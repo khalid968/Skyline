@@ -1,0 +1,12 @@
+[package]
+name = "skyline_crypto_core"
+version = "0.1.0"
+edition = "2021"
+description = "Signal Protocol (libsignal-client) integration core for Skyline, exposed to Flutter via flutter_rust_bridge."
+publish = false
+
+[lib]
+name = "skyline_crypto_core"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]

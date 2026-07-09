@@ -1,0 +1,43 @@
+name: skyline
+description: "Skyline — secure messaging, built for people you trust."
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management / DI
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Routing
+  go_router: ^14.2.0
+
+  # Models / codegen
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+
+  # Local encrypted storage (wired up in Phase 4/5)
+  drift: ^2.19.0
+  sqlite3_flutter_libs: ^0.5.24
+  flutter_secure_storage: ^9.2.2
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+  build_runner: ^2.4.11
+  riverpod_generator: ^2.4.0
+  freezed: ^2.5.7
+  json_serializable: ^6.8.0
+  drift_dev: ^2.19.0
+
+flutter:
+  uses-material-design: true
