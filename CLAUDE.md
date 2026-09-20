@@ -1,38 +1,93 @@
 # CLAUDE.md
 
-Working memory for Claude Code sessions on Skyline — a privacy-first, invite-only, end-to-end-encrypted messaging platform for a private community. Flutter client (Android/iOS/Windows/macOS/Linux/Web) + NestJS backend + Rust crypto core.
+Working memory for Claude Code sessions on Skyline — a privacy-first, invite-only, end-to-end-encrypted
+messaging platform for a closed community. Flutter client (iOS/Android/Windows) + NestJS backend +
+Rust crypto core + a separate web admin dashboard.
+
+**Read `docs/progress-log.md` after this file.** It is the append-only session handoff record and holds
+the current state of play.
 
 ## Current state
 
-- **Phase 1 of 11 complete** (system architecture + scaffolding). **Phase 2 (Backend) is next.**
-- Process: the project is built phase-by-phase per `docs/architecture/roadmap.md`. Never start a phase without the user's explicit approval. End every phase with: design decisions made, files created, remaining tasks — then stop and wait.
-- Working branch: `claude/secure-messaging-platform-xd1bgh` (push with `git push -u origin <branch>`).
+- **Phase 2 of 13 (Product design) — ✅ approved by the owner on 2026-09-20.**
+  **Phase 3 (Database & contact graph) is next and is cleared to start.**
+- Process: built phase-by-phase per `docs/architecture/roadmap.md`. **Never start a phase without the
+  owner's explicit approval.** End every phase with: decisions made, files changed, what remains — then
+  stop and wait.
+- **Never code a user-visible surface before its prototype is approved** (`docs/architecture/design.md`).
+- Append a session entry to `docs/progress-log.md` before finishing. Append decisions to
+  `docs/architecture/decisions.md`. Do not rewrite either file's history.
+
+## The rule that defines this product
+
+**A user sees and can message exactly the people and groups an administrator has linked to them, and
+nothing else — no search, no directory, no discovery, no user-created groups.** This is an authorization
+invariant, not a setting. Full spec, schema and enforcement rules: `docs/architecture/contact-graph.md`.
+
+Default deny. Return **404, not 403**, for anything outside a caller's graph — a 403 confirms the target
+exists and leaks the directory the whole design exists to hide.
 
 ## Locked decisions — do not re-litigate
 
-- **Backend is NestJS in plain JavaScript, NOT TypeScript** (explicit user decision). Babel handles decorators (`.babelrc`); generate code with `npx @nestjs/cli g <schematic> --language JavaScript` semantics (nest-cli.json already sets `"language": "js"`).
-- **PostgreSQL** is the system of record. Redis = WebSocket fan-out, presence, rate limiting only. MinIO = encrypted media blobs.
-- **E2EE = Signal Protocol via the official `libsignal-client` Rust crate**, exposed to Flutter through `flutter_rust_bridge` from `crypto-core/`. Never write custom cryptography — protocol or primitives. The Web/WASM gap is a known open risk (`docs/architecture/known-risks.md`), resolved by a spike at the start of Phase 5.
-- **Riverpod** for state management; providers are also the DI mechanism (no get_it). **go_router** for navigation. **Material 3** with light+dark from `ColorScheme.fromSeed` (`apps/mobile/lib/core/theme/app_theme.dart`).
+Rationale for each is in `docs/architecture/decisions.md`.
+
+- **v1 platforms: iOS, Android, Windows.** The **Web messaging client is out of scope** — no official
+  WASM build of `libsignal-client` exists and every alternative is unaudited. macOS/Linux are cheap
+  follow-ons but unpromised.
+- **Admin tooling is a separate web app**, not in-app screens. (`apps/mobile/lib/features/admin/` is
+  leftover Phase 1 scaffolding and contradicts this — remove it in Phase 6.) The dashboard never holds
+  message keys or plaintext, so the WASM problem does not apply to it.
+- **Admins can grant/revoke contacts and suspend accounts. Admins can never read messages.** Any request
+  that would give them plaintext breaks the product's core promise — escalate to the owner, never
+  quietly implement.
+- **Activation codes are strictly single use.** Store a hash, never the code. Redeem via one atomic
+  conditional `UPDATE` + a unique partial index — **never check-then-write**, which races. Spent,
+  expired and nonexistent codes fail identically, timing included.
+- **Admins can rename any user, but a rename is audit-logged, announced as a system message in every
+  affected conversation, and never touches identity keys** (verified safety numbers stay valid). Those
+  three constraints are what stop an admin renaming one user to another's name to impersonate them —
+  do not drop them for convenience. Released usernames are never reissued.
+- **Backend is NestJS in plain JavaScript, NOT TypeScript.** Babel handles decorators (`.babelrc`);
+  `nest-cli.json` sets `"language": "js"`.
+- **PostgreSQL** is the system of record. Redis = WebSocket fan-out, presence, rate limiting only.
+  MinIO = encrypted media blobs.
+- **E2EE = Signal Protocol via the official `libsignal-client` Rust crate**, exposed to Flutter through
+  `flutter_rust_bridge` from `crypto-core/`. **Never write custom cryptography — protocol or
+  primitives.**
+- **Riverpod** for state (providers are also DI; no get_it). **go_router** for navigation.
+  **Material 3**, themed from the explicit tokens in `docs/architecture/design.md` — replace the
+  `ColorScheme.fromSeed` placeholder in `apps/mobile/lib/core/theme/app_theme.dart`; a seed palette will
+  not reproduce them and the security colours must be exact.
 - **Native WebSocket** (`@nestjs/platform-ws` + `ws`), not Socket.IO.
-- **Single-host Docker Compose** deployment target; keep backend stateless (shared state in Redis/Postgres) so it stays horizontally extractable.
-- The server only ever handles ciphertext + minimal metadata. Private keys never leave the device. No analytics, telemetry, or third-party trackers — ever.
+- **Single-host Docker Compose** target; backend stays stateless (shared state in Redis/Postgres).
+- Server handles only ciphertext + minimal routing metadata. Private keys never leave the device. No
+  analytics, telemetry or third-party trackers — ever.
 
 ## Layout
 
 ```
 apps/mobile/     Flutter client — feature-first Clean Architecture (lib/features/<name>/{data,domain,presentation})
 apps/backend/    NestJS (JS) — src/modules/{auth,users,devices,chats,messages,groups,media,notifications,admin,websocket}
-crypto-core/     Rust workspace; core/ crate is empty until Phase 5
+apps/dashboard/  Admin web app — does not exist yet; created in Phase 6
+crypto-core/     Rust workspace; core/ crate is empty until Phase 7
 infra/docker/    Dev docker-compose.yml (Postgres, Redis, MinIO)
-docs/            architecture/ (overview, tech-stack-decisions, folder-structure, roadmap, known-risks), api/, database/, security/, deployment/
+docs/            progress-log.md + architecture/ (overview, decisions, design, contact-graph, roadmap,
+                 known-risks, tech-stack-decisions, folder-structure), api/, database/, security/, deployment/
 ```
 
-Client conventions: dependencies point inward (`presentation` → `domain` ← `data`); backend module names mirror client feature names. Details: `docs/architecture/folder-structure.md`, `apps/mobile/lib/features/README.md`.
+Client conventions: dependencies point inward (`presentation` → `domain` ← `data`); backend module names
+mirror client feature names. Details: `docs/architecture/folder-structure.md`.
 
 ## Architecture at a glance
 
-Message send flow (see `docs/architecture/overview.md` for the full diagram): client encrypts locally via the recipient's Double Ratchet session (X3DH on first contact) → sends ciphertext + minimal routing metadata (sender device ID, recipient ID, timestamp, message ID) over TLS (Nginx) to REST/WebSocket → backend persists ciphertext+metadata in Postgres and publishes a delivery event on Redis pub/sub → backend fans it out over WebSocket to the recipient's connected devices (or queues for offline delivery) → recipient decrypts locally. The server is never in possession of a decryptable copy. Redis pub/sub is what lets the WebSocket gateway fan out across multiple backend instances once scaled past one process — this is why backend instances must stay stateless (see locked decisions).
+Message send flow (full diagram in `docs/architecture/overview.md`): client encrypts locally via the
+recipient's Double Ratchet session (X3DH on first contact) → sends ciphertext + minimal routing metadata
+(sender device ID, recipient ID, timestamp, message ID) over TLS (Nginx) to REST/WebSocket → backend
+**checks the contact graph**, then persists ciphertext+metadata in Postgres and publishes a delivery
+event on Redis pub/sub → fans out over WebSocket to the recipient's connected devices (or queues for
+offline delivery) → recipient decrypts locally. The server never holds a decryptable copy. Redis pub/sub
+is what lets the gateway fan out across multiple backend instances once scaled past one process — hence
+the stateless-backend rule above.
 
 ## Commands
 
@@ -40,26 +95,31 @@ Message send flow (see `docs/architecture/overview.md` for the full diagram): cl
 # Backend (apps/backend)
 npm install
 cp .env.example .env       # .env is gitignored; never commit real secrets
-npm run start:dev          # nodemon watch mode; npm run start for single run (babel-node)
-npm test                   # Jest unit; npm run test:e2e for e2e; npm run test:cov for coverage
-npx jest src/app.controller.spec.js       # single file
-npx jest -t "test name"                   # single test by name
-npm run format              # prettier --write "**/*.js"
+npm run start:dev          # nodemon watch; npm run start for a single run (babel-node)
+npm test                   # Jest unit; npm run test:e2e; npm run test:cov
+npx jest src/app.controller.spec.js   # single file
+npx jest -t "test name"               # single test
+npm run format             # prettier --write "**/*.js"
 
-# Dev data plane (repo root)
+# Dev data plane (repo root) — needs Docker, not yet installed
 docker compose -f infra/docker/docker-compose.yml up -d
 
-# Crypto core (crypto-core/)
-cargo build
-cargo test
+# Crypto core (crypto-core/) — needs Rust, not yet installed
+cargo build && cargo test
 
-# Flutter client (apps/mobile) — requires one-time platform bootstrap on a machine with the Flutter SDK:
-#   flutter create --platforms=android,ios,windows,macos,linux,web --org com.skyline --project-name skyline .
-# then: flutter pub get && flutter analyze && flutter test   (see apps/mobile/README.md)
+# Flutter client (apps/mobile) — one-time platform bootstrap, note: no web
+#   flutter create --platforms=android,ios,windows --org com.skyline --project-name skyline .
+flutter pub get && flutter analyze && flutter test
 ```
 
-## Remote sandbox caveats
+## Local toolchain (owner's Windows 11 machine)
 
-- **No Flutter SDK** installed — `apps/mobile` has no SDK-generated platform runner folders; they're gitignored and bootstrapped locally (see above).
-- **No runnable Docker daemon** — validate compose changes with `docker compose config`; live-test on a real machine.
-- Backend boot can be smoke-tested directly: `npm run start` comes up with no external services required (DB/Redis wiring lands in Phase 2/3).
+| Tool | State |
+| --- | --- |
+| Flutter 3.35.7 / Dart 3.9.2 | ✅ installed |
+| Node 24.19 / npm 11.17 | ✅ installed |
+| Rust / cargo | ❌ **not installed** — blocking from Phase 7 |
+| Docker | ❌ **not installed** — blocking from Phase 3 |
+
+`apps/mobile` has no SDK-generated platform runner folders yet (gitignored; see bootstrap above).
+Backend boot can be smoke-tested with `npm run start` — no external services required until Phase 3.
