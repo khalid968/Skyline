@@ -30,24 +30,32 @@ docs/            architecture/ (overview, tech-stack-decisions, folder-structure
 
 Client conventions: dependencies point inward (`presentation` → `domain` ← `data`); backend module names mirror client feature names. Details: `docs/architecture/folder-structure.md`, `apps/mobile/lib/features/README.md`.
 
+## Architecture at a glance
+
+Message send flow (see `docs/architecture/overview.md` for the full diagram): client encrypts locally via the recipient's Double Ratchet session (X3DH on first contact) → sends ciphertext + minimal routing metadata (sender device ID, recipient ID, timestamp, message ID) over TLS (Nginx) to REST/WebSocket → backend persists ciphertext+metadata in Postgres and publishes a delivery event on Redis pub/sub → backend fans it out over WebSocket to the recipient's connected devices (or queues for offline delivery) → recipient decrypts locally. The server is never in possession of a decryptable copy. Redis pub/sub is what lets the WebSocket gateway fan out across multiple backend instances once scaled past one process — this is why backend instances must stay stateless (see locked decisions).
+
 ## Commands
 
 ```bash
 # Backend (apps/backend)
 npm install
 cp .env.example .env       # .env is gitignored; never commit real secrets
-npm run start:dev          # nodemon watch mode; npm run start for single run
-npm test                   # Jest unit; npm run test:e2e for e2e
+npm run start:dev          # nodemon watch mode; npm run start for single run (babel-node)
+npm test                   # Jest unit; npm run test:e2e for e2e; npm run test:cov for coverage
+npx jest src/app.controller.spec.js       # single file
+npx jest -t "test name"                   # single test by name
+npm run format              # prettier --write "**/*.js"
 
 # Dev data plane (repo root)
 docker compose -f infra/docker/docker-compose.yml up -d
 
 # Crypto core (crypto-core/)
 cargo build
+cargo test
 
 # Flutter client (apps/mobile) — requires one-time platform bootstrap on a machine with the Flutter SDK:
 #   flutter create --platforms=android,ios,windows,macos,linux,web --org com.skyline --project-name skyline .
-# then: flutter pub get && flutter analyze   (see apps/mobile/README.md)
+# then: flutter pub get && flutter analyze && flutter test   (see apps/mobile/README.md)
 ```
 
 ## Remote sandbox caveats
