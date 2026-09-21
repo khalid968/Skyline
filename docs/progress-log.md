@@ -8,6 +8,56 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-21 — Phase 3: schema written. Not yet run against a live database.
+
+**Tooling chosen: `node-pg-migrate` in plain-SQL mode.** No ORM. It fits the locked decisions already
+in place (raw `pg`, plain JavaScript) and keeps partial indexes, CHECK constraints and triggers
+readable, which matters because this schema's security properties live in exactly those things.
+Added as a devDependency with `migrate*` scripts in `apps/backend/package.json`, and `DATABASE_URL`
+added to `.env.example`.
+
+**Eight migrations written** — see `docs/database/schema.md` for the full walkthrough. Summary:
+extensions/enums, RBAC, users + username history, devices/sessions/push, activation codes, the contact
+graph, chats/messages/envelopes/attachments, audit log.
+
+**The four invariants are enforced by the database, not by application code:**
+
+1. Contact links symmetric via `CHECK (user_a_id < user_b_id)`; one live link per pair via a partial
+   unique index; `are_linked()` and `visible_user_ids()` are the authorization primitives Phase 4
+   builds its guard on.
+2. Activation codes single use: partial unique index for one live code per user, a `BEFORE UPDATE`
+   trigger that freezes redemption facts once spent, and `redeem_activation_code()` doing one atomic
+   conditional `UPDATE` that returns `NULL` identically for unknown/spent/revoked/expired.
+3. Usernames never reissued: `username_history` with a global `UNIQUE` plus a trigger, so a rename to
+   any previously used username aborts the transaction.
+4. `audit_log` append-only via triggers, and deliberately FK-free so records outlive their subjects.
+
+**Bug found and fixed during review.** Four foreign keys were written `ON DELETE SET NULL` on columns
+that CHECK constraints require to be non-null (`messages.sender_user_id`, `messages.sender_device_id`,
+`activation_codes.redeemed_by_device_id`, `attachments.uploaded_by_device_id`). Deleting a device would
+have violated `messages_shape` with a confusing constraint error. Changed to `RESTRICT`, which makes
+the real policy explicit: **nothing is hard-deleted in Skyline** — accounts are soft-deleted, devices
+and links are revoked. Documented in `schema.md`.
+
+**Verification — read this before trusting the schema.** Docker is still not installed, so the
+migrations have **never been applied to a real PostgreSQL**. What was actually verified: every
+statement was parsed against the genuine PostgreSQL 18 grammar using `libpg-query` — 113 statements
+across all up/down halves, plus all seven function bodies parsed individually, 0 failures. **That
+catches syntax errors and nothing more.** It does not prove constraints behave as intended, that
+triggers fire, or that migrations apply and roll back in order.
+
+**Next agent must, before anything else:**
+
+1. Install Docker Desktop, bring up `infra/docker/docker-compose.yml`, then run
+   `npm run migrate:up && npm run migrate:down && npm run migrate:up` and fix whatever falls over.
+   Do not build Phase 4 on an unverified schema.
+2. Write the constraint tests early rather than waiting for Phase 12 — especially double-redemption of
+   one code under concurrency, and renaming to a burned username.
+3. Then Phase 4 (backend foundation + `ContactGraphGuard` over `visible_user_ids()`), after the
+   owner approves starting it.
+
+---
+
 ## 2026-09-20 (later) — Phase 2 APPROVED. Two requirements added.
 
 **The project owner approved the design.** Calls staying in scope (Phase 10) was called out

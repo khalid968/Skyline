@@ -7,6 +7,11 @@
   "license": "UNLICENSED",
   "scripts": {
     "format": "prettier --write \"**/*.js\"",
+    "migrate": "node-pg-migrate --envPath .env -m src/database/migrations -j sql",
+    "migrate:create": "node-pg-migrate create --envPath .env -m src/database/migrations -j sql",
+    "migrate:down": "node-pg-migrate down --envPath .env -m src/database/migrations -j sql",
+    "migrate:redo": "node-pg-migrate redo --envPath .env -m src/database/migrations -j sql",
+    "migrate:up": "node-pg-migrate up --envPath .env -m src/database/migrations -j sql",
     "start": "babel-node index.js",
     "start:dev": "nodemon",
     "test": "jest",
@@ -37,7 +42,9 @@
     "@babel/register": "7.28.6",
     "@babel/runtime": "7.29.2",
     "@nestjs/testing": "^11.0.1",
+    "dotenv": "^18.0.1",
     "jest": "30.3.0",
+    "node-pg-migrate": "^9.0.0",
     "nodemon": "3.1.14",
     "prettier": "3.8.3",
     "supertest": "7.2.2"

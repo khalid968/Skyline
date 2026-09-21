@@ -6,6 +6,35 @@ working around it.
 
 ---
 
+## 2026-09-21 — Migrations are plain SQL run by `node-pg-migrate`. No ORM.
+
+**Decision.** `node-pg-migrate` in `-j sql` mode. Migrations are `.sql` files with `-- Up Migration`
+and `-- Down Migration` sections, in `apps/backend/src/database/migrations/`.
+
+**Why.** The backend already uses raw `pg` and plain JavaScript, both locked decisions. This schema's
+security properties live in partial indexes, CHECK constraints and triggers — things an ORM either
+hides, generates badly, or cannot express. Plain SQL keeps them reviewable, which for this project
+matters more than developer convenience.
+
+---
+
+## 2026-09-21 — Nothing is hard-deleted.
+
+**Decision.** Accounts are soft-deleted (`status = 'deleted'` plus `deleted_at`). Devices, sessions,
+push tokens, contact links and group memberships are revoked, never removed. `username_history.user_id`
+is `ON DELETE RESTRICT`, so `DELETE FROM users` fails by design.
+
+**Why.** Partly principle — an audited system should not let operators erase history — and partly
+because it is the only way the never-reissue-a-username guarantee stays true. It also resolved a bug:
+four foreign keys were `ON DELETE SET NULL` on columns that CHECK constraints require to be non-null,
+so deleting a device would have failed with a confusing constraint violation. Making them `RESTRICT`
+turns an accidental failure into an intentional rule.
+
+**Consequence.** The dashboard's "Delete account" is a soft delete. If a hard delete is ever genuinely
+required (a legal erasure request, say), it needs a deliberate, audited procedure — not a `DELETE`.
+
+---
+
 ## 2026-09-20 — Activation codes are strictly single use.
 
 **Decision.** An activation code is redeemable **exactly once**, binds to the one device that redeems

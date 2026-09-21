@@ -9,8 +9,13 @@ the current state of play.
 
 ## Current state
 
-- **Phase 2 of 13 (Product design) — ✅ approved by the owner on 2026-09-20.**
-  **Phase 3 (Database & contact graph) is next and is cleared to start.**
+- **Phase 2 (Product design) — ✅ approved 2026-09-20.**
+- **Phase 3 (Database & contact graph) — schema written 2026-09-21, ⚠️ NOT yet run against a live
+  PostgreSQL.** Docker is still not installed. The migrations were only parsed against the real
+  PostgreSQL 18 grammar (`libpg-query`, 113 statements, 0 failures) — that catches syntax errors and
+  nothing else. **Apply them for real before building anything on top.** See `docs/database/schema.md`.
+- **Phase 4 (Backend foundation + `ContactGraphGuard`) is next**, once the schema is verified and the
+  owner approves starting it.
 - Process: built phase-by-phase per `docs/architecture/roadmap.md`. **Never start a phase without the
   owner's explicit approval.** End every phase with: decisions made, files changed, what remains — then
   stop and wait.
@@ -47,6 +52,12 @@ Rationale for each is in `docs/architecture/decisions.md`.
   affected conversation, and never touches identity keys** (verified safety numbers stay valid). Those
   three constraints are what stop an admin renaming one user to another's name to impersonate them —
   do not drop them for convenience. Released usernames are never reissued.
+- **Nothing is hard-deleted.** Accounts are soft-deleted (`status='deleted'`); devices, sessions,
+  links and memberships are revoked. `DELETE FROM users` fails by design (`username_history` is
+  `ON DELETE RESTRICT`) — that is what keeps burned usernames burned.
+- **Migrations are plain SQL via `node-pg-migrate`, no ORM.** The security properties live in partial
+  indexes, CHECK constraints and triggers; keep them readable. Redeem codes only through
+  `redeem_activation_code()`, and build authorization on `are_linked()` / `visible_user_ids()`.
 - **Backend is NestJS in plain JavaScript, NOT TypeScript.** Babel handles decorators (`.babelrc`);
   `nest-cli.json` sets `"language": "js"`.
 - **PostgreSQL** is the system of record. Redis = WebSocket fan-out, presence, rate limiting only.
@@ -100,6 +111,10 @@ npm test                   # Jest unit; npm run test:e2e; npm run test:cov
 npx jest src/app.controller.spec.js   # single file
 npx jest -t "test name"               # single test
 npm run format             # prettier --write "**/*.js"
+
+# Migrations (apps/backend) — plain SQL via node-pg-migrate; needs DATABASE_URL in .env
+npm run migrate:up                       # apply; migrate:down rolls back one
+npm run migrate:create -- add-something  # scaffold a new .sql migration
 
 # Dev data plane (repo root) — needs Docker, not yet installed
 docker compose -f infra/docker/docker-compose.yml up -d
