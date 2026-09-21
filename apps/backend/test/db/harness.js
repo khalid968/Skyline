@@ -9,8 +9,17 @@ import dotenv from 'dotenv';
 
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env'), quiet: true });
 
-const MIGRATIONS_DIR = path.join(__dirname, '..', '..', 'src', 'database', 'migrations');
-const BASE_URL = process.env.DATABASE_URL || 'postgres://skyline:skyline@localhost:5432/skyline';
+const MIGRATIONS_DIR = path.join(
+  __dirname,
+  '..',
+  '..',
+  'src',
+  'database',
+  'migrations',
+);
+const BASE_URL =
+  process.env.DATABASE_URL ||
+  'postgres://skyline:skyline@localhost:5432/skyline';
 
 function urlForDatabase(name) {
   const u = new URL(BASE_URL);
@@ -22,7 +31,8 @@ function urlForDatabase(name) {
 function upSection(sql) {
   const up = sql.indexOf('-- Up Migration');
   const down = sql.indexOf('-- Down Migration');
-  if (up === -1 || down === -1) throw new Error('migration is missing an Up/Down marker');
+  if (up === -1 || down === -1)
+    throw new Error('migration is missing an Up/Down marker');
   return sql.slice(up, down);
 }
 
@@ -42,7 +52,9 @@ export async function createTestDatabase(label) {
   const client = new Client({ connectionString: urlForDatabase(name) });
   await client.connect();
   for (const f of files) {
-    await client.query(upSection(fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8')));
+    await client.query(
+      upSection(fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8')),
+    );
   }
 
   return {
@@ -92,10 +104,12 @@ export async function mkDevice(db, userId) {
 
 // 32 bytes derived from a number via SHA-256, standing in for an HMAC output.
 // Distinct inputs give distinct hashes, so tests never collide by accident.
-export const hashOf = (n) => crypto.createHash('sha256').update(String(n)).digest();
+export const hashOf = (n) =>
+  crypto.createHash('sha256').update(String(n)).digest();
 
 export async function mkCode(db, userId, issuedBy, opts = {}) {
-  const { hash = hashOf(next()), expiresSql = `now() + interval '72 hours'` } = opts;
+  const { hash = hashOf(next()), expiresSql = `now() + interval '72 hours'` } =
+    opts;
   // created_at is set explicitly so that already-expired codes satisfy the
   // expires_at > created_at CHECK.
   const created = opts.createdSql || 'now()';
@@ -122,11 +136,10 @@ export async function mkGroup(db, createdBy, memberIds = []) {
     [createdBy],
   );
   for (const m of memberIds) {
-    await db.query(`INSERT INTO group_members (group_id, user_id, added_by) VALUES ($1, $2, $3)`, [
-      rows[0].id,
-      m,
-      createdBy,
-    ]);
+    await db.query(
+      `INSERT INTO group_members (group_id, user_id, added_by) VALUES ($1, $2, $3)`,
+      [rows[0].id, m, createdBy],
+    );
   }
   return rows[0].id;
 }

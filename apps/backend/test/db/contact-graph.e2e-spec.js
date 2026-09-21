@@ -2,7 +2,14 @@
 // exactly the people and groups an administrator has linked to them, and nothing
 // else. These tests exercise the database layer that the Phase 4 guard is built
 // on. They must never be deleted -- see docs/architecture/contact-graph.md.
-import { createTestDatabase, mkUser, link, mkGroup, failure, SQLSTATE } from './harness';
+import {
+  createTestDatabase,
+  mkUser,
+  link,
+  mkGroup,
+  failure,
+  SQLSTATE,
+} from './harness';
 
 describe('contact graph (database layer)', () => {
   let db;
@@ -18,7 +25,10 @@ describe('contact graph (database layer)', () => {
   });
 
   const visible = async (userId) => {
-    const { rows } = await db.client.query('SELECT user_id FROM visible_user_ids($1)', [userId]);
+    const { rows } = await db.client.query(
+      'SELECT user_id FROM visible_user_ids($1)',
+      [userId],
+    );
     return rows.map((r) => r.user_id).sort();
   };
   const linked = async (a, b) =>
@@ -209,11 +219,10 @@ describe('contact graph (database layer)', () => {
       const groupId = await mkGroup(db.client, admin.id, [a.id]);
 
       const err = await failure(
-        db.client.query(`INSERT INTO group_members (group_id, user_id, added_by) VALUES ($1, $2, $3)`, [
-          groupId,
-          a.id,
-          admin.id,
-        ]),
+        db.client.query(
+          `INSERT INTO group_members (group_id, user_id, added_by) VALUES ($1, $2, $3)`,
+          [groupId, a.id, admin.id],
+        ),
       );
       expect(err.code).toBe(SQLSTATE.unique);
     });

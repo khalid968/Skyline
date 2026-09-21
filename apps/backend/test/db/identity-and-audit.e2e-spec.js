@@ -14,7 +14,10 @@ describe('identity and audit (database layer)', () => {
   });
 
   const rename = (id, username) =>
-    db.client.query('UPDATE users SET username = $2 WHERE id = $1', [id, username]);
+    db.client.query('UPDATE users SET username = $2 WHERE id = $1', [
+      id,
+      username,
+    ]);
   const history = async (userId) =>
     (
       await db.client.query(
@@ -46,7 +49,10 @@ describe('identity and audit (database layer)', () => {
 
     it('does not add history when the username is left unchanged', async () => {
       const u = await mkUser(db.client, 'same');
-      await db.client.query(`UPDATE users SET display_name = 'Someone Else' WHERE id = $1`, [u.id]);
+      await db.client.query(
+        `UPDATE users SET display_name = 'Someone Else' WHERE id = $1`,
+        [u.id],
+      );
       await rename(u.id, u.username);
       expect(await history(u.id)).toHaveLength(1);
     });
@@ -57,7 +63,10 @@ describe('identity and audit (database layer)', () => {
       await rename(original.id, `${burned}moved`);
 
       // The old name is free in `users` -- only the history keeps it burned.
-      const free = await db.client.query('SELECT 1 FROM users WHERE username = $1', [burned]);
+      const free = await db.client.query(
+        'SELECT 1 FROM users WHERE username = $1',
+        [burned],
+      );
       expect(free.rowCount).toBe(0);
 
       const err = await failure(
@@ -80,11 +89,14 @@ describe('identity and audit (database layer)', () => {
       expect(err.code).toBe(SQLSTATE.unique);
 
       // The failed rename must leave the second account untouched.
-      const { rows } = await db.client.query('SELECT username::text FROM users WHERE id = $1', [
-        second.id,
-      ]);
+      const { rows } = await db.client.query(
+        'SELECT username::text FROM users WHERE id = $1',
+        [second.id],
+      );
       expect(rows[0].username).toBe(second.username);
-      expect((await history(second.id)).filter((r) => r.released_at === null)).toHaveLength(1);
+      expect(
+        (await history(second.id)).filter((r) => r.released_at === null),
+      ).toHaveLength(1);
     });
 
     it('treats usernames case-insensitively', async () => {
@@ -119,10 +131,14 @@ describe('identity and audit (database layer)', () => {
   describe('accounts are never hard-deleted', () => {
     it('refuses DELETE FROM users, because the username history restricts it', async () => {
       const u = await mkUser(db.client, 'keep');
-      const err = await failure(db.client.query('DELETE FROM users WHERE id = $1', [u.id]));
+      const err = await failure(
+        db.client.query('DELETE FROM users WHERE id = $1', [u.id]),
+      );
       expect([SQLSTATE.restrict, SQLSTATE.foreignKey]).toContain(err.code);
 
-      const still = await db.client.query('SELECT 1 FROM users WHERE id = $1', [u.id]);
+      const still = await db.client.query('SELECT 1 FROM users WHERE id = $1', [
+        u.id,
+      ]);
       expect(still.rowCount).toBe(1);
     });
 
@@ -130,15 +146,21 @@ describe('identity and audit (database layer)', () => {
       const u = await mkUser(db.client, 'soft');
 
       const err = await failure(
-        db.client.query(`UPDATE users SET status = 'deleted' WHERE id = $1`, [u.id]),
+        db.client.query(`UPDATE users SET status = 'deleted' WHERE id = $1`, [
+          u.id,
+        ]),
       );
       expect(err.code).toBe(SQLSTATE.check);
       expect(err.constraint).toBe('users_deleted_stamp');
 
-      await db.client.query(`UPDATE users SET status = 'deleted', deleted_at = now() WHERE id = $1`, [
-        u.id,
-      ]);
-      const { rows } = await db.client.query('SELECT status FROM users WHERE id = $1', [u.id]);
+      await db.client.query(
+        `UPDATE users SET status = 'deleted', deleted_at = now() WHERE id = $1`,
+        [u.id],
+      );
+      const { rows } = await db.client.query(
+        'SELECT status FROM users WHERE id = $1',
+        [u.id],
+      );
       expect(rows[0].status).toBe('deleted');
     });
 
@@ -167,7 +189,9 @@ describe('identity and audit (database layer)', () => {
 
     it('refuses UPDATE', async () => {
       await record();
-      const err = await failure(db.client.query(`UPDATE audit_log SET actor_username = 'someone else'`));
+      const err = await failure(
+        db.client.query(`UPDATE audit_log SET actor_username = 'someone else'`),
+      );
       expect(err.code).toBe(SQLSTATE.insufficientPrivilege);
       expect(err.message).toMatch(/append-only/);
     });
@@ -183,7 +207,9 @@ describe('identity and audit (database layer)', () => {
       const err = await failure(db.client.query('TRUNCATE audit_log'));
       expect(err.code).toBe(SQLSTATE.insufficientPrivilege);
 
-      const { rows } = await db.client.query('SELECT count(*)::int AS n FROM audit_log');
+      const { rows } = await db.client.query(
+        'SELECT count(*)::int AS n FROM audit_log',
+      );
       expect(rows[0].n).toBeGreaterThan(0);
     });
 

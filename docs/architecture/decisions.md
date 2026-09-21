@@ -6,9 +6,41 @@ working around it.
 
 ---
 
-## 2026-09-21 — PENDING OWNER DECISION: admin access to message content and media
+## 2026-09-21 — The WebSocket is server-to-client only; clients send over REST
 
-**Status: OPEN. Not implemented. Not refused. Waiting on the owner.**
+**Decision.** The gateway ignores every inbound frame. Clients send messages over authenticated REST, and
+receive over the socket.
+
+**Why.** REST is where the three guards run per request. If a client could also send by writing to the
+socket, every guard would have to be reimplemented there, and any gap would be a way to bypass the contact
+graph. One-directional removes the whole class. Delivery still re-checks the graph at the moment it
+happens, so revoking a link stops an already-open socket immediately.
+
+---
+
+## 2026-09-21 — Authorization is checked against Postgres on every request; it is never cached
+
+**Decision (owner).** Account status, device revocation, role permissions and the contact graph are read
+from PostgreSQL on every request, and by the WebSocket fan-out on every delivery. No Redis or in-process
+cache.
+
+**Why.** A cache makes each of these wait for expiry: a suspended user keeps working, a revoked device
+keeps connecting, a revoked contact keeps receiving. For a product whose value is containment that is the
+wrong trade. The cost is two extra queries per request, accepted at this scale.
+
+**Consequence.** Measure before optimising, and never optimise by caching authorization. If load ever
+demands it, prefer a faster query or a read replica over a cache.
+
+---
+
+## 2026-09-21 — DECIDED: true E2EE for v1; a disclosed compliance archive is a possible later mode
+
+**Status: RESOLVED by the owner on 2026-09-21 — option 3 below.** v1 ships with true end-to-end
+encryption; admins never see message content. A disclosed compliance archive may be designed later as an
+opt-in deployment mode. **Nothing archive-related is built now**, and the locked rule "admins can never
+read messages" stands for v1. Revisiting it needs the owner's explicit go-ahead and its own design phase
+(key management, access audit, threat model) *before* Phase 7 (Encryption). The analysis that led to this
+decision follows.
 
 **The request.** "Give the admin the power to view all messages and media and have a history of
 everything."
@@ -65,8 +97,9 @@ except the content.
 - **An administrator can neither see nor reset a user's PIN.** A forgotten PIN means the on-device keys
   are unrecoverable: the user re-activates with a fresh activation code and loses local history. The
   server never held a copy, so this is unavoidable and must be said plainly in the UI.
-- **Open question:** may an admin *require* app lock organization-wide as a policy? Recommended yes;
-  needs the owner's confirmation.
+- **Decided (owner, 2026-09-21): app lock is always the user's own choice.** There is no admin policy
+  to force it on. This also keeps the admin surface smaller: no policy setting, and one less thing an
+  admin can do to a user's device.
 
 Lands in Phase 5 (Authentication). It is UI, so a settings prototype is needed first.
 

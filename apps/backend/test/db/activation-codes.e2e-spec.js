@@ -25,8 +25,12 @@ describe('activation codes (database layer)', () => {
   });
 
   const redeem = async (hash, deviceId, client = db.client) =>
-    (await client.query('SELECT redeem_activation_code($1, $2) AS user_id', [hash, deviceId])).rows[0]
-      .user_id;
+    (
+      await client.query('SELECT redeem_activation_code($1, $2) AS user_id', [
+        hash,
+        deviceId,
+      ])
+    ).rows[0].user_id;
 
   describe('redeem_activation_code()', () => {
     it('returns the owning user on first use', async () => {
@@ -108,9 +112,10 @@ describe('activation codes (database layer)', () => {
 
       const u3 = await mkUser(db.client, 'uniform');
       const revoked = await mkCode(db.client, u3.id, admin.id);
-      await db.client.query(`UPDATE activation_codes SET revoked_at = now() WHERE id = $1`, [
-        revoked.id,
-      ]);
+      await db.client.query(
+        `UPDATE activation_codes SET revoked_at = now() WHERE id = $1`,
+        [revoked.id],
+      );
 
       const answers = [
         await redeem(spent.hash, device),
@@ -139,7 +144,9 @@ describe('activation codes (database layer)', () => {
       }
 
       try {
-        const results = await Promise.all(racers.map((r) => redeem(code.hash, r.device, r.client)));
+        const results = await Promise.all(
+          racers.map((r) => redeem(code.hash, r.device, r.client)),
+        );
 
         const winners = results.filter((r) => r !== null);
         expect(winners).toHaveLength(1);
@@ -149,7 +156,9 @@ describe('activation codes (database layer)', () => {
           'SELECT redeemed_by_device_id FROM activation_codes WHERE id = $1',
           [code.id],
         );
-        const winningDevices = racers.filter((r) => r.device === rows[0].redeemed_by_device_id);
+        const winningDevices = racers.filter(
+          (r) => r.device === rows[0].redeemed_by_device_id,
+        );
         expect(winningDevices).toHaveLength(1);
       } finally {
         await Promise.all(racers.map((r) => r.client.end()));
@@ -183,10 +192,10 @@ describe('activation codes (database layer)', () => {
       const other = await mkDevice(db.client, user.id);
 
       const err = await failure(
-        db.client.query(`UPDATE activation_codes SET redeemed_by_device_id = $2 WHERE id = $1`, [
-          code.id,
-          other,
-        ]),
+        db.client.query(
+          `UPDATE activation_codes SET redeemed_by_device_id = $2 WHERE id = $1`,
+          [code.id, other],
+        ),
       );
       expect(err.code).toBe(SQLSTATE.integrity);
       expect(err.message).toMatch(/already spent/);
@@ -195,10 +204,10 @@ describe('activation codes (database layer)', () => {
     it('cannot have its hash rewritten to make it look like a different code', async () => {
       const { code } = await spendOne();
       const err = await failure(
-        db.client.query(`UPDATE activation_codes SET code_hash = $2 WHERE id = $1`, [
-          code.id,
-          hashOf(next() + 777),
-        ]),
+        db.client.query(
+          `UPDATE activation_codes SET code_hash = $2 WHERE id = $1`,
+          [code.id, hashOf(next() + 777)],
+        ),
       );
       expect(err.code).toBe(SQLSTATE.integrity);
     });
@@ -207,10 +216,10 @@ describe('activation codes (database layer)', () => {
       const { code } = await spendOne();
       const stranger = await mkUser(db.client, 'stranger');
       const err = await failure(
-        db.client.query(`UPDATE activation_codes SET user_id = $2 WHERE id = $1`, [
-          code.id,
-          stranger.id,
-        ]),
+        db.client.query(
+          `UPDATE activation_codes SET user_id = $2 WHERE id = $1`,
+          [code.id, stranger.id],
+        ),
       );
       expect(err.code).toBe(SQLSTATE.integrity);
     });
@@ -218,10 +227,15 @@ describe('activation codes (database layer)', () => {
     it('cannot be both spent and revoked', async () => {
       const { code } = await spendOne();
       const err = await failure(
-        db.client.query(`UPDATE activation_codes SET revoked_at = now() WHERE id = $1`, [code.id]),
+        db.client.query(
+          `UPDATE activation_codes SET revoked_at = now() WHERE id = $1`,
+          [code.id],
+        ),
       );
       expect(err.code).toBe(SQLSTATE.check);
-      expect(err.constraint).toBe('activation_codes_not_both_spent_and_revoked');
+      expect(err.constraint).toBe(
+        'activation_codes_not_both_spent_and_revoked',
+      );
     });
   });
 
@@ -239,7 +253,10 @@ describe('activation codes (database layer)', () => {
       const user = await mkUser(db.client, 'replaced');
       const device = await mkDevice(db.client, user.id);
       const old = await mkCode(db.client, user.id, admin.id);
-      await db.client.query(`UPDATE activation_codes SET revoked_at = now() WHERE id = $1`, [old.id]);
+      await db.client.query(
+        `UPDATE activation_codes SET revoked_at = now() WHERE id = $1`,
+        [old.id],
+      );
 
       const fresh = await mkCode(db.client, user.id, admin.id);
 

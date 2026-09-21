@@ -37,10 +37,10 @@ describe('messaging and RBAC (database layer)', () => {
       const b = await mkUser(db.client, 'b');
       const [lo, hi] = a.id < b.id ? [a.id, b.id] : [b.id, a.id];
       const err = await failure(
-        db.client.query(`INSERT INTO chats (kind, user_a_id, user_b_id) VALUES ('direct', $1, $2)`, [
-          hi,
-          lo,
-        ]),
+        db.client.query(
+          `INSERT INTO chats (kind, user_a_id, user_b_id) VALUES ('direct', $1, $2)`,
+          [hi, lo],
+        ),
       );
       expect(err.code).toBe(SQLSTATE.check);
       expect(err.constraint).toBe('chats_shape');
@@ -80,9 +80,15 @@ describe('messaging and RBAC (database layer)', () => {
     it('allows only one chat per group', async () => {
       const a = await mkUser(db.client, 'g');
       const groupId = await mkGroup(db.client, admin.id, [a.id]);
-      await db.client.query(`INSERT INTO chats (kind, group_id) VALUES ('group', $1)`, [groupId]);
+      await db.client.query(
+        `INSERT INTO chats (kind, group_id) VALUES ('group', $1)`,
+        [groupId],
+      );
       const err = await failure(
-        db.client.query(`INSERT INTO chats (kind, group_id) VALUES ('group', $1)`, [groupId]),
+        db.client.query(
+          `INSERT INTO chats (kind, group_id) VALUES ('group', $1)`,
+          [groupId],
+        ),
       );
       expect(err.code).toBe(SQLSTATE.unique);
     });
@@ -118,7 +124,13 @@ describe('messaging and RBAC (database layer)', () => {
         `SELECT column_name FROM information_schema.columns WHERE table_name = 'messages'`,
       );
       const names = rows.map((r) => r.column_name);
-      for (const forbidden of ['body', 'text', 'content', 'plaintext', 'message']) {
+      for (const forbidden of [
+        'body',
+        'text',
+        'content',
+        'plaintext',
+        'message',
+      ]) {
         expect(names).not.toContain(forbidden);
       }
     });
@@ -133,7 +145,10 @@ describe('messaging and RBAC (database layer)', () => {
 
     it('rejects a user message with no sender', async () => {
       const err = await failure(
-        db.client.query(`INSERT INTO messages (chat_id, kind) VALUES ($1, 'user')`, [chatId]),
+        db.client.query(
+          `INSERT INTO messages (chat_id, kind) VALUES ($1, 'user')`,
+          [chatId],
+        ),
       );
       expect(err.code).toBe(SQLSTATE.check);
       expect(err.constraint).toBe('messages_shape');
@@ -141,7 +156,10 @@ describe('messaging and RBAC (database layer)', () => {
 
     it('rejects a system message with no event, and a user message carrying one', async () => {
       const noEvent = await failure(
-        db.client.query(`INSERT INTO messages (chat_id, kind) VALUES ($1, 'system')`, [chatId]),
+        db.client.query(
+          `INSERT INTO messages (chat_id, kind) VALUES ($1, 'system')`,
+          [chatId],
+        ),
       );
       expect(noEvent.code).toBe(SQLSTATE.check);
 
@@ -157,13 +175,23 @@ describe('messaging and RBAC (database layer)', () => {
     it('accepts a server-composed system message, which is how a rename is announced', async () => {
       const { rows } = await db.client.query(
         `INSERT INTO messages (chat_id, kind, system_event) VALUES ($1, 'system', $2) RETURNING id`,
-        [chatId, JSON.stringify({ type: 'user_renamed', from: 'Sara', to: 'Sarah', by: 'admin' })],
+        [
+          chatId,
+          JSON.stringify({
+            type: 'user_renamed',
+            from: 'Sara',
+            to: 'Sarah',
+            by: 'admin',
+          }),
+        ],
       );
       expect(rows[0].id).toBeDefined();
     });
 
     it('cannot delete a device that has sent a message -- devices are revoked, not deleted', async () => {
-      const err = await failure(db.client.query('DELETE FROM devices WHERE id = $1', [device]));
+      const err = await failure(
+        db.client.query('DELETE FROM devices WHERE id = $1', [device]),
+      );
       expect([SQLSTATE.restrict, SQLSTATE.foreignKey]).toContain(err.code);
     });
   });
@@ -198,7 +226,9 @@ describe('messaging and RBAC (database layer)', () => {
     });
 
     it('rejects a read receipt on an envelope that was never delivered', async () => {
-      const err = await failure(envelope(Buffer.from('opaque'), { cols: 'read_at', vals: 'now()' }));
+      const err = await failure(
+        envelope(Buffer.from('opaque'), { cols: 'read_at', vals: 'now()' }),
+      );
       expect(err.code).toBe(SQLSTATE.check);
       expect(err.constraint).toBe('message_envelopes_read_after_delivery');
     });
@@ -234,7 +264,9 @@ describe('messaging and RBAC (database layer)', () => {
       ).rows.map((r) => r.permission_key);
 
     it('defines exactly the three roles', async () => {
-      const { rows } = await db.client.query('SELECT key FROM roles ORDER BY rank');
+      const { rows } = await db.client.query(
+        'SELECT key FROM roles ORDER BY rank',
+      );
       expect(rows.map((r) => r.key)).toEqual(['member', 'moderator', 'admin']);
     });
 
@@ -243,9 +275,9 @@ describe('messaging and RBAC (database layer)', () => {
     });
 
     it('gives the administrator every permission', async () => {
-      const all = (await db.client.query('SELECT key FROM permissions ORDER BY 1')).rows.map(
-        (r) => r.key,
-      );
+      const all = (
+        await db.client.query('SELECT key FROM permissions ORDER BY 1')
+      ).rows.map((r) => r.key);
       expect(await permsOf('admin')).toEqual(all);
     });
 
@@ -265,9 +297,13 @@ describe('messaging and RBAC (database layer)', () => {
     });
 
     it('has NO permission -- for any role -- that could grant access to message plaintext', async () => {
-      const { rows } = await db.client.query('SELECT key, description FROM permissions');
+      const { rows } = await db.client.query(
+        'SELECT key, description FROM permissions',
+      );
       for (const p of rows) {
-        expect(`${p.key} ${p.description}`).not.toMatch(/message|plaintext|content|decrypt|read_all/i);
+        expect(`${p.key} ${p.description}`).not.toMatch(
+          /message|plaintext|content|decrypt|read_all/i,
+        );
       }
     });
   });

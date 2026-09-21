@@ -13,11 +13,17 @@ the current state of play.
 - **Phase 3 (Database & contact graph) — ✅ verified 2026-09-21** against a live PostgreSQL 16: applies,
   rolls back clean, re-applies, and 75 tests pass (`npm run test:db`). It found and fixed one real bug
   (`TRUNCATE` bypassed the append-only audit log). See `docs/database/schema.md`.
-- **Phase 4 (Backend foundation + `ContactGraphGuard`) is next.** The owner chose SQL-backed graph
-  checks (call `visible_user_ids()` / `are_linked()` per request; no Redis cache of the visible set).
-- **⚠️ OPEN OWNER DECISION — admin access to message content.** The owner asked (2026-09-21) for admins
-  to "view all messages and media". That contradicts the locked rule below. **Do not implement it, and do
-  not quietly refuse it either: it is pending the owner's answer.** See `decisions.md`.
+- **Phase 4 (Backend foundation + authorization core) — ✅ built 2026-09-21**, awaiting the owner's
+  review. Config validation, redacted JSON logging, uniform error filter, strict validation, health
+  checks, the three global guards, the audit service, and the WebSocket gateway with Redis fan-out.
+  243 tests pass (71 unit, 75 db, 97 app), and the core protections were mutation-tested. **Read
+  `docs/security/authorization.md` before writing any controller.** Rate limiting was NOT built; it moves
+  to Phase 5. **Phase 5 (Authentication & invites) is next and needs the owner's explicit approval.**
+- **Owner decisions 2026-09-21** (`decisions.md`): admins never see message content in v1 (a *disclosed*
+  compliance archive may be designed later as an opt-in mode — build nothing toward it now); app lock
+  (PIN/biometrics) is always the user's own choice, no admin override; user-set disappearing messages are
+  accepted (Phase 8). Both accepted features need a prototype before code — a Privacy & security
+  settings screen is still owed.
 - Process: built phase-by-phase per `docs/architecture/roadmap.md`. **Never start a phase without the
   owner's explicit approval.** End every phase with: decisions made, files changed, what remains — then
   stop and wait.
@@ -54,6 +60,16 @@ Rationale for each is in `docs/architecture/decisions.md`.
   affected conversation, and never touches identity keys** (verified safety numbers stay valid). Those
   three constraints are what stop an admin renaming one user to another's name to impersonate them —
   do not drop them for convenience. Released usernames are never reissued.
+- **Authorization is three global guards, default deny, and NOTHING is cached** (owner decision): 401 if
+  not an active account, 403 if the role lacks a permission, **404** if a named person/group/chat is
+  outside the contact graph. Every check hits Postgres per request, so suspending a user, revoking a
+  device, changing a role or revoking a link takes effect on the very next request. **Never add a cache.**
+  Every route path parameter must be covered by `@ContactTarget`/`@GroupTarget`/`@ChatTarget`, or by
+  `@GraphExempt(reason)` + `@RequirePermission`; the route-inventory test fails the build otherwise.
+- **The WebSocket is server-to-client only** and delivery re-checks the graph at delivery time, so a
+  revocation stops an already-open socket at once. Clients send over authenticated REST.
+- **Plain-JS traps:** no parameter decorators (use `@Bind(Body())`), and DTO validation does nothing
+  unless the route also has `@Validated(Dto)`. Details in `docs/security/authorization.md`.
 - **Nothing is hard-deleted.** Accounts are soft-deleted (`status='deleted'`); devices, sessions,
   links and memberships are revoked. `DELETE FROM users` fails by design (`username_history` is
   `ON DELETE RESTRICT`) — that is what keeps burned usernames burned.
@@ -85,7 +101,8 @@ apps/dashboard/  Admin web app — does not exist yet; created in Phase 6
 crypto-core/     Rust workspace; core/ crate is empty until Phase 7
 infra/docker/    Dev docker-compose.yml (Postgres, Redis, MinIO)
 docs/            progress-log.md + architecture/ (overview, decisions, design, contact-graph, roadmap,
-                 known-risks, tech-stack-decisions, folder-structure), api/, database/, security/, deployment/
+                 known-risks, tech-stack-decisions, folder-structure), api/, database/, security/
+                 (authorization.md), deployment/
 ```
 
 Client conventions: dependencies point inward (`presentation` → `domain` ← `data`); backend module names
@@ -117,6 +134,8 @@ npm run format             # prettier --write "**/*.js"
 # Migrations (apps/backend) — plain SQL via node-pg-migrate; needs DATABASE_URL in .env
 npm run migrate:up                       # apply; migrate:down rolls back one; migrate:redo redoes the last
 npm run test:db                          # 75 schema-invariant tests against a throwaway database
+npm run test:app                         # 97 tests: HTTP guards, WebSocket fan-out, audit, route inventory
+                                         #   (needs the dev Postgres AND Redis up; each suite drops its own DB)
 npm run migrate:create -- add-something  # scaffold a new .sql migration
 
 # Dev data plane (repo root) — Docker Desktop must be running

@@ -8,6 +8,68 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-21 (night) — Phase 4 BUILT: backend foundation and authorization core
+
+**Owner decisions this session:** graph checks go **in SQL, nothing cached**; true E2EE for v1 with a
+*disclosed* compliance archive possible later (nothing built toward it); app lock is **always the user's
+own choice**; then "start Phase 4". All recorded in `decisions.md`.
+
+**Built** (all under `apps/backend/src`, documented in `docs/security/authorization.md`):
+
+- **Config** validated at boot: reports every problem at once, never prints a value, refuses dev placeholder
+  secrets in production.
+- **Logging**: structured JSON, redacted by key name, no bodies, no query strings, sanitised request ids.
+- **One error filter**: every 404 identical whatever produced it; no stack/SQL/path ever leaks; only a
+  *list* of validation messages is passed through on a 400.
+- **Strict validation**, global: undeclared fields are rejected (mass assignment), values never echoed.
+- **Health**: `/health` (liveness) and `/health/ready` (Postgres + Redis, up/down only).
+- **Three global guards, default deny, nothing cached**: authenticated-and-still-active (401), permission
+  (403), contact graph (404). Plus `AuditService`, the DB and Redis modules, and the WebSocket gateway
+  with Redis fan-out that **re-checks the graph at delivery time**.
+- **Route-inventory test**: fails the build if any route parameter is not graph-scoped, or a body is unvalidated.
+
+**Tests: 243 pass** (71 unit, 75 db, 97 app), every run exiting 0 with no leaked databases. Includes real
+HTTP, real WebSockets, real Redis, and **two backend instances** sharing a channel.
+
+**Mutation-tested.** Deliberately breaking each core protection makes the suite fail: fan-out ignoring the
+graph (7 tests fail), graph guard off (12), suspended user still active (2), revoked device accepted (2),
+404 leaking a message (3). A first attempt at the last one "passed" only because my mutation was a no-op;
+I redid it as a real leak rather than accept a false all-clear.
+
+**Real bugs found and fixed by the tests — none would have been caught by reading:**
+
+1. **Health check reported OK with the database down.** `database && redis ? 'ok' : ...` where the values
+   were the strings `'up'`/`'down'`, both truthy. A load balancer would have kept routing to a dead instance.
+2. **Malformed-JSON 400 leaked the parser's message** ("Unexpected end of JSON input"). Nest wraps
+   body-parser errors in a BadRequestException carrying that text; my filter passed it through.
+3. **Jest could not parse `src/`** from the e2e config (Babel ignored `.babelrc` with `rootDir` at `test/`).
+4. My own test leaked a whole app when an assertion failed before cleanup, hanging the run. Now `try/finally`.
+
+**Decisions made in code that the owner has not been asked about** (all cheap to reverse):
+a suspended user stays *visible* to contacts (only deleted accounts vanish); archived groups remain reachable
+by members; a missing permission is a 403 not a 404; the WebSocket is server-to-client only.
+
+**NOT built, and stated so nobody assumes otherwise:**
+
+- **Rate limiting.** It was on my Phase 4 plan and I did not build it. It is needed first for activation-code
+  redemption (Phase 5), so it moves there.
+- **Real authentication.** Every non-public route returns 401 and no WebSocket can connect until Phase 5.
+- Timing side channels are unmeasured; `trust proxy` is unset until Phase 13 (details in `authorization.md`).
+
+**Also this session:** MinIO's image had vanished from Docker Hub and the replacement is a year stale (see
+`known-risks.md`, needs an owner decision before Phase 9). Docker/WSL is fixed.
+
+**Owed to the owner:** a *Privacy & security* settings prototype (app lock, disappearing-message timer),
+required before those features are coded.
+
+**Next agent:** do not start Phase 5 without the owner's explicit approval. Read
+`docs/security/authorization.md` first. Phase 5 will implement token authentication (feeding
+`request.principal` and `WS_AUTHENTICATOR`), activation-code redemption through `redeem_activation_code()`,
+rate limiting, and device binding. **The test harness fakes a principal from headers; that fake must never
+appear in `src/`.**
+
+---
+
 ## 2026-09-21 (evening) — Docker working; Phase 3 schema VERIFIED; three new owner requests
 
 **Docker.** WSL installed and the engine runs (Docker 29.8.0). Postgres 16, Redis 7 and MinIO are up and

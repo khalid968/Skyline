@@ -21,7 +21,7 @@ See `design.md` for the standing design-review rule.
    constraints. **This is where the admin-controlled contact graph is defined** (`contact-graph.md`);
    it is a data-model invariant, not an admin feature, so it lands before any endpoint exists.
 
-4. **Backend foundation & authorization core** — NestJS conventions: DTO validation, error handling,
+4. **Backend foundation & authorization core** — ✅ built 2026-09-21, awaiting review (rate limiting deferred to Phase 5). NestJS conventions: DTO validation, error handling,
    logging, health checks, base guards/interceptors/filters, WebSocket gateway skeleton. Includes the
    contact-graph guard that every downstream endpoint composes with.
 
@@ -70,8 +70,9 @@ Phases are not started until the current phase is explicitly approved.
 
 ## Pending owner decisions that could change this plan
 
-- **Admin access to message content** (`decisions.md`). Option 1 changes nothing here. Option 2 (a
-  disclosed compliance archive) would add a design phase and a key-management workstream *before* Phase 7
-  (Encryption), and would revise two locked decisions. Nothing in Phases 4 to 6 depends on the answer.
+- **Admin access to message content — decided 2026-09-21** (`decisions.md`): true E2EE for v1. A
+  *disclosed* compliance archive is a possible later opt-in mode. If the owner ever asks for it, it needs
+  its own design phase and key-management workstream *before* Phase 7 (Encryption), and would revise two
+  locked decisions. Nothing is planned or built toward it now.
 - **Prototypes owed** for the accepted requests: a *Privacy & security* settings screen (app lock,
   disappearing-message timer). Not yet drawn.
