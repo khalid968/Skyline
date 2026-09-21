@@ -27,12 +27,18 @@ permissions, and never holds message keys or plaintext.
 is installed. Not blocking now; **blocking from Phase 7 (Encryption)**. Install Rust via `rustup` before
 that phase starts.
 
-## Docker not installed on the development machine — OPEN
+## Docker installed, but its engine cannot start (WSL missing) — OPEN, blocking
 
-No Docker daemon on the owner's Windows machine, so the `infra/docker/docker-compose.yml` dev stack
-(Postgres, Redis, MinIO) cannot be brought up. The compose file has been syntax-validated but never
-live-tested. Not blocking now; **blocking from Phase 3 (Database)**. Install Docker Desktop before that
-phase starts, then verify with `docker compose -f infra/docker/docker-compose.yml up`.
+Docker Desktop is installed (CLI 29.8.0, Compose v5.5.1), but on the owner's Windows 11 **Home**
+machine its Linux engine runs on WSL2 and **WSL is not installed**, so the daemon answers `500`. The
+dev stack (Postgres, Redis, MinIO) cannot come up, so the Phase 3 migrations have still never been
+applied to a live database. **Blocking Phase 4's SQL-backed guard.**
+
+Virtualization is enabled (`HypervisorPresent: True`) — no BIOS change needed. Fix, from an elevated
+PowerShell: `wsl --install --no-distribution`, reboot if prompted, start Docker Desktop, then verify with
+`docker compose -f infra/docker/docker-compose.yml up -d`. The Docker binaries live at
+`C:\Users\kkhal\AppData\Local\Programs\DockerDesktop\resources\bin` and are not on the PATH of shells
+started before the install.
 
 ## Flutter platform runners not yet generated — OPEN (low)
 

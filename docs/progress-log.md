@@ -8,6 +8,35 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-21 (later) — Docker installed but its engine cannot start: WSL is missing
+
+**Owner decisions:** Docker installed; graph authorization goes **in SQL** (call `visible_user_ids()` /
+`are_linked()` per request, no Redis cache of the visible set — a cache adds a stale-access-after-revoke
+risk that isn't worth it at this scale). That is effectively the go-ahead for Phase 4.
+
+**State found.** Docker Desktop's CLI (29.8.0) and Compose (v5.5.1) are installed at
+`C:\Users\kkhal\AppData\Local\Programs\DockerDesktop\resources\bin` — on the *persistent* PATH but not in
+sessions started before the install, so use the full path or restart the terminal. Launching Docker
+Desktop leaves the engine returning `500 Internal Server Error` because **WSL is not installed**
+(`wsl --status` reports it missing) and Docker Desktop's Linux engine runs on WSL2. Windows 11 **Home**
+has no Hyper-V alternative. Virtualization itself *is* enabled (`HypervisorPresent: True`, VBS running);
+`Win32_Processor.VirtualizationFirmwareEnabled` reads `False` but is a known false negative when a
+hypervisor is already running — do not send the owner into the BIOS on that basis.
+
+**Fix (needs an elevated PowerShell, possibly a reboot — owner's call, not done by the agent):**
+`wsl --install --no-distribution`, reboot if asked, then start Docker Desktop.
+
+**A local `apps/backend/.env` was created** (gitignored) with credentials matching the dev compose
+stack: `DATABASE_URL=postgres://skyline:skyline@localhost:5432/skyline`. Note `.env.example` keeps the
+`change-me` placeholders; only the local `.env` uses the dev-stack values.
+
+**Not yet done, and deliberately held:** applying the Phase 3 migrations for real
+(`docker compose ... up -d`, then `npm run migrate:up && migrate:down && migrate:up`). Phase 4's guard is
+SQL-backed, so it should not be built on a schema that has never touched a live Postgres. DB-independent
+Phase 4 pieces (config validation, exception filter, logging, permission decorators) can proceed first.
+
+---
+
 ## 2026-09-21 — Phase 3: schema written. Not yet run against a live database.
 
 **Tooling chosen: `node-pg-migrate` in plain-SQL mode.** No ORM. It fits the locked decisions already
