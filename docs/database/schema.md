@@ -117,20 +117,28 @@ rename impossible to perform silently.
 
 ## Verification status
 
-The migrations have **not been run against a live PostgreSQL** — Docker is not installed on the
-development machine, so the dev data plane cannot start.
+**Verified against a live PostgreSQL 16 on 2026-09-21.**
 
-They have been parsed against the real PostgreSQL 18 grammar via `libpg-query`: all 113 statements
-across both the up and down halves of all 8 files parse cleanly, and all seven function bodies
-(five PL/pgSQL, two SQL) parse individually. That catches syntax errors and nothing else — it does
-**not** verify that constraints behave as intended, that triggers fire correctly, or that the
-migrations apply and roll back in order.
+- All 8 migrations apply, roll back completely (0 tables, 0 enum types, 0 functions left behind), and
+  re-apply from nothing.
+- 75 tests in `apps/backend/test/db/` exercise the invariants against a real database. Run them with
+  `npm run test:db` (needs the dev Postgres up). Each suite builds a throwaway database from the real
+  migration files and drops it afterwards; the dev database is never touched.
+- The single-use guarantee was checked under genuine concurrency: 25 separate connections race one code
+  and exactly one wins. As a control, a deliberately broken check-then-write version of
+  `redeem_activation_code()` told **10 of 10** racers they had redeemed the same code, so the test
+  discriminates and the warning against that pattern is not theoretical.
 
-**Before relying on any of this:** install Docker Desktop, then
+**Bug found by those tests and fixed:** `audit_log` refused `UPDATE` and `DELETE` but not `TRUNCATE`,
+so one statement could wipe the whole trail. A `BEFORE TRUNCATE` trigger now closes it. A syntax-only
+parse could never have caught this.
 
-```bash
-docker compose -f infra/docker/docker-compose.yml up -d
-cd apps/backend && npm run migrate:up && npm run migrate:down && npm run migrate:up
-```
+**Not covered by tests, and worth knowing:**
 
-The Phase 12 test obligations in `../architecture/contact-graph.md` are the real check.
+- *Timing.* "Spent, expired and unknown codes are indistinguishable, in the time taken" is a design
+  property of the single conditional `UPDATE`, not something these tests measure.
+- *Application code.* These are database-layer tests. Nothing yet proves a service or endpoint routes
+  through `redeem_activation_code()`, `are_linked()` or `visible_user_ids()`; that is Phase 4's job.
+- *Migration 008 was edited in place* to add the TRUNCATE trigger rather than adding a 009. That is
+  acceptable only because nothing has been deployed anywhere. **Once any environment beyond a developer
+  laptop has run these migrations, they are immutable: add new migrations instead.**

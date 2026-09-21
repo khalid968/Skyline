@@ -8,6 +8,40 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-21 (evening) — Docker working; Phase 3 schema VERIFIED; three new owner requests
+
+**Docker.** WSL installed and the engine runs (Docker 29.8.0). Postgres 16, Redis 7 and MinIO are up and
+healthy. `minio/minio` no longer exists on Docker Hub, so the compose file now uses
+`quay.io/minio/minio:latest` — which is release 2025-09-07, a year stale. Fine for dev, a real risk for
+production; see `known-risks.md`.
+
+**Phase 3 verified against a live database.** 8 migrations apply, roll back to nothing, and re-apply.
+75 tests (`npm run test:db`, in `apps/backend/test/db/`) pass, including 25 concurrent connections racing
+one activation code (exactly one wins). A control run with a deliberately broken check-then-write redeem
+let **10 of 10** racers through, so the test discriminates. **One real bug found and fixed:** `TRUNCATE`
+bypassed the append-only audit log; added a `BEFORE TRUNCATE` trigger to migration 008 (edited in place,
+legitimate only while nothing is deployed anywhere). Full detail and the honest gaps (timing is not
+measured; no application code exists yet to test) are in `docs/database/schema.md`. Earlier I said "15
+tables"; it is 17.
+
+**Owner requests received, all logged in `decisions.md`:**
+
+1. **PIN / Face ID / fingerprint app lock — accepted.** Local-only, must gate the keystore not just cover
+   the screen, admin can never see or reset a PIN. Phase 5. Needs a prototype first.
+2. **User-set disappearing messages — accepted, with honest limits.** Schema already supports it. Phase 8.
+   Needs a prototype first.
+3. **Admin can view all messages and media — ESCALATED, NOT IMPLEMENTED.** It contradicts the locked rule
+   that admins never read messages. Three options were put to the owner (keep E2EE; disclosed compliance
+   archive; E2EE now and an opt-in archive mode later). **Do not build any of it until the owner
+   answers, and never build a covert version.**
+
+**Next agent:** read the open decision in `decisions.md` first. Phase 4 does not depend on the answer and
+may proceed. Start with the DB-independent pieces (config validation, exception filter, logging,
+permission decorators), then `ContactGraphGuard` over `visible_user_ids()`, tested against the real
+database using the harness in `apps/backend/test/db/harness.js`.
+
+---
+
 ## 2026-09-21 (later) — Docker installed but its engine cannot start: WSL is missing
 
 **Owner decisions:** Docker installed; graph authorization goes **in SQL** (call `visible_user_ids()` /

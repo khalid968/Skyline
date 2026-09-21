@@ -16,6 +16,7 @@
     "start:dev": "nodemon",
     "test": "jest",
     "test:cov": "jest --coverage",
+    "test:db": "jest --config ./test/jest-e2e.json --runInBand db/",
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {

@@ -6,6 +6,96 @@ working around it.
 
 ---
 
+## 2026-09-21 — PENDING OWNER DECISION: admin access to message content and media
+
+**Status: OPEN. Not implemented. Not refused. Waiting on the owner.**
+
+**The request.** "Give the admin the power to view all messages and media and have a history of
+everything."
+
+**Why it is escalated rather than built.** It contradicts, directly, a locked decision and a core design
+property: admins can never read messages (`contact-graph.md` rule 7). The server holds only ciphertext;
+private keys never leave devices; the seeded `permissions` table deliberately has no permission that
+could grant plaintext. Implementing this is not a feature toggle. It changes what kind of product Skyline
+is. Per the project rules that call is the owner's, not an agent's.
+
+**What an admin can already see (the "history of everything" that needs no change).** The audit log of
+every admin action; account, device, session and activation-code history; the full contact-link and
+group-membership history; and message *metadata* (who, which chat, when, ciphertext size). Everything
+except the content.
+
+**Options put to the owner:**
+
+1. **Keep true end-to-end encryption.** Admins get all of the above, never content. Strongest security
+   claim; simplest; the position the whole design and prototype assume.
+2. **A disclosed compliance archive.** Every message and attachment is *additionally* encrypted to an
+   organization archive key, held by a designated compliance role and used under audited, ideally
+   dual-control access. Users are told plainly and permanently. This is a real enterprise category, but it
+   is a different product claim: it is no longer end-to-end between the two people, and the archive key
+   becomes the single most valuable secret in the system.
+3. **Ship option 1 now; design option 2 later as an opt-in deployment mode**, so the core stays clean.
+
+**Constraints that apply to any version of option 2, so they are recorded before the choice is made:**
+
+- **It must be disclosed to users**, in the app, permanently, not buried in terms. Reading people's
+  messages without their knowledge is deceptive and, in many jurisdictions, unlawful. An agent will not
+  build a covert variant.
+- **It defeats disappearing messages** (below). If the archive retains everything, "messages delete
+  automatically" is false for the archive, and the UI must not claim otherwise.
+- It needs its own key management design, access audit log and threat model before any code.
+- It re-opens the locked decisions "admins can never read messages" and "server holds only ciphertext",
+  which must then be explicitly revised, not quietly bypassed.
+
+---
+
+## 2026-09-21 — ACCEPTED: PIN / biometric app lock (prototype required before code)
+
+**Request (owner).** Users can protect the app with a PIN, Face ID or fingerprint.
+
+**Design constraints:**
+
+- **Purely local.** Biometric matching is done by the operating system (Face ID / Touch ID, Android
+  BiometricPrompt, Windows Hello). The app never receives biometric data. The PIN never leaves the
+  device and is never sent to the server.
+- **It must gate the keys, not just cover the screen.** Store device key material in the platform
+  keystore (iOS Keychain, Android Keystore, Windows DPAPI/Hello) flagged as requiring user
+  authentication. A lock screen drawn over an unlocked app is decoration, not security.
+- Escalating lockout delays after wrong PINs. An optional "erase after N failures" is destructive and
+  strictly opt-in.
+- **An administrator can neither see nor reset a user's PIN.** A forgotten PIN means the on-device keys
+  are unrecoverable: the user re-activates with a fresh activation code and loses local history. The
+  server never held a copy, so this is unavoidable and must be said plainly in the UI.
+- **Open question:** may an admin *require* app lock organization-wide as a policy? Recommended yes;
+  needs the owner's confirmation.
+
+Lands in Phase 5 (Authentication). It is UI, so a settings prototype is needed first.
+
+---
+
+## 2026-09-21 — ACCEPTED: user-set disappearing messages, with honest limits
+
+**Request (owner).** Users choose how long until messages are deleted from the device automatically.
+
+**Design.**
+
+- A per-chat timer. The schema already supports it: `chats.disappear_seconds` (5 seconds to 1 year) and
+  `messages.expires_at`.
+- The client deletes its local copy at expiry. The server deletes ciphertext envelopes once delivered or
+  expired.
+- **Changing the timer is announced as a system message in the chat**, for the same reason a rename is:
+  a silent change would let one party quietly shorten the other's retention.
+- Recommended: the timer starts when the message is **read**, not sent (as in Signal).
+- **Honest limits, and the UI must not overpromise:** it cannot be enforced against a modified client, a
+  screenshot, or a photograph of the screen. It deletes cooperatively-run copies, nothing more.
+- **Open questions:** who may set the timer in a group (groups are admin-managed, so likely admin-set);
+  whether an admin may impose an organization-wide minimum or maximum.
+- **Conflicts with the pending decision above.** If a compliance archive exists, disappearing messages do
+  not apply to it.
+
+Lands in Phase 8 (Messaging). It is UI, so a prototype is needed first.
+
+---
+
 ## 2026-09-21 — Migrations are plain SQL run by `node-pg-migrate`. No ORM.
 
 **Decision.** `node-pg-migrate` in `-j sql` mode. Migrations are `.sql` files with `-- Up Migration`

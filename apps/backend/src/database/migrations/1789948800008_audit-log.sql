@@ -41,8 +41,14 @@ CREATE TRIGGER audit_log_no_update BEFORE UPDATE ON audit_log
 CREATE TRIGGER audit_log_no_delete BEFORE DELETE ON audit_log
   FOR EACH STATEMENT EXECUTE FUNCTION audit_log_append_only();
 
+-- TRUNCATE does not fire row or DELETE triggers, so without this one statement
+-- would wipe the whole trail and sail past the two triggers above.
+CREATE TRIGGER audit_log_no_truncate BEFORE TRUNCATE ON audit_log
+  FOR EACH STATEMENT EXECUTE FUNCTION audit_log_append_only();
+
 -- Down Migration
 
+DROP TRIGGER IF EXISTS audit_log_no_truncate ON audit_log;
 DROP TRIGGER IF EXISTS audit_log_no_delete ON audit_log;
 DROP TRIGGER IF EXISTS audit_log_no_update ON audit_log;
 DROP FUNCTION IF EXISTS audit_log_append_only();

@@ -27,12 +27,11 @@ permissions, and never holds message keys or plaintext.
 is installed. Not blocking now; **blocking from Phase 7 (Encryption)**. Install Rust via `rustup` before
 that phase starts.
 
-## Docker installed, but its engine cannot start (WSL missing) — OPEN, blocking
+## Docker / WSL — RESOLVED 2026-09-21 (kept for the diagnosis)
 
-Docker Desktop is installed (CLI 29.8.0, Compose v5.5.1), but on the owner's Windows 11 **Home**
-machine its Linux engine runs on WSL2 and **WSL is not installed**, so the daemon answers `500`. The
-dev stack (Postgres, Redis, MinIO) cannot come up, so the Phase 3 migrations have still never been
-applied to a live database. **Blocking Phase 4's SQL-backed guard.**
+Docker Desktop's Linux engine runs on WSL2, and WSL was not installed, so the daemon answered `500`.
+Resolved by `wsl --install --no-distribution` and a reboot; the engine now runs (Docker 29.8.0) and the
+dev stack is up. Left here because the symptom (a 500 from the engine) is misleading.
 
 Virtualization is enabled (`HypervisorPresent: True`) — no BIOS change needed. Fix, from an elevated
 PowerShell: `wsl --install --no-distribution`, reboot if prompted, start Docker Desktop, then verify with
@@ -53,3 +52,16 @@ installed, so this is a one-command fix, not a blocker.
 `apps/mobile/lib/features/admin/` was scaffolded in Phase 1 on the assumption of in-app administration.
 Administration is now a separate web dashboard (`decisions.md`). Remove or repurpose that directory when
 Phase 6 starts, so nobody builds admin surface into the client binary by following the folder structure.
+
+---
+
+## MinIO: the compose image was gone, and the replacement is a year stale — OPEN (before Phase 9)
+
+`minio/minio` no longer exists on Docker Hub, so `docker compose up` failed outright. The dev compose
+file now uses `quay.io/minio/minio:latest`, which starts and passes its healthcheck. **But that image is
+release 2025-09-07 — a year old** — so `latest` is not receiving updates. Fine for local development;
+**not acceptable for production, where the object store holds every user's encrypted media.**
+
+The client talks S3, so the store is swappable. Decide before Phase 9 whether to keep MinIO (a pinned,
+self-built or source-built version) or move to another S3-compatible store. This touches the locked
+"MinIO = encrypted media blobs" decision, so it is the owner's call, not an agent's.

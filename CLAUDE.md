@@ -10,12 +10,14 @@ the current state of play.
 ## Current state
 
 - **Phase 2 (Product design) — ✅ approved 2026-09-20.**
-- **Phase 3 (Database & contact graph) — schema written 2026-09-21, ⚠️ NOT yet run against a live
-  PostgreSQL.** Docker is still not installed. The migrations were only parsed against the real
-  PostgreSQL 18 grammar (`libpg-query`, 113 statements, 0 failures) — that catches syntax errors and
-  nothing else. **Apply them for real before building anything on top.** See `docs/database/schema.md`.
-- **Phase 4 (Backend foundation + `ContactGraphGuard`) is next**, once the schema is verified and the
-  owner approves starting it.
+- **Phase 3 (Database & contact graph) — ✅ verified 2026-09-21** against a live PostgreSQL 16: applies,
+  rolls back clean, re-applies, and 75 tests pass (`npm run test:db`). It found and fixed one real bug
+  (`TRUNCATE` bypassed the append-only audit log). See `docs/database/schema.md`.
+- **Phase 4 (Backend foundation + `ContactGraphGuard`) is next.** The owner chose SQL-backed graph
+  checks (call `visible_user_ids()` / `are_linked()` per request; no Redis cache of the visible set).
+- **⚠️ OPEN OWNER DECISION — admin access to message content.** The owner asked (2026-09-21) for admins
+  to "view all messages and media". That contradicts the locked rule below. **Do not implement it, and do
+  not quietly refuse it either: it is pending the owner's answer.** See `decisions.md`.
 - Process: built phase-by-phase per `docs/architecture/roadmap.md`. **Never start a phase without the
   owner's explicit approval.** End every phase with: decisions made, files changed, what remains — then
   stop and wait.
@@ -113,11 +115,12 @@ npx jest -t "test name"               # single test
 npm run format             # prettier --write "**/*.js"
 
 # Migrations (apps/backend) — plain SQL via node-pg-migrate; needs DATABASE_URL in .env
-npm run migrate:up                       # apply; migrate:down rolls back one
+npm run migrate:up                       # apply; migrate:down rolls back one; migrate:redo redoes the last
+npm run test:db                          # 75 schema-invariant tests against a throwaway database
 npm run migrate:create -- add-something  # scaffold a new .sql migration
 
-# Dev data plane (repo root) — needs Docker, not yet installed
-docker compose -f infra/docker/docker-compose.yml up -d
+# Dev data plane (repo root) — Docker Desktop must be running
+docker compose -f infra/docker/docker-compose.yml up -d   # Postgres, Redis, MinIO
 
 # Crypto core (crypto-core/) — needs Rust, not yet installed
 cargo build && cargo test
@@ -134,7 +137,7 @@ flutter pub get && flutter analyze && flutter test
 | Flutter 3.35.7 / Dart 3.9.2 | ✅ installed |
 | Node 24.19 / npm 11.17 | ✅ installed |
 | Rust / cargo | ❌ **not installed** — blocking from Phase 7 |
-| Docker | ❌ **not installed** — blocking from Phase 3 |
+| Docker Desktop 29.8 (WSL2) | ✅ installed and working; dev stack verified |
 
 `apps/mobile` has no SDK-generated platform runner folders yet (gitignored; see bootstrap above).
 Backend boot can be smoke-tested with `npm run start` — no external services required until Phase 3.

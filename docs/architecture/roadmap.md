@@ -13,11 +13,11 @@ See `design.md` for the standing design-review rule.
 1. **System architecture** — ✅ complete. Project identity, tech stack decisions, monorepo scaffolding,
    local dev environment. No feature logic.
 
-2. **Product design** — ✅ first pass complete, awaiting approval. Visual language (type, colour,
+2. **Product design** — ✅ approved 2026-09-20 (a Privacy & security settings screen is still owed, see below). Visual language (type, colour,
    spacing, iconography), core mobile screens, admin dashboard screens. Clickable prototype on the
    design canvas (`design.md`). No code.
 
-3. **Database & the contact graph** — full normalized PostgreSQL schema, migrations, indexes,
+3. **Database & the contact graph** — ✅ verified 2026-09-21 against live Postgres. Full normalized PostgreSQL schema, migrations, indexes,
    constraints. **This is where the admin-controlled contact graph is defined** (`contact-graph.md`);
    it is a data-model invariant, not an admin feature, so it lands before any endpoint exists.
 
@@ -26,7 +26,7 @@ See `design.md` for the standing design-review rule.
    contact-graph guard that every downstream endpoint composes with.
 
 5. **Authentication & invites** — admin-issued activation codes, username auth, device authentication,
-   biometric unlock, recovery codes, session/device binding. No public registration path exists at all.
+   PIN / Face ID / fingerprint app lock gating the on-device keys (`decisions.md`), recovery codes, session/device binding. No public registration path exists at all.
 
 6. **Admin dashboard (v1)** — separate web app. User creation, activation codes, the contact-graph
    editor, group membership, device list. **This is a hard prerequisite for using Skyline**: accounts
@@ -65,3 +65,13 @@ See `design.md` for the standing design-review rule.
 | Database moved ahead of backend foundation | The schema defines the invariant the guards enforce, so it is settled first. |
 
 Phases are not started until the current phase is explicitly approved.
+
+---
+
+## Pending owner decisions that could change this plan
+
+- **Admin access to message content** (`decisions.md`). Option 1 changes nothing here. Option 2 (a
+  disclosed compliance archive) would add a design phase and a key-management workstream *before* Phase 7
+  (Encryption), and would revise two locked decisions. Nothing in Phases 4 to 6 depends on the answer.
+- **Prototypes owed** for the accepted requests: a *Privacy & security* settings screen (app lock,
+  disappearing-message timer). Not yet drawn.
