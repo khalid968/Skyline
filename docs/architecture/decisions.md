@@ -6,6 +6,28 @@ working around it.
 
 ---
 
+## 2026-09-23 — Phase 7 (Encryption) ground rules, decided by the owner
+
+- **The AGPL-3.0 licence of `libsignal` is accepted.** The Skyline client apps link `libsignal` and are
+  therefore AGPL: their source must be offered to the people who receive them (the members). The backend and
+  the admin dashboard do not link it and are unaffected; keep it that way, and never link `libsignal` into
+  either. This is the same model Signal uses. Every non-AGPL alternative is an unaudited reimplementation,
+  which the "no custom cryptography" rule forbids.
+- **Each device has its own keys.** Every device is activated with its own admin-issued code, generates its
+  own identity key and prekeys, and is verified separately (one safety number per device). A contact sees a
+  system notice when someone adds a device. Senders encrypt to each of the recipient's live devices.
+  - *Rejected:* one shared identity with linked devices, as in Signal or WhatsApp. Copying the identity key
+    between devices needs a provisioning protocol that `libsignal` does not fully provide, so we would have
+    to write cryptographic glue ourselves.
+- **The key exchange is `libsignal`'s current default, PQXDH** (X3DH with post-quantum Kyber prekeys), not
+  classic X3DH. The roadmap's "X3DH" means whatever `libsignal` currently uses.
+- **Toolchain.** Claude installs Rust (MSVC) and the Microsoft C++ Build Tools through winget on the
+  owner's machine.
+- **No Mac is available**, so iOS is built and tested later. Phase 7 is proven on Windows and Android; the
+  iOS side is kept buildable in principle but is untested until a Mac or a cloud Mac exists.
+
+---
+
 ## 2026-09-23 — How the dashboard holds its session; the protected owner
 
 These are implementation choices made while building Phase 6. None of them changes an owner decision.

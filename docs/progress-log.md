@@ -8,6 +8,24 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-23 (late night) — Phase 6 pushed; Phase 7 planned, NOT started
+
+The owner reviewed Phase 6 ("looks good") and asked to push. `275d670` is on GitHub. The Phase 7 plan was
+presented:
+
+1. toolchain;
+2. the `libsignal` crypto core with Rust tests;
+3. `flutter_rust_bridge` bindings and on-device key storage;
+4. the backend key directory (prekey tables, upload, graph-checked bundle fetch, one-time keys claimed
+   atomically, fetch rate-limited);
+5. an end-to-end check that the server stores only ciphertext.
+
+The owner answered the four open questions (recorded in `decisions.md`): accept AGPL, each device has its own
+keys, Claude installs the toolchain via winget, and no Mac for now. **Phase 7 has not started. Wait for
+the owner's explicit go.**
+
+---
+
 ## 2026-09-23 (night) — Phase 6 BUILT: admin dashboard v1
 
 The owner approved boards 9-15 and asked for longer disappearing-message periods. The timer now has presets
