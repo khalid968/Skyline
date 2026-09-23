@@ -8,6 +8,16 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-23 (evening) — Phase 6 prototypes drawn, awaiting approval
+
+The owner said "let's start". Seven screens were added to the canvas (boards 9-15, listed in `design.md`):
+admin sign-in, 2FA code, account & 2FA setup, devices, and on mobile Privacy & security, the lock screen and
+the disappearing-message timer. **No Phase 6 code has been written; it waits for approval of these.** Two
+proposals shown on the canvas need an explicit yes or no: the owner resets a locked-out admin's password or 2FA
+(no self-service reset), and the v1 sidebar is Users / Contact graph / Devices only.
+
+---
+
 ## 2026-09-23 (later) — Phase 5 pushed; Phase 6 scoped, NOT started
 
 The owner tested Phase 5 by hand (admin sign-in worked once the doc's `YOUR PASSWORD` placeholder was replaced)
