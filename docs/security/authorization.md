@@ -191,13 +191,42 @@ Full rationale in `decisions.md` (2026-09-23). How it works:
 - **The test fakes stay in `test/`.** `test/app/app-harness.js` can set a principal from `x-test-*` headers
   for guard tests; `realAuth: true` turns that off. Nothing in `src/` may read those headers.
 
+## The dashboard session and the admin API (Phase 6)
+
+- **Cookie, not token.** `POST /admin/auth/login` or `/mfa` sent with `x-skyline-client: dashboard` sets
+  `skyline_admin`: HttpOnly, SameSite=Strict, `Path=/`, and Secure in production. The token is then **left out
+  of the body**. Without the header the old behaviour is unchanged: the token comes back in the body, for
+  scripts and the CLI. Logout clears the cookie. See `src/modules/auth/dashboard-cookie.js`.
+- **Reading it.** `AuthenticatedGuard` checks a bearer token first, then the cookie. The cookie is only ever
+  looked up as a *dashboard* session; a device token in a cookie is ignored.
+- **CSRF.** A request authenticated by cookie with any method other than GET, HEAD or OPTIONS must carry
+  `x-skyline-client: dashboard`, or it gets a 403. Keep this check. SameSite is the first layer; this header
+  is the second.
+- **Must change password.** While `admin_credentials.must_change_password` is set, an operator can reach only
+  `@DashboardSession` routes (me, password, logout) and everything else is 403. The flag is set by a temporary
+  password (a new operator, or an owner reset) and cleared by `POST /admin/auth/password`.
+- **Who may manage whom** (`src/modules/admin/admin-policy.js`). Every admin write calls `assertCanManage`:
+  - nobody acts on themselves, except to rename themselves or revoke their own device;
+  - only the owner acts on an administrator;
+  - a moderator acts only on members.
+
+  `assertCanAssignRole`: only the owner makes or unmakes administrators. The database trigger
+  `users_protect_owner` enforces the owner's protection even if the API is bypassed. The dashboard's
+  `canManage()` mirrors these rules only to hide buttons.
+- **Admin routes do not use the contact graph.** Operators manage everyone, so every `:id` route is
+  `@GraphExempt(OPERATOR)` plus `@RequirePermission(...)`. Permissions come from migrations 002 and 010, and
+  `users.role` is admin-only.
+- **Same origin, no CORS.** The dashboard reaches the API through `/api` on its own origin: the Vite proxy
+  in development, Nginx in production. Adding CORS would open the cookie to other origins' requests, so don't.
+
 ## Tests
 
 | Command | Suite | Needs |
 | --- | --- | --- |
 | `npm test` | 109 unit tests (config, redaction, logger, filter, validation, auth crypto, rate-limit guard) | nothing |
 | `npm run test:db` | 78 schema-invariant tests | Postgres up |
-| `npm run test:app` | 157 tests: guards, real-token authentication, WebSocket fan-out, audit, rate limits, CLI tools, route inventory | Postgres + Redis up |
+| `npm run test:app` | 200 tests: guards, real-token authentication, WebSocket fan-out, audit, rate limits, CLI tools, admin API and owner protection, dashboard cookie and CSRF, route inventory | Postgres + Redis up |
+| `npm test` in `apps/dashboard` | 18 dashboard tests (API client, sign-in and 2FA, must-change lock, create user, contact graph, owner read-only) | nothing |
 
 `test:db` and `test:app` build a throwaway database per suite and drop it afterwards. The core
 protections were **mutation-tested**: deliberately breaking each (graph filter off, guard off, suspended

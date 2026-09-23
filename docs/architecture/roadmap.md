@@ -28,8 +28,9 @@ See `design.md` for the standing design-review rule.
 5. **Authentication & invites** — ✅ built 2026-09-23, awaiting review. Admin-issued activation codes, username auth, device authentication,
    session/device binding, rate limiting. (The PIN / Face ID / fingerprint app lock moved to the mobile app build: it is purely on-device. Recovery codes were dropped: a lost phone gets a new activation code.) No public registration path exists at all.
 
-6. **Admin dashboard (v1)** — separate web app. User creation, activation codes, the contact-graph
-   editor, group membership, device list. **This is a hard prerequisite for using Skyline**: accounts
+6. **Admin dashboard (v1)** — ✅ built 2026-09-23, awaiting review. Separate web app (`apps/dashboard`,
+   React + Vite, plain JS). User creation, activation codes, the contact-graph editor, device list, sign-in
+   with optional 2FA, protected owner. (Group membership moved to dashboard v2, Phase 11 — owner decision.) **This is a hard prerequisite for using Skyline**: accounts
    are created by hand and contacts are assigned by hand, so nobody can sign in until this ships.
 
 7. **Encryption** — `libsignal-client` in `crypto-core`, `flutter_rust_bridge` bindings, on-device key

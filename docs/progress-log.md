@@ -8,6 +8,61 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-23 (night) — Phase 6 BUILT: admin dashboard v1
+
+The owner approved boards 9-15 and asked for longer disappearing-message periods. The timer now has presets
+from 1 hour to 1 year plus a custom duration; this is a Phase 8 mobile screen and board 15 was updated.
+Then Phase 6 was built. **It is awaiting the owner's review. Phase 7 needs explicit approval.**
+
+**Backend** (commit `ddc4d35`):
+
+- Migration 010 adds `is_owner`, protected by a trigger, and `must_change_password`.
+- `src/modules/admin/` holds the users, codes, contact-link and devices APIs, with 15 routes, all behind
+  `@RequirePermission`.
+- `admin-policy.js` decides who may manage whom:
+  - nobody manages themselves;
+  - only the owner manages admins;
+  - moderators manage members only.
+- The dashboard session is a cookie, with the CSRF header rule.
+
+**Dashboard** (`apps/dashboard`, new): React 19 + Vite 8, plain JavaScript.
+
+- `src/lib/api.js` is the only fetch path. It stays same-origin through `/api` and always sends the CSRF
+  header.
+- `src/lib/auth.jsx` holds the session state plus `capabilities()` and `canManage()`, which mirror the
+  backend policy.
+- The pages:
+  - `SignIn` and `TwoFactor`;
+  - `Users`, with the create-user panel;
+  - `UserDetail`: rename, role, suspend, reinstate, delete, codes, devices and reset sign-in;
+  - `ContactGraph`: a picker plus switches, updated optimistically;
+  - `Devices`;
+  - `Account`: password, 2FA with a QR code, and the must-change lock.
+
+**Verified**
+
+- `npm test` in `apps/dashboard`: 18 tests.
+- `npm run build` is clean. oxlint gives only style warnings.
+- Backend: 387 tests.
+- Smoke test through the real proxy path: the dashboard on :5179, the backend on :3077, and a throwaway
+  database, dropped afterwards.
+  - Checked: the HttpOnly cookie is set and no token appears in the body; CSRF is refused without the header;
+    users are created with initial contacts; link, unlink, rename, suspend and reinstate work.
+  - A moderator is held to the account page until they change their password, then cannot touch the owner
+    but can suspend a member. After logout the cookie is dead.
+  - Suspend and reinstate return 200, not 204.
+
+**Next agent should:**
+
+1. Remind the owner to **restart their backend on :3000**. It was started before Phase 6 and does not have
+   the admin routes.
+2. Wait for the owner's review of Phase 6. **Phase 7 (Encryption) needs explicit approval.** It also needs
+   Rust installed, which it still is not.
+3. Known leftovers (the stray `apps/mobile/lib/features/admin/` placeholder folders were removed this phase):
+   - Groups and the audit-log viewer are dashboard v2 (Phase 11).
+
+---
+
 ## 2026-09-23 (evening) — Phase 6 prototypes drawn, awaiting approval
 
 The owner said "let's start". Seven screens were added to the canvas (boards 9-15, listed in `design.md`):

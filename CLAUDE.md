@@ -23,12 +23,18 @@ the current state of play.
   activation with Ed25519 keys, rotating signed refresh tokens, admin password sign-in with optional TOTP,
   session kinds enforced, rate limiting (fails closed), `admin:create` / `user:invite` / `dev:device` tools.
   344 tests pass; 8 more mutation checks caught. Owner's manual test: `docs/try-it-yourself.md`.
-  **Phase 6 (admin dashboard v1) is next: needs approval AND an approved prototype of its screens first.**
+- **Phase 6 (Admin dashboard v1) — ✅ built 2026-09-23**, awaiting the owner's review. `apps/dashboard`
+  (React 19 + Vite, plain JS): users & activation codes, contact-graph editor, devices, sign-in with
+  optional 2FA, account page. Backend: `modules/admin/`, migration 010 (protected **owner**,
+  `must_change_password`). Session = HttpOnly cookie + CSRF header rule, same-origin via `/api` proxy, **no
+  CORS**. 387 backend + 18 dashboard tests pass. Groups & audit viewer are v2 (Phase 11).
+  **Phase 7 (Encryption) is next: needs approval, and Rust is still not installed.**
 - **Owner decisions 2026-09-21** (`decisions.md`): admins never see message content in v1 (a *disclosed*
   compliance archive may be designed later as an opt-in mode — build nothing toward it now); app lock
   (PIN/biometrics) is always the user's own choice, no admin override; user-set disappearing messages are
-  accepted (Phase 8). Both accepted features need a prototype before code — a Privacy & security
-  settings screen is still owed.
+  accepted (Phase 8). Their Privacy & security, lock-screen and timer prototypes were **approved
+  2026-09-23** (design boards 13-15). The timer offers Off, 1 hour, 1 day, 1 week, 1 month, 3 months,
+  6 months, 1 year, plus a custom duration from 5 minutes to 1 year.
 - Process: built phase-by-phase per `docs/architecture/roadmap.md`. **Never start a phase without the
   owner's explicit approval.** End every phase with: decisions made, files changed, what remains — then
   stop and wait.
@@ -52,9 +58,14 @@ Rationale for each is in `docs/architecture/decisions.md`.
 - **v1 platforms: iOS, Android, Windows.** The **Web messaging client is out of scope** — no official
   WASM build of `libsignal-client` exists and every alternative is unaudited. macOS/Linux are cheap
   follow-ons but unpromised.
-- **Admin tooling is a separate web app**, not in-app screens. (`apps/mobile/lib/features/admin/` is
-  leftover Phase 1 scaffolding and contradicts this — remove it in Phase 6.) The dashboard never holds
-  message keys or plaintext, so the WASM problem does not apply to it.
+- **Admin tooling is a separate web app** (`apps/dashboard`), never in-app screens. The dashboard never
+  holds message keys or plaintext, so the WASM problem does not apply to it.
+- **The owner account is protected** (`users.is_owner`, DB trigger): nobody can demote, suspend, rename or
+  delete it, and only the owner creates, promotes or removes admins. Moderators manage members only;
+  nobody manages themselves. Policy lives in `modules/admin/admin-policy.js` — every admin write calls it.
+- **Dashboard session = `skyline_admin` HttpOnly SameSite=Strict cookie**, and every cookie-authenticated
+  change must carry `x-skyline-client: dashboard` (CSRF). The dashboard is same-origin through `/api`; never
+  add CORS. Details: `docs/security/authorization.md` → "The dashboard session".
 - **Admins can grant/revoke contacts and suspend accounts. Admins can never read messages.** Any request
   that would give them plaintext breaks the product's core promise — escalate to the owner, never
   quietly implement.
@@ -108,7 +119,7 @@ Rationale for each is in `docs/architecture/decisions.md`.
 ```
 apps/mobile/     Flutter client — feature-first Clean Architecture (lib/features/<name>/{data,domain,presentation})
 apps/backend/    NestJS (JS) — src/modules/{auth,users,devices,chats,messages,groups,media,notifications,admin,websocket}
-apps/dashboard/  Admin web app — does not exist yet; created in Phase 6
+apps/dashboard/  Admin web app — React + Vite, plain JS (src/lib/api.js is the only fetch path; src/pages/*)
 crypto-core/     Rust workspace; core/ crate is empty until Phase 7
 infra/docker/    Dev docker-compose.yml (Postgres, Redis, MinIO)
 docs/            progress-log.md + architecture/ (overview, decisions, design, contact-graph, roadmap,
@@ -154,6 +165,12 @@ npm run admin:create -- --username x --display-name "Name"   # FIRST admin only;
 npm run user:invite -- --username x --display-name "Name"    # member + one-time code, printed once
 npm run dev:device -- activate SKY-...                      # pretend phone (dev only): activate|me|devices|refresh|logout|forget
 
+# Admin dashboard (apps/dashboard) — needs the backend running on :3000 (override: SKYLINE_API=...)
+npm install
+npm run dev                # http://localhost:5173, proxies /api -> backend
+npm test                   # Vitest + Testing Library, no backend needed
+npm run build
+
 # Dev data plane (repo root) — Docker Desktop must be running
 docker compose -f infra/docker/docker-compose.yml up -d   # Postgres, Redis, MinIO
 
@@ -175,4 +192,5 @@ flutter pub get && flutter analyze && flutter test
 | Docker Desktop 29.8 (WSL2) | ✅ installed and working; dev stack verified |
 
 `apps/mobile` has no SDK-generated platform runner folders yet (gitignored; see bootstrap above).
-Backend boot can be smoke-tested with `npm run start` — no external services required until Phase 3.
+Backend boot needs the dev Postgres + Redis up (`npm run start`). Smoke tests that create accounts must
+run against a **throwaway** database on a spare port — never the owner's dev DB, never their server on :3000.

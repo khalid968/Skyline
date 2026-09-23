@@ -10,7 +10,7 @@ skyline/
           routing/               app_router.dart — go_router route table
           di/ error/ constants/  reserved, populated as needed per feature phase
         features/              # feature-first; each has data/domain/presentation (see features/README.md)
-          auth/ chats/ messages/ groups/ calls/ media/ settings/ admin/
+          auth/ chats/ messages/ groups/ calls/ media/ settings/
         shared/                # shared widgets/providers used across features
       native/crypto_bridge/    # flutter_rust_bridge generated bindings (Phase 5)
       test/

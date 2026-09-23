@@ -116,7 +116,41 @@ Invoke-RestMethod -Method Post -Uri http://localhost:3000/admin/auth/mfa `
   -ContentType 'application/json' -Body '{"mfaToken":"PASTE","code":"123456"}'
 ```
 
-The dashboard (Phase 6) will turn all of this into screens.
+The dashboard (Phase 6, below) turns all of this into screens.
+
+## Phase 6: the admin dashboard
+
+1. **Restart the backend** so it picks up the new admin routes and migration 010. In the first terminal,
+   press `Ctrl+C` and then run:
+
+   ```powershell
+   cd C:\Users\kkhal\Desktop\AI\Skyline\apps\backend
+   npm run migrate:up
+   npm run start
+   ```
+
+2. In a **second** terminal, start the dashboard (the first time only, run `npm install` first):
+
+   ```powershell
+   cd C:\Users\kkhal\Desktop\AI\Skyline\apps\dashboard
+   npm install
+   npm run dev
+   ```
+
+3. Open <http://localhost:5173> and sign in with the administrator you created in Phase 5. That account is now
+   the **owner**: it shows a crown badge, and nobody else can demote, suspend or rename it.
+
+Things to try:
+
+- **Users → Create user.** Make two members, and add the first as an initial contact of the second. The
+  activation code appears once; copy it.
+- **Contact graph.** Pick a person and switch contacts on and off. Links always work both ways.
+- **A user's page.** Rename them, suspend and reinstate them, or issue a new code.
+- **Make a moderator.** They get a temporary password. Sign in as them in a private window: they must choose a
+  new password before anything else opens. They can manage members but cannot touch you.
+- **Account.** Turn on two-factor sign-in by scanning the QR code with an authenticator app.
+
+Dashboard tests: `npm test` in `apps\dashboard` (no backend needed).
 
 ## Starting over
 

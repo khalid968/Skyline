@@ -6,6 +6,31 @@ working around it.
 
 ---
 
+## 2026-09-23 — How the dashboard holds its session; the protected owner
+
+These are implementation choices made while building Phase 6. None of them changes an owner decision.
+
+- **The dashboard session is an HttpOnly, SameSite=Strict cookie (`skyline_admin`), not a token in the
+  page.** The backend sets the cookie only when the login request carries `x-skyline-client: dashboard`, and
+  then leaves the token out of the response. Script on the page never sees the token, so an injected script
+  cannot steal it. Bearer tokens still work for scripts and the CLI.
+- **CSRF: any cookie-authenticated change must carry `x-skyline-client: dashboard`.** This covers every
+  method except GET, HEAD and OPTIONS. Another website cannot set a custom header on a cross-site request, so
+  it cannot make the browser perform an admin action. The rule sits on top of SameSite=Strict as a second
+  layer.
+- **The dashboard and the API share one origin.** In development the Vite server forwards `/api/*` to the
+  backend. In production Nginx will do the same (Phase 13). As a result the backend has **no CORS
+  configuration at all**. Do not add one.
+- **Operator accounts are created `active` and get a temporary password.** They cannot sign in to the
+  dashboard until they redeem a phone code, which was a real bug found while testing. The temporary password
+  sets `must_change_password`, and the server allows only the account routes until the operator chooses a
+  new password.
+- **The protected owner is enforced in the database.** A trigger rejects any change that would demote,
+  suspend or delete the owner, and any change that would create a second owner. The API checks the same
+  rules first, so the operator sees a readable 403.
+
+---
+
 ## 2026-09-23 — Phase 6 prototypes approved; timer range; owner resets
 
 **Approved by the owner:** design boards 9-15 (admin sign-in, 2FA code, account & 2FA setup, devices; mobile

@@ -47,11 +47,12 @@ started before the install.
 `apps/mobile/README.md` before the first `flutter pub get` / `flutter run`. Flutter 3.35.7 **is**
 installed, so this is a one-command fix, not a blocker.
 
-## Admin scaffolding contradicts the admin architecture — OPEN (low)
+## Admin scaffolding contradicts the admin architecture — CLOSED 2026-09-23
 
 `apps/mobile/lib/features/admin/` was scaffolded in Phase 1 on the assumption of in-app administration.
 Administration is now a separate web dashboard (`decisions.md`). Remove or repurpose that directory when
 Phase 6 starts, so nobody builds admin surface into the client binary by following the folder structure.
+**Closed:** the directory was removed in Phase 6.
 
 ---
 

@@ -8,4 +8,4 @@ Each feature under this directory is a self-contained vertical slice, structured
 
 Dependencies only point inward: `presentation` → `domain` ← `data`. `domain` never depends on `data` or `presentation`.
 
-Current features (scaffolded, logic added per phase): `auth`, `chats`, `messages`, `groups`, `calls`, `media`, `settings`, `admin`.
+Current features (scaffolded, logic added per phase): `auth`, `chats`, `messages`, `groups`, `calls`, `media`, `settings`. (Administration is the separate web dashboard in `apps/dashboard`, never in this app.)
