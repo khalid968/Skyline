@@ -8,6 +8,59 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-23 (night, later) — Phase 7 IN PROGRESS (owner closed the session mid-phase)
+
+The owner said "yes go ahead" on Phase 7. Nothing from Phase 7 is pushed; local commits only.
+
+**Done and tested:**
+
+- **Toolchain** (installed via winget):
+  - VS 2022 Build Tools with C++, rustup with Rust 1.98.1 (pinned in `crypto-core/rust-toolchain.toml`,
+    matching libsignal), protoc 36 (on the user PATH), and `flutter_rust_bridge_codegen` 2.13.0.
+  - In a fresh shell, `export PATH="$HOME/.cargo/bin:$PATH"` may be needed.
+- **`crypto-core/core`**: libsignal v0.103.1, pinned by tag.
+  - API: `SkylineCrypto` with identity, prekeys (signed, Kyber, one-time), PQXDH `start_session`,
+    `encrypt`/`decrypt`, `safety_number`, and Ed25519 `sign`.
+  - Keys live in an encrypted SQLite vault (`vault.rs`), and identity trust is strict.
+  - 20 tests and 5 mutation checks, all caught. There is no `unsafe` code.
+  - Found and fixed: opening the vault with the wrong key silently created a second identity; it is now
+    refused as `VaultLocked`.
+- **Backend** (commit `f54b05f`):
+  - Migration 011 (key directory), and activation v2, which registers the Signal identity under the
+    device signature.
+  - Key routes: `PUT`/`GET /me/keys` and `GET /users/:id/keys`, with a direct link required and per-caller
+    rate limits.
+  - `RateLimitModule` is now global, with `enforceLimit()` for per-caller limits.
+  - Tests: 12 db tests and 14 app tests for keys. `test:db` passes 79 + 12. The app suites pass file by
+    file, but the FULL `npm run test:app` run should be repeated: one earlier run hung while cargo was
+    compiling at the same time.
+- **`crypto-core/e2e` plus `test/app/crypto-e2e.e2e-spec.js`**: two real libsignal devices against the
+  real backend. They activate, publish keys, fetch bundles, start a session and talk, and the 404 without
+  a link holds. The test passes; it needs `cargo build -p skyline_e2e` first, or it is skipped.
+
+**Uncommitted, next steps:**
+
+1. The bridge:
+   - `crypto-core/ffi`: a thin `CryptoDevice` wrapper. It builds.
+   - `apps/mobile/rust_builder`: cargokit wired to `crypto-core/ffi`.
+   - `flutter_rust_bridge.yaml`, and the generated `lib/src/rust`.
+   - `pubspec.yaml`, now with `flutter_rust_bridge 2.13.0`, `skyline_crypto_ffi` and `integration_test`.
+   - `apps/mobile/{android,ios,windows}` are now tracked (root `.gitignore` changed). The template test
+     `widget_test.dart` was deleted.
+2. Still to do:
+   - Load the storage key from `flutter_secure_storage` in `lib/core/crypto/`.
+   - An integration test on Windows (`flutter test integration_test -d windows`), then an Android build.
+     The NDK is not checked yet.
+   - Run `flutter analyze`, and repeat the full `test:app`.
+   - Docs: decisions (committed platform folders, the committed `Cargo.lock`, the ffi crate split), CLAUDE.md
+     and authorization.md for the key routes, and try-it-yourself.
+   - Then end the phase and ask the owner.
+3. **Noted for Phase 8:** when a session-starting message arrives from an unknown device, the client should
+   check the embedded identity key against the key directory before trusting it (so the server cannot
+   relabel a sender). Safety-number verification is the final guard.
+
+---
+
 ## 2026-09-23 (late night) — Phase 6 pushed; Phase 7 planned, NOT started
 
 The owner reviewed Phase 6 ("looks good") and asked to push. `275d670` is on GitHub. The Phase 7 plan was

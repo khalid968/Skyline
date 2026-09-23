@@ -27,6 +27,9 @@ dependencies:
   flutter_secure_storage: ^9.2.2
 
   cupertino_icons: ^1.0.8
+  flutter_rust_bridge: 2.13.0
+  skyline_crypto_ffi:
+    path: rust_builder
 
 dev_dependencies:
   flutter_test:
@@ -38,6 +41,8 @@ dev_dependencies:
   freezed: ^2.5.7
   json_serializable: ^6.8.0
   drift_dev: ^2.19.0
+  integration_test:
+    sdk: flutter
 
 flutter:
   uses-material-design: true

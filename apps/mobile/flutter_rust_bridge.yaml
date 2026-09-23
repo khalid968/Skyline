@@ -1,0 +1,5 @@
+# flutter_rust_bridge: generates lib/src/rust from crypto-core/ffi/src/api.
+# Regenerate after changing that API:  flutter_rust_bridge_codegen generate
+rust_input: crate::api
+rust_root: ../../crypto-core/ffi/
+dart_output: lib/src/rust
