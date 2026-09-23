@@ -6,6 +6,29 @@ working around it.
 
 ---
 
+## 2026-09-23 — Phase 6 (admin dashboard v1) scope and stack
+
+**Decided by the owner:**
+
+1. **React, plain JavaScript** for `apps/dashboard/`, matching the backend's language.
+2. **v1 scope: users and activation codes, the contact-graph editor, and devices**, plus sign-in, 2FA and
+   account settings. **Groups and the audit-log viewer move to v2 (Phase 11).** Consequence: until then,
+   members can only have one-to-one chats, since groups can only be created by an admin.
+3. **A protected owner account.** The owner (the first admin, created by `admin:create`) cannot be demoted,
+   suspended, renamed or deleted by another admin, and only the owner can create, promote or remove admins.
+   Needs a schema marker (e.g. `users.is_owner`, at most one) enforced in the database, not just the UI.
+4. **The mobile Privacy & security screen** (app lock, disappearing-message timer) is prototyped in the same
+   design round.
+
+**Decided by the agent (reversible):** the dashboard keeps its session in an **HttpOnly, Secure, SameSite=Strict
+cookie**, not a token readable by JavaScript, so a malicious script on the page cannot steal an admin session.
+Requires CSRF protection on state-changing requests.
+
+**Process:** screens not yet approved (sign-in, 2FA code entry, account/2FA setup, device list, the mobile
+Privacy & security screen) are prototyped and approved before any code.
+
+---
+
 ## 2026-09-23 — Phase 5 authentication model
 
 **Decided by the owner:**

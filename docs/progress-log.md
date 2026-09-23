@@ -8,6 +8,16 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-23 (later) — Phase 5 pushed; Phase 6 scoped, NOT started
+
+The owner tested Phase 5 by hand (admin sign-in worked once the doc's `YOUR PASSWORD` placeholder was replaced)
+and asked to push: `3e7894e` is on GitHub. Phase 6 decisions are in `decisions.md` (React + plain JS; v1 =
+users/codes, contact graph, devices; groups and audit viewer moved to v2; protected owner account; dashboard
+session in an HttpOnly cookie). **The owner has not yet said "go" on Phase 6.** First step once they do:
+prototype the unapproved screens on the design canvas and get approval before any code.
+
+---
+
 ## 2026-09-23 — Phase 5 BUILT: authentication, invites, rate limiting
 
 **Owner decisions** (full text in `decisions.md`, 2026-09-23): members have **no password** (the activation code
