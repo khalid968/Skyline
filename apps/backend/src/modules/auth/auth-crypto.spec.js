@@ -128,6 +128,16 @@ describe('Ed25519', () => {
     ).toBe(false);
   });
 
+  it('an activation signature covers the Signal identity, not just the code', () => {
+    const signed = sign(signedMessage.activation('ABC', 'BQidentityA', 42));
+    expect(
+      verifyEd25519(raw, signedMessage.activation('ABC', 'BQidentityB', 42), signed),
+    ).toBe(false);
+    expect(
+      verifyEd25519(raw, signedMessage.activation('ABC', 'BQidentityA', 43), signed),
+    ).toBe(false);
+  });
+
   it('rejects a signature for another purpose, even over the same text', () => {
     const forActivation = sign(signedMessage.activation('X'));
     expect(

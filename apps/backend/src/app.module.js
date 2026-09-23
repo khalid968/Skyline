@@ -25,7 +25,7 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
 import { ContactGraphGuard } from './common/guards/contact-graph.guard';
 import {
   RateLimitGuard,
-  RateLimitService,
+  RateLimitModule,
 } from './common/rate-limit/rate-limit';
 
 @Module({
@@ -38,6 +38,7 @@ import {
     }),
     DatabaseModule,
     RedisModule,
+    RateLimitModule,
     AuthorizationModule,
     AuditModule,
     HealthModule,
@@ -55,7 +56,6 @@ import {
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_PIPE, useFactory: createValidationPipe },
-    RateLimitService,
     // Guards run in this order, for EVERY route: are you over a rate limit (so
     // unauthenticated floods are throttled too), who are you, are you allowed
     // to do this, and is the person you named inside your contact graph.

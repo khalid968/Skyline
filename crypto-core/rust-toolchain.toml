@@ -1,0 +1,3 @@
+# Matches the toolchain libsignal v0.103.1 pins.
+[toolchain]
+channel = "1.98.1"

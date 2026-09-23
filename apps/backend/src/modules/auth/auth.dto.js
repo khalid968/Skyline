@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsIn, Length, Matches } from 'class-validator';
+import { IsString, IsInt, IsIn, Length, Matches, Min, Max } from 'class-validator';
 
 // Shapes only. Whether a code, token or signature is actually GOOD is decided
 // by the services, and every such failure looks identical to the caller.
@@ -13,6 +13,11 @@ export class ActivateDto {
   // Ed25519 public key (32 bytes) and signature (64 bytes), base64 or base64url.
   @IsString() @Length(40, 48) signingKey;
   @IsString() @Length(80, 96) signature;
+  // The device's Signal identity: its PUBLIC identity key (33 bytes, 0x05
+  // then 32) and a random registration id. Both are fixed for the device's
+  // life. The signature above covers them, binding them to the signing key.
+  @IsString() @Length(44, 46) identityKey;
+  @IsInt() @Min(1) @Max(16383) registrationId;
 }
 
 export class RefreshDto {

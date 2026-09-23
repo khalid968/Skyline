@@ -259,7 +259,14 @@ describe('messaging and RBAC (database layer)', () => {
         insertDevice(u.id, { identityKey: Buffer.alloc(64) }),
       );
       expect(err.code).toBe(SQLSTATE.check);
-      expect(err.constraint).toBe('devices_identity_key_len');
+      expect(err.constraint).toMatch(/^devices_identity_key_(len|format)$/);
+    });
+
+    it("stores only libsignal's serialized key form (type byte 0x05)", async () => {
+      const u = await mkUser(db.client, 'typed');
+      const wrongType = Buffer.concat([Buffer.from([6]), Buffer.alloc(32, 1)]);
+      const err = await failure(insertDevice(u.id, { identityKey: wrongType }));
+      expect(err.constraint).toBe('devices_identity_key_format');
     });
 
     it('allows the Signal fields to be empty until Phase 7, but never the signing key', async () => {

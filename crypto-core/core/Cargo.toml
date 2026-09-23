@@ -1,8 +1,10 @@
 [package]
 name = "skyline_crypto_core"
 version = "0.1.0"
-edition = "2021"
-description = "Signal Protocol (libsignal-client) integration core for Skyline, exposed to Flutter via flutter_rust_bridge."
+edition = "2024"
+rust-version = "1.98"
+description = "Signal Protocol (libsignal) integration core for Skyline, exposed to Flutter via flutter_rust_bridge."
+license = "AGPL-3.0-only"
 publish = false
 
 [lib]
@@ -10,3 +12,21 @@ name = "skyline_crypto_core"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
+# Signal's official protocol implementation, pinned to a release tag. Upgrade
+# deliberately (read the release notes), never by floating to a branch.
+libsignal-protocol = { git = "https://github.com/signalapp/libsignal", tag = "v0.103.1" }
+# Same versions libsignal itself uses.
+rand = "0.9.4"
+futures = "0.3"
+async-trait = "0.1.79"
+# At-rest encryption of the local key store (a vetted AEAD, used as designed).
+aes-gcm-siv = "0.12"
+hkdf = "0.13"
+hmac = "0.13"
+sha2 = "0.11"
+# The device's Phase 5 credential key (activation and refresh signatures).
+ed25519-dalek = "2.2"
+rusqlite = { version = "0.37", features = ["bundled"] }
+uuid = "1"
+thiserror = "2"
+zeroize = "1.8"

@@ -93,12 +93,18 @@ export async function mkUser(db, name = 'user', opts = {}) {
   return { id: rows[0].id, username };
 }
 
+// A stand-in for a libsignal serialized public key: 0x05 then 32 bytes.
+export const signalPublicKey = () =>
+  Buffer.concat([Buffer.from([5]), crypto.randomBytes(32)]);
+
 export async function mkDevice(db, userId) {
   const { rows } = await db.query(
     `INSERT INTO devices (user_id, name, platform, registration_id, identity_key, signing_key)
      VALUES ($1, 'test device', 'android', $2, $3, $4) RETURNING id`,
     // signing_key must be unique among live devices, so each fixture gets fresh bytes.
-    [userId, next() % 16000 || 1, Buffer.alloc(32, 7), crypto.randomBytes(32)],
+    // identity_key is a serialized Curve25519 public key (0x05 + 32 bytes),
+    // also unique among live devices.
+    [userId, next() % 16000 || 1, signalPublicKey(), crypto.randomBytes(32)],
   );
   return rows[0].id;
 }

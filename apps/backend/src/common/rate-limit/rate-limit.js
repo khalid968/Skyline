@@ -6,6 +6,8 @@ import {
   ServiceUnavailableException,
   Logger,
   SetMetadata,
+  Global,
+  Module,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
@@ -94,29 +96,35 @@ export class RateLimitGuard {
       const subject = subjectOf(req, rule.by);
       if (subject === null) continue; // e.g. no username supplied: validation will reject it anyway
 
-      let result;
-      try {
-        result = await this.limiter.hit(
-          `${meta.name}:${rule.by}:${subject}`,
-          rule.limit,
-          rule.windowSec,
-        );
-      } catch (err) {
-        this.logger.error(
-          `rate limiter unavailable, refusing ${meta.name}: ${err.message}`,
-        );
-        throw new ServiceUnavailableException();
-      }
-
-      if (!result.allowed) {
-        res.setHeader('Retry-After', String(result.retryAfterSec));
-        throw new HttpException(
-          'Too Many Requests',
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
+      await enforceLimit(
+        this.limiter,
+        `${meta.name}:${rule.by}:${subject}`,
+        rule,
+        res,
+        this.logger,
+      );
     }
     return true;
+  }
+}
+
+// One rule, applied now: 429 with Retry-After when over, 503 when Redis is
+// unreachable (fails closed). The guard uses it for per-address and per-field
+// rules; a service uses it directly for limits that need to know WHO is
+// calling, which the guard cannot, since it runs before authentication.
+export async function enforceLimit(limiter, key, rule, res, logger) {
+  let result;
+  try {
+    result = await limiter.hit(key, rule.limit, rule.windowSec);
+  } catch (err) {
+    (logger || new Logger('RateLimit')).error(
+      `rate limiter unavailable, refusing ${key.split(':')[0]}: ${err.message}`,
+    );
+    throw new ServiceUnavailableException();
+  }
+  if (!result.allowed) {
+    if (res) res.setHeader('Retry-After', String(result.retryAfterSec));
+    throw new HttpException('Too Many Requests', HttpStatus.TOO_MANY_REQUESTS);
   }
 }
 
@@ -130,3 +138,8 @@ function subjectOf(req, by) {
   // huge value cannot bloat a Redis key.
   return v.trim().toLowerCase().slice(0, 64);
 }
+
+// Global so a service can apply a per-caller limit with enforceLimit().
+@Global()
+@Module({ providers: [RateLimitService], exports: [RateLimitService] })
+export class RateLimitModule {}

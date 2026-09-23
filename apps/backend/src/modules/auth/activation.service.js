@@ -35,16 +35,36 @@ export class ActivationService {
     this.logger = new Logger('Activation');
   }
 
-  async activate({ code, deviceName, platform, signingKey, signature }, ip) {
+  async activate(
+    {
+      code,
+      deviceName,
+      platform,
+      signingKey,
+      signature,
+      identityKey,
+      registrationId,
+    },
+    ip,
+  ) {
     const normalized = normalizeActivationCode(code);
     const publicKey = decodeFixed(signingKey, 32);
     const sig = decodeFixed(signature, 64);
+    const identity = decodeFixed(identityKey, 33);
 
     // The device proves it holds the private half of the key it is registering,
-    // by signing the code. This happens before the database is touched; failing
-    // it reveals nothing about the code, since the caller controls the signature.
-    if (!normalized || !publicKey || !sig) throw new UnauthorizedException();
-    if (!verifyEd25519(publicKey, signedMessage.activation(normalized), sig)) {
+    // by signing the code together with its Signal identity. This happens
+    // before the database is touched; failing it reveals nothing about the
+    // code, since the caller controls the signature.
+    if (!normalized || !publicKey || !sig || !identity || identity[0] !== 5) {
+      throw new UnauthorizedException();
+    }
+    const message = signedMessage.activation(
+      normalized,
+      identity.toString('base64'),
+      registrationId,
+    );
+    if (!verifyEd25519(publicKey, message, sig)) {
       throw new UnauthorizedException();
     }
 
@@ -72,9 +92,32 @@ export class ActivationService {
         if (!rows[0] || !['pending', 'active'].includes(rows[0].status))
           throw new RejectActivation();
 
+        // libsignal's device number: the next one for this user, never reused
+        // (the users row is locked above, so two activations cannot race).
+        const next = await client.query(
+          'SELECT COALESCE(max(device_number), 0) + 1 AS n FROM devices WHERE user_id = $1',
+          [userId],
+        );
+        const deviceNumber = next.rows[0].n;
+        if (deviceNumber > 127) {
+          this.logger.warn(`user ${userId} has used every device number`);
+          throw new RejectActivation();
+        }
+
         await client.query(
-          `INSERT INTO devices (id, user_id, name, platform, signing_key) VALUES ($1, $2, $3, $4, $5)`,
-          [deviceId, userId, deviceName, platform, publicKey],
+          `INSERT INTO devices (id, user_id, name, platform, signing_key,
+                                identity_key, registration_id, device_number)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            deviceId,
+            userId,
+            deviceName,
+            platform,
+            publicKey,
+            identity,
+            registrationId,
+            deviceNumber,
+          ],
         );
         await client.query(
           `UPDATE users SET status = 'active' WHERE id = $1 AND status = 'pending'`,
@@ -95,15 +138,18 @@ export class ActivationService {
           },
           client,
         );
-        return { userId, deviceId, ...tokens };
+        return { userId, deviceId, deviceNumber, ...tokens };
       });
     } catch (err) {
       if (err instanceof RejectActivation) throw new UnauthorizedException();
       // A signing key already on a live device: a cloned or replayed key.
+      // An identity key already on a live device: the same.
       if (
         err &&
         err.code === '23505' &&
-        err.constraint === 'devices_live_signing_key'
+        ['devices_live_signing_key', 'devices_live_identity_key'].includes(
+          err.constraint,
+        )
       ) {
         throw new UnauthorizedException();
       }

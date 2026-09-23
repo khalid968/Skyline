@@ -14,22 +14,10 @@ import {
   signedMessage,
 } from '../../src/modules/auth/auth-crypto';
 import { hashPassword } from '../../src/modules/auth/admin-auth.service';
+import { newDeviceKey, activationFields } from './device-key';
 
 // ------------------------------------------------------------------ a "client"
 
-function newDeviceKey() {
-  const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
-  return {
-    publicKey: Buffer.from(
-      publicKey.export({ format: 'jwk' }).x,
-      'base64url',
-    ).toString('base64'),
-    sign: (message) =>
-      crypto
-        .sign(null, Buffer.from(message, 'utf8'), privateKey)
-        .toString('base64'),
-  };
-}
 
 const GENERIC_401 = {
   statusCode: 401,
@@ -65,10 +53,7 @@ describe('authentication (real tokens, real database)', () => {
         code,
         deviceName: 'Test phone',
         platform: 'android',
-        signingKey: key.publicKey,
-        signature: key.sign(
-          signedMessage.activation(normalizeActivationCode(code) || code),
-        ),
+        ...activationFields(code, key),
         ...overrides,
       });
 
@@ -222,16 +207,13 @@ describe('authentication (real tokens, real database)', () => {
         expired: await activate(expired),
         revoked: await activate(revoked),
         'signed by a different key': await activate(good, newDeviceKey(), {
-          signature: other.sign(
-            signedMessage.activation(normalizeActivationCode(good)),
-          ),
+          signature: activationFields(good, other).signature,
         }),
-        'signature over a different code': await activate(good, other, {
-          signingKey: other.publicKey,
-          signature: other.sign(
-            signedMessage.activation('00000000000000000000'),
-          ),
-        }),
+        'signature over a different code': await activate(
+          good,
+          other,
+          activationFields(good, other, '00000000000000000000'),
+        ),
         'not a code at all': await activate('hello-this-is-not-a-code'),
       };
 

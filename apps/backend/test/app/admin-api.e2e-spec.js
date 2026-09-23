@@ -11,25 +11,14 @@ import {
   failure,
 } from '../db/harness';
 import { createTestApp } from './app-harness';
+import { newDeviceKey, activationFields } from './device-key';
 import { hashPassword } from '../../src/modules/auth/admin-auth.service';
 import {
   normalizeActivationCode,
-  signedMessage,
 } from '../../src/modules/auth/auth-crypto';
 
 const PASSWORD = 'correct horse battery staple';
 
-function newDeviceKey() {
-  const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
-  return {
-    publicKey: Buffer.from(
-      publicKey.export({ format: 'jwk' }).x,
-      'base64url',
-    ).toString('base64'),
-    sign: (m) =>
-      crypto.sign(null, Buffer.from(m, 'utf8'), privateKey).toString('base64'),
-  };
-}
 
 describe('admin API (real sign-ins, real database)', () => {
   let db;
@@ -71,10 +60,7 @@ describe('admin API (real sign-ins, real database)', () => {
         code,
         deviceName: 'Phone',
         platform: 'ios',
-        signingKey: key.publicKey,
-        signature: key.sign(
-          signedMessage.activation(normalizeActivationCode(code)),
-        ),
+        ...activationFields(code, key),
       });
   };
 

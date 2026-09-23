@@ -6,9 +6,8 @@
 **/.pub-cache/
 **/.pub/
 **/build/
-apps/mobile/android/
-apps/mobile/ios/
-apps/mobile/windows/
+# android/, ios/ and windows/ ARE committed (the v1 platforms carry real
+# configuration: app id, OS minimums, NDK). The rest are not v1 targets.
 apps/mobile/macos/
 apps/mobile/linux/
 apps/mobile/web/
@@ -28,7 +27,8 @@ yarn-error.log*
 # --- Rust ---
 crypto-core/target/
 **/*.rs.bk
-Cargo.lock
+# Cargo.lock IS committed: it pins every transitive crate the crypto core is
+# built from (supply-chain reproducibility).
 
 # --- Env / secrets ---
 .env

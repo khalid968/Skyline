@@ -75,6 +75,14 @@ const commands = {
       publicKey.export({ format: 'jwk' }).x,
       'base64url',
     ).toString('base64');
+    // A stand-in Signal identity (public half only: this script never
+    // encrypts anything). Real devices get theirs from libsignal.
+    const x25519 = crypto.generateKeyPairSync('x25519').publicKey;
+    const identityKey = Buffer.concat([
+      Buffer.from([5]),
+      Buffer.from(x25519.export({ format: 'jwk' }).x, 'base64url'),
+    ]).toString('base64');
+    const registrationId = 1 + crypto.randomInt(16383);
 
     const r = await call('POST', '/auth/activate', {
       body: {
@@ -82,7 +90,11 @@ const commands = {
         deviceName: 'Dev device (script)',
         platform: 'windows',
         signingKey,
-        signature: signer(state)(`skyline-activate:v1:${normalize(code)}`),
+        identityKey,
+        registrationId,
+        signature: signer(state)(
+          `skyline-activate:v2:${normalize(code)}:${identityKey}:${registrationId}`,
+        ),
       },
     });
     show({
@@ -92,6 +104,7 @@ const commands = {
           ? {
               userId: r.data.userId,
               deviceId: r.data.deviceId,
+              deviceNumber: r.data.deviceNumber,
               tokens: '(saved to .dev-device.json)',
             }
           : r.data,

@@ -87,7 +87,11 @@ export function tokenKind(token) {
 // What a device signs. Versioned and labelled so a signature made for one
 // purpose can never be replayed for another.
 export const signedMessage = {
-  activation: (normalizedCode) => `skyline-activate:v1:${normalizedCode}`,
+  // v2 (Phase 7) also covers the Signal identity, so whoever holds the signing
+  // key is provably the one who chose that identity key. The identity key is
+  // given as standard base64 of its 33 bytes.
+  activation: (normalizedCode, identityKeyB64, registrationId) =>
+    `skyline-activate:v2:${normalizedCode}:${identityKeyB64}:${registrationId}`,
   refresh: (timestamp, refreshToken) =>
     `skyline-refresh:v1:${timestamp}:${refreshToken}`,
 };

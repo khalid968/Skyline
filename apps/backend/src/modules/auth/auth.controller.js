@@ -41,6 +41,7 @@ export class AuthController {
     return {
       userId: r.userId,
       deviceId: r.deviceId,
+      deviceNumber: r.deviceNumber,
       accessToken: r.accessToken,
       accessExpiresAt: r.accessExpiresAt,
       refreshToken: r.refreshToken,

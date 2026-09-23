@@ -1,29 +1,17 @@
 // Real rate limits (production values, scale 1) against real Redis, and the
 // operator command-line tools run exactly as an operator would run them.
-import crypto from 'crypto';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import request from 'supertest';
 import { createTestDatabase } from '../db/harness';
 import { createTestApp } from './app-harness';
+import { newDeviceKey, activationFields } from './device-key';
 import {
   normalizeActivationCode,
-  signedMessage,
 } from '../../src/modules/auth/auth-crypto';
 
 const BACKEND = path.join(__dirname, '..', '..');
 
-function newDeviceKey() {
-  const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
-  return {
-    publicKey: Buffer.from(
-      publicKey.export({ format: 'jwk' }).x,
-      'base64url',
-    ).toString('base64'),
-    sign: (m) =>
-      crypto.sign(null, Buffer.from(m, 'utf8'), privateKey).toString('base64'),
-  };
-}
 
 describe('rate limits and operator tools (real Redis, real processes)', () => {
   let db;
@@ -37,10 +25,7 @@ describe('rate limits and operator tools (real Redis, real processes)', () => {
         code,
         deviceName: 'Phone',
         platform: 'ios',
-        signingKey: key.publicKey,
-        signature: key.sign(
-          signedMessage.activation(normalizeActivationCode(code) || 'x'),
-        ),
+        ...activationFields(code, key, normalizeActivationCode(code) || 'x'),
       });
 
   const cli = (script, args, env = {}) =>
@@ -195,10 +180,7 @@ describe('rate limits and operator tools (real Redis, real processes)', () => {
             code: sarahCode,
             deviceName: "Sarah's phone",
             platform: 'android',
-            signingKey: key.publicKey,
-            signature: key.sign(
-              signedMessage.activation(normalizeActivationCode(sarahCode)),
-            ),
+            ...activationFields(sarahCode, key),
           });
         expect(res.status).toBe(201);
       } finally {
@@ -225,10 +207,7 @@ describe('rate limits and operator tools (real Redis, real processes)', () => {
               code,
               deviceName: 'Phone',
               platform: 'ios',
-              signingKey: key.publicKey,
-              signature: key.sign(
-                signedMessage.activation(normalizeActivationCode(code)),
-              ),
+              ...activationFields(code, key),
             });
         };
         expect((await attempt(first)).status).toBe(401);
