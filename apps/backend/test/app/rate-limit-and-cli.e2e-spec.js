@@ -124,7 +124,7 @@ describe('rate limits and operator tools (real Redis, real processes)', () => {
         },
       );
       expect(r.status).toBe(0);
-      expect(r.stdout).toMatch(/Administrator "boss" created/);
+      expect(r.stdout).toMatch(/Owner "boss" created/); // the first admin is the protected owner
 
       const { rows } = await db.client.query(
         `SELECT u.role_key, u.status, c.password_hash FROM users u JOIN admin_credentials c ON c.user_id = u.id WHERE u.username = 'boss'`,

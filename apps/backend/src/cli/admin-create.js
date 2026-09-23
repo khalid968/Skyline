@@ -53,9 +53,13 @@ run(async () => {
     try {
       await client.query('BEGIN');
       const { rows } = await client.query(
-        `INSERT INTO users (username, display_name, role_key, status)
-         VALUES ($1, $2, 'admin', 'active') RETURNING id`,
-        [username, displayName],
+        // The first administrator becomes the protected owner (migration 010);
+        // an --additional admin created here never does.
+        `INSERT INTO users (username, display_name, role_key, status, is_owner)
+         VALUES ($1, $2, 'admin', 'active',
+                 NOT EXISTS (SELECT 1 FROM users WHERE is_owner) AND NOT $3::boolean)
+         RETURNING id, is_owner`,
+        [username, displayName, !!args.additional],
       );
       await client.query(
         'INSERT INTO admin_credentials (user_id, password_hash) VALUES ($1, $2)',
@@ -69,13 +73,14 @@ run(async () => {
             via: 'command_line',
             role: 'admin',
             additional: !!args.additional,
+            owner: rows[0].is_owner,
           },
         },
         client,
       );
       await client.query('COMMIT');
       console.log(
-        `\nAdministrator "${username}" created. Sign in to the dashboard with this password.`,
+        `\n${rows[0].is_owner ? 'Owner' : 'Administrator'} "${username}" created. Sign in to the dashboard with this password.`,
       );
       console.log(
         'Two-factor sign-in is off; it can be turned on from the dashboard once you are signed in.',

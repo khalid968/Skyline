@@ -39,14 +39,22 @@ export class AccountService {
     if (!isUuid(userId)) return null;
 
     const { rows } = await this.db.query(
-      `SELECT u.role_key
+      `SELECT u.role_key, u.is_owner, COALESCE(c.must_change_password, false) AS must_change
          FROM users u
          JOIN role_permissions rp
            ON rp.role_key = u.role_key AND rp.permission_key = 'dashboard.access'
+         LEFT JOIN admin_credentials c ON c.user_id = u.id
         WHERE u.id = $1 AND u.status = 'active'`,
       [userId],
     );
-    return rows[0] ? { userId, role: rows[0].role_key } : null;
+    return rows[0]
+      ? {
+          userId,
+          role: rows[0].role_key,
+          isOwner: rows[0].is_owner,
+          mustChangePassword: rows[0].must_change,
+        }
+      : null;
   }
 
   // Of these device ids, the ones whose device is not revoked and whose owner

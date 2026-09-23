@@ -23,13 +23,13 @@ Private to the owner. Current boards:
 | 6 · Admin · Users | User table + create-user panel with generated activation code |
 | 7 · Admin · Contact graph | The contact-link editor — interactive |
 | 8 · Admin · Edit user | Rename, spent-code record, device revoke — approved 2026-09-20 |
-| 9 · Admin · Sign in | **Awaiting approval (Phase 6)** |
-| 10 · Admin · Two-factor code | **Awaiting approval** — keypad works in Play |
-| 11 · Admin · Your account & 2FA setup | **Awaiting approval** — owner badge; 2FA off → setup → on |
-| 12 · Admin · Devices | **Awaiting approval** — revoke with confirmation |
-| 13 · Privacy & security (mobile) | **Awaiting approval** — app lock, default disappearing timer |
-| 14 · App locked (mobile) | **Awaiting approval** — PIN pad works in Play |
-| 15 · Disappearing-message timer (mobile) | **Awaiting approval** — announced in the chat |
+| 9 · Admin · Sign in | Approved 2026-09-23 |
+| 10 · Admin · Two-factor code | Approved 2026-09-23 — keypad works in Play |
+| 11 · Admin · Your account & 2FA setup | Approved 2026-09-23 — owner badge; 2FA off → setup → on |
+| 12 · Admin · Devices | Approved 2026-09-23 — revoke with confirmation |
+| 13 · Privacy & security (mobile) | Approved 2026-09-23 — app lock, default disappearing timer |
+| 14 · App locked (mobile) | Approved 2026-09-23 — PIN pad works in Play |
+| 15 · Disappearing-message timer (mobile) | Approved 2026-09-23 — presets to 1 year plus custom; announced in the chat |
 
 Boards 2–7 are clickable in Play mode. Board 7 has working toggles.
 

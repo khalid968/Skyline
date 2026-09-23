@@ -8,7 +8,9 @@ import {
   Req,
   HttpCode,
   Dependencies,
+  Res,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   Public,
   DashboardSession,
@@ -16,6 +18,11 @@ import {
 import { Validated } from '../../common/decorators/validated.decorator';
 import { RateLimit } from '../../common/rate-limit/rate-limit';
 import { AdminAuthService } from './admin-auth.service';
+import {
+  isDashboardClient,
+  setSessionCookie,
+  clearSessionCookie,
+} from './dashboard-cookie';
 import {
   AdminLoginDto,
   MfaDto,
@@ -29,10 +36,13 @@ const FIFTEEN_MIN = 15 * 60;
 // Operator sign-in for the web dashboard (Phase 6 builds the screens). These
 // routes accept only a dashboard session, never a device session.
 @Controller('admin/auth')
-@Dependencies(AdminAuthService)
+@Dependencies(AdminAuthService, ConfigService)
 export class AdminAuthController {
-  constructor(auth) {
+  constructor(auth, config) {
     this.auth = auth;
+    // Browsers accept Secure cookies on http://localhost, so this is only
+    // relaxed outside production for other development hosts.
+    this.secureCookie = config.get('env') === 'production';
   }
 
   // Limited per address AND per username, so spreading guesses over many
@@ -44,10 +54,10 @@ export class AdminAuthController {
     { by: 'ip', limit: 20, windowSec: FIFTEEN_MIN },
     { by: 'body.username', limit: 10, windowSec: FIFTEEN_MIN },
   ])
-  @Bind(Body(), Ip())
+  @Bind(Body(), Ip(), Req(), Res({ passthrough: true }))
   @Validated(AdminLoginDto)
-  login(dto, ip) {
-    return this.auth.login(dto, ip);
+  async login(dto, ip, req, res) {
+    return this.deliver(await this.auth.login(dto, ip), req, res);
   }
 
   // Second step, for admins who turned two-factor on.
@@ -55,17 +65,22 @@ export class AdminAuthController {
   @Post('mfa')
   @HttpCode(200)
   @RateLimit('admin-mfa', [{ by: 'ip', limit: 20, windowSec: FIFTEEN_MIN }])
-  @Bind(Body(), Ip())
+  @Bind(Body(), Ip(), Req(), Res({ passthrough: true }))
   @Validated(MfaDto)
-  mfa(dto, ip) {
-    return this.auth.completeMfa(dto, ip);
+  async mfa(dto, ip, req, res) {
+    return this.deliver(
+      { mfaRequired: false, ...(await this.auth.completeMfa(dto, ip)) },
+      req,
+      res,
+    );
   }
 
   @DashboardSession()
   @Post('logout')
   @HttpCode(204)
-  @Bind(Req())
-  async logout(req) {
+  @Bind(Req(), Res({ passthrough: true }))
+  async logout(req, res) {
+    clearSessionCookie(res, this.secureCookie);
     await this.auth.logout(req.account.sessionId);
   }
 
@@ -119,5 +134,15 @@ export class AdminAuthController {
       dto,
       ip,
     );
+  }
+
+  // The dashboard gets its session as an HttpOnly cookie and never sees the
+  // token itself. Other clients (scripts, tests, the CLI guide) get the token in
+  // the body and send it as a Bearer header.
+  deliver(result, req, res) {
+    if (result.mfaRequired || !isDashboardClient(req)) return result;
+    setSessionCookie(res, result.token, result.expiresAt, this.secureCookie);
+    const { token, ...rest } = result;
+    return rest;
   }
 }

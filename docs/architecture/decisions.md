@@ -6,6 +6,23 @@ working around it.
 
 ---
 
+## 2026-09-23 — Phase 6 prototypes approved; timer range; owner resets
+
+**Approved by the owner:** design boards 9-15 (admin sign-in, 2FA code, account & 2FA setup, devices; mobile
+Privacy & security, lock screen, disappearing-message timer), and both proposals shown with them:
+
+- **The owner resets a locked-out admin's password or two-factor.** There is no self-service reset. The reset
+  is audit-logged and signs the target out everywhere.
+- **The v1 dashboard sidebar is Users, Contact graph, Devices** (groups and the audit viewer are v2).
+
+**Disappearing-message timer (owner's change):** presets Off, 1 hour, 1 day, 1 week, 1 month, 3 months,
+6 months, 1 year, plus **Custom: any duration from 5 minutes to 1 year** (minutes, hours, days, weeks or
+months). The schema already enforces 5 seconds to 1 year (`chats.disappear_seconds`), so no migration is
+needed; the client offers 5 minutes as its shortest. Longer than a year would need a schema change and the
+owner's say-so.
+
+---
+
 ## 2026-09-23 — Phase 6 (admin dashboard v1) scope and stack
 
 **Decided by the owner:**

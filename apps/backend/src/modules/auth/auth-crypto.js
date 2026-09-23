@@ -152,3 +152,14 @@ export const deriveKey = (secret, label) =>
     .update(`skyline:${label}:v1:`)
     .update(secret)
     .digest();
+
+// A password someone else chooses for an operator (a new admin or moderator, or
+// a reset by the owner). Shown once; the operator must replace it before doing
+// anything else (admin_credentials.must_change_password). 100 bits, lower case,
+// grouped so it can be read out over a phone call.
+export function generateTemporaryPassword() {
+  let raw = '';
+  for (let i = 0; i < 20; i++)
+    raw += CROCKFORD[crypto.randomInt(CROCKFORD.length)];
+  return raw.toLowerCase().match(/.{5}/g).join('-');
+}

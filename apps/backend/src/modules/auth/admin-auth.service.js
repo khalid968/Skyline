@@ -154,7 +154,8 @@ export class AdminAuthService {
   async me(userId) {
     const { rows } = await this.db.query(
       `SELECT u.id, u.username::text AS username, u.display_name, u.role_key,
-              c.totp_enabled_at IS NOT NULL AS two_factor_enabled
+              c.totp_enabled_at IS NOT NULL AS two_factor_enabled,
+              u.is_owner, c.must_change_password
          FROM users u JOIN admin_credentials c ON c.user_id = u.id
         WHERE u.id = $1`,
       [userId],
@@ -166,6 +167,8 @@ export class AdminAuthService {
       displayName: r.display_name,
       role: r.role_key,
       twoFactorEnabled: r.two_factor_enabled,
+      isOwner: r.is_owner,
+      mustChangePassword: r.must_change_password,
     };
   }
 
@@ -256,7 +259,9 @@ export class AdminAuthService {
         throw new BadRequestException();
       }
       await client.query(
-        `UPDATE admin_credentials SET password_hash = $2, password_changed_at = now() WHERE user_id = $1`,
+        `UPDATE admin_credentials
+            SET password_hash = $2, password_changed_at = now(), must_change_password = false
+          WHERE user_id = $1`,
         [userId, await hashPassword(newPassword)],
       );
       await this.sessions.revokeOtherDashboardSessions(
