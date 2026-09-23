@@ -95,9 +95,10 @@ export async function mkUser(db, name = 'user', opts = {}) {
 
 export async function mkDevice(db, userId) {
   const { rows } = await db.query(
-    `INSERT INTO devices (user_id, name, platform, registration_id, identity_key)
-     VALUES ($1, 'test device', 'android', $2, $3) RETURNING id`,
-    [userId, next() % 16000 || 1, Buffer.alloc(32, 7)],
+    `INSERT INTO devices (user_id, name, platform, registration_id, identity_key, signing_key)
+     VALUES ($1, 'test device', 'android', $2, $3, $4) RETURNING id`,
+    // signing_key must be unique among live devices, so each fixture gets fresh bytes.
+    [userId, next() % 16000 || 1, Buffer.alloc(32, 7), crypto.randomBytes(32)],
   );
   return rows[0].id;
 }

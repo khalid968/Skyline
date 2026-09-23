@@ -23,6 +23,10 @@ import { createValidationPipe } from './common/pipes/validation.pipe';
 import { AuthenticatedGuard } from './common/guards/authenticated.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { ContactGraphGuard } from './common/guards/contact-graph.guard';
+import {
+  RateLimitGuard,
+  RateLimitService,
+} from './common/rate-limit/rate-limit';
 
 @Module({
   imports: [
@@ -51,8 +55,11 @@ import { ContactGraphGuard } from './common/guards/contact-graph.guard';
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_PIPE, useFactory: createValidationPipe },
-    // Guards run in this order, for EVERY route: who are you, are you allowed
+    RateLimitService,
+    // Guards run in this order, for EVERY route: are you over a rate limit (so
+    // unauthenticated floods are throttled too), who are you, are you allowed
     // to do this, and is the person you named inside your contact graph.
+    { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_GUARD, useClass: AuthenticatedGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_GUARD, useClass: ContactGraphGuard },

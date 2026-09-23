@@ -44,3 +44,6 @@ infra/docker/**/*.log
 .DS_Store
 Thumbs.db
 *.swp
+
+# Pretend-phone state from apps/backend/scripts/dev-device.js (holds a private key)
+.dev-device.json

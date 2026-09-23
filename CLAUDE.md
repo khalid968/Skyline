@@ -18,7 +18,12 @@ the current state of play.
   checks, the three global guards, the audit service, and the WebSocket gateway with Redis fan-out.
   243 tests pass (71 unit, 75 db, 97 app), and the core protections were mutation-tested. **Read
   `docs/security/authorization.md` before writing any controller.** Rate limiting was NOT built; it moves
-  to Phase 5. **Phase 5 (Authentication & invites) is next and needs the owner's explicit approval.**
+  to Phase 5.
+- **Phase 5 (Authentication & invites) — ✅ built 2026-09-23**, awaiting the owner's review. Device
+  activation with Ed25519 keys, rotating signed refresh tokens, admin password sign-in with optional TOTP,
+  session kinds enforced, rate limiting (fails closed), `admin:create` / `user:invite` / `dev:device` tools.
+  344 tests pass; 8 more mutation checks caught. Owner's manual test: `docs/try-it-yourself.md`.
+  **Phase 6 (admin dashboard v1) is next: needs approval AND an approved prototype of its screens first.**
 - **Owner decisions 2026-09-21** (`decisions.md`): admins never see message content in v1 (a *disclosed*
   compliance archive may be designed later as an opt-in mode — build nothing toward it now); app lock
   (PIN/biometrics) is always the user's own choice, no admin override; user-set disappearing messages are
@@ -60,12 +65,18 @@ Rationale for each is in `docs/architecture/decisions.md`.
   affected conversation, and never touches identity keys** (verified safety numbers stay valid). Those
   three constraints are what stop an admin renaming one user to another's name to impersonate them —
   do not drop them for convenience. Released usernames are never reissued.
-- **Authorization is three global guards, default deny, and NOTHING is cached** (owner decision): 401 if
+- **Authorization is global guards, default deny, and NOTHING is cached** (owner decision): 429 if rate-limited (checked first, fails closed), 401 if
   not an active account, 403 if the role lacks a permission, **404** if a named person/group/chat is
   outside the contact graph. Every check hits Postgres per request, so suspending a user, revoking a
   device, changing a role or revoking a link takes effect on the very next request. **Never add a cache.**
   Every route path parameter must be covered by `@ContactTarget`/`@GroupTarget`/`@ChatTarget`, or by
   `@GraphExempt(reason)` + `@RequirePermission`; the route-inventory test fails the build otherwise.
+- **Members have no password; operators do** (owner decision). Members get in only with a one-time
+  activation code, then the device is the credential (Ed25519 key signs activation and every refresh).
+  Admins: Argon2id password, TOTP 2FA optional. **Operator routes accept only dashboard sessions (`ska_`),
+  member routes only device sessions (`skd_`)** — never interchangeable. Tokens and codes are stored only as
+  HMAC hashes; every auth failure is the same 401. Before running anything that creates accounts, **prove
+  the command points at a throwaway database** (see the 2026-09-23 progress-log entry).
 - **The WebSocket is server-to-client only** and delivery re-checks the graph at delivery time, so a
   revocation stops an already-open socket at once. Clients send over authenticated REST.
 - **Plain-JS traps:** no parameter decorators (use `@Bind(Body())`), and DTO validation does nothing
@@ -76,7 +87,7 @@ Rationale for each is in `docs/architecture/decisions.md`.
 - **Migrations are plain SQL via `node-pg-migrate`, no ORM.** The security properties live in partial
   indexes, CHECK constraints and triggers; keep them readable. Redeem codes only through
   `redeem_activation_code()`, and build authorization on `are_linked()` / `visible_user_ids()`.
-- **Backend is NestJS in plain JavaScript, NOT TypeScript.** Babel handles decorators (`.babelrc`);
+- **Backend is NestJS in plain JavaScript, NOT TypeScript.** Babel handles decorators (`babel.config.js`, project-wide: `.babelrc` would not reach the ESM-only deps tests compile);
   `nest-cli.json` sets `"language": "js"`.
 - **PostgreSQL** is the system of record. Redis = WebSocket fan-out, presence, rate limiting only.
   MinIO = encrypted media blobs.
@@ -133,10 +144,15 @@ npm run format             # prettier --write "**/*.js"
 
 # Migrations (apps/backend) — plain SQL via node-pg-migrate; needs DATABASE_URL in .env
 npm run migrate:up                       # apply; migrate:down rolls back one; migrate:redo redoes the last
-npm run test:db                          # 75 schema-invariant tests against a throwaway database
-npm run test:app                         # 97 tests: HTTP guards, WebSocket fan-out, audit, route inventory
+npm run test:db                          # 78 schema-invariant tests against a throwaway database
+npm run test:app                         # 157 tests: guards, real-token auth, WebSocket, rate limits, CLI, route inventory
                                          #   (needs the dev Postgres AND Redis up; each suite drops its own DB)
 npm run migrate:create -- add-something  # scaffold a new .sql migration
+
+# Operator tools (apps/backend) — act on whatever DATABASE_URL points at
+npm run admin:create -- --username x --display-name "Name"   # FIRST admin only; prompts for password
+npm run user:invite -- --username x --display-name "Name"    # member + one-time code, printed once
+npm run dev:device -- activate SKY-...                      # pretend phone (dev only): activate|me|devices|refresh|logout|forget
 
 # Dev data plane (repo root) — Docker Desktop must be running
 docker compose -f infra/docker/docker-compose.yml up -d   # Postgres, Redis, MinIO

@@ -32,6 +32,23 @@ export class AccountService {
     return rows[0] ? { userId, deviceId, role: rows[0].role_key } : null;
   }
 
+  // An operator signed in to the dashboard: active, and their role still holds
+  // dashboard.access. Demoting an admin to member ends their dashboard access on
+  // the next request, even with a session still open.
+  async loadActiveOperator(userId) {
+    if (!isUuid(userId)) return null;
+
+    const { rows } = await this.db.query(
+      `SELECT u.role_key
+         FROM users u
+         JOIN role_permissions rp
+           ON rp.role_key = u.role_key AND rp.permission_key = 'dashboard.access'
+        WHERE u.id = $1 AND u.status = 'active'`,
+      [userId],
+    );
+    return rows[0] ? { userId, role: rows[0].role_key } : null;
+  }
+
   // Of these device ids, the ones whose device is not revoked and whose owner
   // is active. One batched query, used to sweep open WebSockets.
   async liveDeviceIds(deviceIds) {

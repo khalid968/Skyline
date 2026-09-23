@@ -9,6 +9,7 @@ export const IS_PUBLIC = 'skyline:public';
 export const REQUIRED_PERMISSIONS = 'skyline:permissions';
 export const GRAPH_TARGETS = 'skyline:graph-targets';
 export const GRAPH_EXEMPT = 'skyline:graph-exempt';
+export const DASHBOARD_SESSION = 'skyline:dashboard-session';
 
 // No authentication required. Use for health checks and the activation flow,
 // and almost nothing else.
@@ -42,6 +43,20 @@ export const ContactTarget = (param, { mode = 'visible' } = {}) => {
 };
 export const GroupTarget = (param) => addTarget({ kind: 'group', param });
 export const ChatTarget = (param) => addTarget({ kind: 'chat', param });
+// A device id that must belong to the caller (listing or revoking their own
+// devices). Someone else's device is a 404, like anything outside the graph.
+export const OwnDeviceTarget = (param) =>
+  addTarget({ kind: 'own-device', param });
+
+// Which kind of session a route accepts. A route that requires a permission is
+// an OPERATOR route and accepts only a dashboard session; every other
+// authenticated route is a MEMBER route and accepts only a device session.
+// That enforces the locked decision that admin tooling is separate from the
+// app: even an admin's own phone cannot call operator APIs.
+//
+// This marks the few operator routes that need a dashboard session but no
+// particular permission (sign out, 2FA setup, change password).
+export const DashboardSession = () => SetMetadata(DASHBOARD_SESSION, true);
 
 // For a route that takes an id but is legitimately not scoped to the caller's
 // graph, chiefly admin routes that act on any user and are gated by a

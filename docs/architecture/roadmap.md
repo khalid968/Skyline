@@ -25,8 +25,8 @@ See `design.md` for the standing design-review rule.
    logging, health checks, base guards/interceptors/filters, WebSocket gateway skeleton. Includes the
    contact-graph guard that every downstream endpoint composes with.
 
-5. **Authentication & invites** — admin-issued activation codes, username auth, device authentication,
-   PIN / Face ID / fingerprint app lock gating the on-device keys (`decisions.md`), recovery codes, session/device binding. No public registration path exists at all.
+5. **Authentication & invites** — ✅ built 2026-09-23, awaiting review. Admin-issued activation codes, username auth, device authentication,
+   session/device binding, rate limiting. (The PIN / Face ID / fingerprint app lock moved to the mobile app build: it is purely on-device. Recovery codes were dropped: a lost phone gets a new activation code.) No public registration path exists at all.
 
 6. **Admin dashboard (v1)** — separate web app. User creation, activation codes, the contact-graph
    editor, group membership, device list. **This is a hard prerequisite for using Skyline**: accounts

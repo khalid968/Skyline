@@ -23,6 +23,7 @@ Migrations are numbered by timestamp prefix and applied in filename order.
 | 006 | `contact-graph` | `groups`, `group_members`, `contact_links`, `are_linked()`, `visible_user_ids()` |
 | 007 | `chats-and-messages` | `chats`, `messages`, `message_envelopes`, `attachments` |
 | 008 | `audit-log` | `audit_log` + append-only triggers |
+| 009 | `authentication` | device `signing_key`; Signal fields nullable until Phase 7; deferred code->device FK; access/refresh token hashes on `device_sessions`; `admin_credentials`, `admin_sessions` |
 
 ---
 
@@ -70,6 +71,95 @@ has ever existed violates that `UNIQUE` and aborts the transaction, so the renam
 `audit_log` has `BEFORE UPDATE` and `BEFORE DELETE` triggers that raise. Corrections are recorded as
 new entries. It deliberately carries **no foreign keys**: an audit record must outlive the rows it
 describes, so ids are stored as plain uuids beside a snapshot of the name at the time.
+
+### 5. Authentication (migration 009)
+
+- **Every device has an Ed25519 `signing_key`** (32 bytes, unique among live devices, since two live devices
+  sharing one means a clone). It signs activation and every token refresh. `identity_key` and
+  `registration_id` are the Signal Protocol fields and stay NULL until Phase 7 fills them.
+- **Activation is one transaction.** `activation_codes.redeemed_by_device_id` is `DEFERRABLE INITIALLY
+  DEFERRED`, so the service claims the code with a pre-generated device id, then inserts that device, then
+  commits. Any failure rolls both back and the code stays unspent.
+- **Tokens are stored only as HMAC hashes.** `device_sessions` holds the current access and refresh hashes
+  plus `previous_refresh_hash`; seeing that one presented again is how refresh-token theft is detected.
+- **`admin_credentials`** exists only for operators: an Argon2id password hash (a CHECK insists on the
+  `$argon2id# Database Schema
+
+PostgreSQL 16+. Migrations live in `apps/backend/src/database/migrations/` and run with
+[`node-pg-migrate`](https://github.com/salsita/node-pg-migrate) in plain-SQL mode.
+
+```bash
+cd apps/backend
+cp .env.example .env          # set DATABASE_URL
+npm run migrate:up            # apply
+npm run migrate:down          # roll back one
+npm run migrate:create -- add-something   # scaffold a new migration
+```
+
+Migrations are numbered by timestamp prefix and applied in filename order.
+
+| # | Migration | Contents |
+| --- | --- | --- |
+| 001 | `extensions-and-enums` | `pgcrypto`, `citext`, all enum types, `set_updated_at()` |
+| 002 | `roles-and-permissions` | `roles`, `permissions`, `role_permissions` + seed data |
+| 003 | `users-and-usernames` | `users`, `username_history` + the rename trigger |
+| 004 | `devices-sessions-push` | `devices`, `device_sessions`, `push_tokens` |
+| 005 | `activation-codes` | `activation_codes`, the single-use trigger, `redeem_activation_code()` |
+| 006 | `contact-graph` | `groups`, `group_members`, `contact_links`, `are_linked()`, `visible_user_ids()` |
+| 007 | `chats-and-messages` | `chats`, `messages`, `message_envelopes`, `attachments` |
+| 008 | `audit-log` | `audit_log` + append-only triggers |
+| 009 | `authentication` | device `signing_key`; Signal fields nullable until Phase 7; deferred code->device FK; access/refresh token hashes on `device_sessions`; `admin_credentials`, `admin_sessions` |
+
+---
+
+## The four invariants the schema enforces structurally
+
+These are enforced by the database, not by application code, because application code forgets.
+
+### 1. Contact links are symmetric and admin-granted
+
+`contact_links` stores each pair once in canonical order, guarded by
+`CHECK (user_a_id < user_b_id)`. There is no direction column and no way to express "A can reach B but
+B cannot reach A". Look a pair up with `(LEAST(a,b), GREATEST(a,b))`, or just call `are_linked(a, b)`.
+
+A partial unique index allows **one live link per pair** while letting revoked rows accumulate as
+history, so a pair can be granted, revoked and re-granted without losing either record.
+
+`visible_user_ids(user)` returns everyone a user may act on: live contacts plus anyone sharing a live
+group. **Phase 4's guard is built on this function.** Anything outside the set is a `404`, never a
+`403` — a `403` confirms the target exists and leaks the directory the design exists to hide.
+
+### 2. Activation codes are single use
+
+- `code_hash` is `HMAC-SHA256(server pepper, normalized code)` — deterministic so it can be indexed,
+  keyed so a database leak alone yields nothing redeemable. The code itself is shown once at creation
+  and is never stored. A slow KDF is deliberately not used: codes carry 128 bits of entropy, so there
+  is nothing to brute force.
+- A partial unique index permits **at most one live code per user**.
+- `activation_codes_freeze_when_spent` is a `BEFORE UPDATE` trigger that refuses any change to
+  `redeemed_at`, `redeemed_by_device_id`, `code_hash` or `user_id` once a code is spent. A buggy
+  service cannot resurrect a code.
+- **Redeem only through `redeem_activation_code(code_hash, device_id)`.** It is one atomic conditional
+  `UPDATE` — the row is claimed or it is not, with no window between check and write. Do not
+  reimplement it as `SELECT`-then-`UPDATE`; that races and two devices could redeem the same code.
+  It returns the user id, or `NULL` identically for every failure: unknown, spent, revoked, expired.
+  Callers must not distinguish between those in the response *or in the time taken*.
+
+### 3. A username is never reissued
+
+`username_history` holds every username ever assigned to anyone, with a **global** `UNIQUE`. The
+`users_track_username` trigger writes to it on insert and on every rename. Renaming to a username that
+has ever existed violates that `UNIQUE` and aborts the transaction, so the rename simply cannot happen.
+
+### 4. The audit log is append-only
+
+`audit_log` has `BEFORE UPDATE` and `BEFORE DELETE` triggers that raise. Corrections are recorded as
+new entries. It deliberately carries **no foreign keys**: an audit record must outlive the rows it
+describes, so ids are stored as plain uuids beside a snapshot of the name at the time.
+
+ prefix) and an optional TOTP secret encrypted with AES-256-GCM, with `totp_last_step` so no
+  code works twice. Members have no row and no password.
+- **`admin_sessions`** are dashboard sessions: `pending_mfa` (password done, code not yet) or `active`.
 
 ---
 
@@ -121,7 +211,7 @@ rename impossible to perform silently.
 
 - All 8 migrations apply, roll back completely (0 tables, 0 enum types, 0 functions left behind), and
   re-apply from nothing.
-- 75 tests in `apps/backend/test/db/` exercise the invariants against a real database. Run them with
+- 78 tests in `apps/backend/test/db/` exercise the invariants against a real database. Run them with
   `npm run test:db` (needs the dev Postgres up). Each suite builds a throwaway database from the real
   migration files and drops it afterwards; the dev database is never touched.
 - The single-use guarantee was checked under genuine concurrency: 25 separate connections race one code

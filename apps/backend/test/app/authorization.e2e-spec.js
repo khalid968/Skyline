@@ -21,7 +21,10 @@ describe('authorization (HTTP, real database)', () => {
 
   const get = (path, who) => {
     const req = request(t.app.getHttpServer()).get(path);
-    return who ? req.set(t.as(who.user, who.device)) : req;
+    if (!who) return req;
+    return req.set(
+      who.dashboard ? t.asDashboard(who.dashboard) : t.as(who.user, who.device),
+    );
   };
   const asAlice = () => ({ user: alice.id, device: aliceDev });
   const asBob = () => ({ user: bob.id, device: bobDev });
@@ -172,13 +175,30 @@ describe('authorization (HTTP, real database)', () => {
     });
   });
 
-  describe('permissions', () => {
-    it('refuses a member on an operator route with 403', async () => {
-      expect((await get('/t/admin', asAlice())).status).toBe(403);
+  describe('permissions and session kinds', () => {
+    const asOperator = (userId) => ({ dashboard: userId });
+
+    it('refuses a moderator a permission their role lacks with 403', async () => {
+      const c = db.client;
+      const mod = await mkUser(c, 'mod', { role: 'moderator' });
+      expect((await get('/t/admin', asOperator(mod.id))).status).toBe(403);
     });
 
-    it('admits an administrator', async () => {
-      expect((await get('/t/admin', asAdmin())).status).toBe(200);
+    it('admits an administrator signed in to the dashboard', async () => {
+      expect((await get('/t/admin', asOperator(admin.id))).status).toBe(200);
+    });
+
+    it("refuses an administrator's PHONE on an operator route: admin tooling is dashboard-only", async () => {
+      expect((await get('/t/admin', asAdmin())).status).toBe(401);
+    });
+
+    it('refuses a dashboard session on a member route: a dashboard login is not a member in the app', async () => {
+      expect((await get('/t/open', asOperator(admin.id))).status).toBe(401);
+    });
+
+    it('refuses a member with no dashboard access, whatever session they present', async () => {
+      expect((await get('/t/admin', asAlice())).status).toBe(401);
+      expect((await get('/t/admin', asOperator(alice.id))).status).toBe(401);
     });
 
     it('asks who you are before what you may do: no credentials is 401, not 403', async () => {
@@ -188,19 +208,34 @@ describe('authorization (HTTP, real database)', () => {
     it('applies a promotion or demotion on the very next request', async () => {
       const c = db.client;
       const u = await mkUser(c, 'promoted');
-      const d = await mkDevice(c, u.id);
-      const who = { user: u.id, device: d };
-      expect((await get('/t/admin', who)).status).toBe(403);
+      const who = asOperator(u.id);
+      expect((await get('/t/admin', who)).status).toBe(401); // member: no dashboard at all
 
       await c.query(`UPDATE users SET role_key = 'admin' WHERE id = $1`, [
         u.id,
       ]);
       expect((await get('/t/admin', who)).status).toBe(200);
 
+      await c.query(`UPDATE users SET role_key = 'moderator' WHERE id = $1`, [
+        u.id,
+      ]);
+      expect((await get('/t/admin', who)).status).toBe(403); // dashboard yes, this permission no
+
       await c.query(`UPDATE users SET role_key = 'member' WHERE id = $1`, [
         u.id,
       ]);
-      expect((await get('/t/admin', who)).status).toBe(403);
+      expect((await get('/t/admin', who)).status).toBe(401);
+    });
+
+    it('shuts a suspended operator out of the dashboard on the next request', async () => {
+      const c = db.client;
+      const op = await mkUser(c, 'op', { role: 'admin' });
+      expect((await get('/t/admin', asOperator(op.id))).status).toBe(200);
+      await c.query(
+        `UPDATE users SET status = 'suspended', suspended_at = now() WHERE id = $1`,
+        [op.id],
+      );
+      expect((await get('/t/admin', asOperator(op.id))).status).toBe(401);
     });
   });
 

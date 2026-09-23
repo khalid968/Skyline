@@ -47,6 +47,17 @@ export class GraphService {
     );
   }
 
+  // A live device that belongs to `me`. Anyone else's device, and one already
+  // revoked, is indistinguishable from one that does not exist.
+  ownsDevice(me, deviceId) {
+    return this._ask(
+      `SELECT EXISTS (
+         SELECT 1 FROM devices WHERE id = $2 AND user_id = $1 AND revoked_at IS NULL
+       ) AS ok`,
+      [me, deviceId],
+    );
+  }
+
   isGroupMember(me, groupId) {
     return this._ask(
       `SELECT EXISTS (

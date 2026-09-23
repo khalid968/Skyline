@@ -1,5 +1,6 @@
 // Message and chat shape, the no-hard-delete foreign keys, and RBAC. The server
 // must never hold message plaintext, and no permission may grant access to it.
+import crypto from 'crypto';
 import {
   createTestDatabase,
   mkUser,
@@ -241,16 +242,60 @@ describe('messaging and RBAC (database layer)', () => {
   });
 
   describe('devices', () => {
+    const randomKey = () => crypto.randomBytes(32);
+    const insertDevice = (
+      userId,
+      { identityKey = null, signingKey = randomKey() } = {},
+    ) =>
+      db.client.query(
+        `INSERT INTO devices (user_id, name, platform, identity_key, signing_key)
+         VALUES ($1, 'x', 'ios', $2, $3) RETURNING id`,
+        [userId, identityKey, signingKey],
+      );
+
     it('stores only a public-key-sized identity key', async () => {
       const u = await mkUser(db.client, 'keyed');
       const err = await failure(
-        db.client.query(
-          `INSERT INTO devices (user_id, name, platform, registration_id, identity_key) VALUES ($1, 'x', 'ios', 5, $2)`,
-          [u.id, Buffer.alloc(64)],
-        ),
+        insertDevice(u.id, { identityKey: Buffer.alloc(64) }),
       );
       expect(err.code).toBe(SQLSTATE.check);
       expect(err.constraint).toBe('devices_identity_key_len');
+    });
+
+    it('allows the Signal fields to be empty until Phase 7, but never the signing key', async () => {
+      const u = await mkUser(db.client, 'phase5');
+      await expect(insertDevice(u.id)).resolves.toBeDefined();
+
+      const err = await failure(insertDevice(u.id, { signingKey: null }));
+      expect(err.code).toBe(SQLSTATE.notNull);
+    });
+
+    it('requires a 32-byte Ed25519 public signing key', async () => {
+      const u = await mkUser(db.client, 'badkey');
+      const err = await failure(
+        insertDevice(u.id, { signingKey: Buffer.alloc(64) }),
+      );
+      expect(err.code).toBe(SQLSTATE.check);
+      expect(err.constraint).toBe('devices_signing_key_len');
+    });
+
+    it('refuses two live devices with the same signing key, which would mean a cloned device', async () => {
+      const a = await mkUser(db.client, 'clone');
+      const b = await mkUser(db.client, 'clone');
+      const key = randomKey();
+      const { rows } = await insertDevice(a.id, { signingKey: key });
+
+      const err = await failure(insertDevice(b.id, { signingKey: key }));
+      expect(err.code).toBe(SQLSTATE.unique);
+
+      // Once the first is revoked, the key may be registered again.
+      await db.client.query(
+        'UPDATE devices SET revoked_at = now() WHERE id = $1',
+        [rows[0].id],
+      );
+      await expect(
+        insertDevice(b.id, { signingKey: key }),
+      ).resolves.toBeDefined();
     });
   });
 

@@ -45,6 +45,8 @@ describe('validateEnv', () => {
         'postgres://skyline:Xy7-strong-and-long-9Qp@db:5432/skyline',
       STORAGE_ACCESS_KEY: 'AKIA-real-access-key',
       STORAGE_SECRET_KEY: 'a-genuinely-long-random-storage-secret',
+      AUTH_TOKEN_PEPPER: 'Qk3v9-a-genuinely-random-pepper-value-8Hn2',
+      AUTH_TOTP_KEY: 'Zp7w1-a-genuinely-random-totp-key-value-4Rt6',
     };
 
     it('accepts properly configured production settings', () => {
@@ -67,6 +69,14 @@ describe('validateEnv', () => {
       ['the dev storage secret', { STORAGE_SECRET_KEY: 'skyline-secret' }],
       ['a missing storage secret', { STORAGE_SECRET_KEY: undefined }],
       ['the dev storage access key', { STORAGE_ACCESS_KEY: 'skyline' }],
+      ['a missing token pepper', { AUTH_TOKEN_PEPPER: undefined }],
+      ['a short token pepper', { AUTH_TOKEN_PEPPER: 'too-short' }],
+      [
+        'the dev token pepper',
+        { AUTH_TOKEN_PEPPER: 'dev-only-token-pepper-never-use-in-production' },
+      ],
+      ['a missing 2FA key', { AUTH_TOTP_KEY: undefined }],
+      ['a scaled-up rate limit', { RATE_LIMIT_SCALE: '100' }],
     ])('rejects %s', (_label, override) => {
       expect(() => validateEnv({ ...good, ...override })).toThrow(/production/);
     });
@@ -79,6 +89,16 @@ describe('validateEnv', () => {
         }),
       ).not.toThrow();
     });
+  });
+
+  it('rejects a nonsensical rate-limit scale anywhere', () => {
+    expect(() => validateEnv({ RATE_LIMIT_SCALE: '0' })).toThrow(
+      /RATE_LIMIT_SCALE/,
+    );
+    expect(() => validateEnv({ RATE_LIMIT_SCALE: 'lots' })).toThrow(
+      /RATE_LIMIT_SCALE/,
+    );
+    expect(() => validateEnv({ RATE_LIMIT_SCALE: '50' })).not.toThrow();
   });
 
   it('never echoes a secret value in its error message', () => {

@@ -6,6 +6,39 @@ working around it.
 
 ---
 
+## 2026-09-23 — Phase 5 authentication model
+
+**Decided by the owner:**
+
+1. **Members have no password.** The one-time activation code is the only way in; afterwards the device
+   holds the credential. No recovery codes: a lost phone means an administrator issues a new code. App
+   lock (PIN/biometric) protects the phone locally.
+2. **Administrators sign in to the dashboard with a password; two-factor (TOTP authenticator app) is an
+   optional step each admin may turn on.** Chosen for simplicity at the start. Known trade-off: an admin
+   who skips 2FA is protected by the password alone, and admins control the whole contact graph. Mitigated
+   by Argon2id hashing and rate limiting. Easy to make mandatory later.
+3. **Each device registers an Ed25519 signing key at activation** (Node's built-in, vetted implementation
+   — no custom crypto) and must sign every token refresh with it, so a stolen refresh token alone is
+   useless. `devices.identity_key` and `devices.registration_id` (the Signal Protocol fields) become
+   nullable until Phase 7 fills them.
+
+**Decided by the agent (cheap to reverse, listed so the owner can object):**
+
+- **Tokens are opaque random strings**, stored only as HMAC-SHA256 hashes under a server pepper, and looked
+  up in Postgres on every request, consistent with the no-caching rule. A JWT would buy nothing here and
+  could not be revoked instantly. Device access tokens last 15 minutes; refresh tokens 30 days and rotate
+  on every use, and presenting an already-rotated refresh token revokes the whole session (theft detection).
+- **Operator routes accept only a dashboard session; member routes accept only a device session.** This
+  enforces the locked decision that admin tooling is separate from the app: even an admin's own phone
+  cannot call operator APIs.
+- **Rate limiting fails closed** on the authentication endpoints: if Redis is down, activation and login
+  are refused rather than left unthrottled.
+- **Activation codes are 100 bits** (20 Crockford base32 characters, `SKY-XXXXX-XXXXX-XXXXX-XXXXX`), not
+  the 128 the schema comment assumed. With a keyed hash, rate limiting and a 72-hour expiry, 100 bits is
+  far beyond guessable, and it is shorter to type.
+
+---
+
 ## 2026-09-21 — The WebSocket is server-to-client only; clients send over REST
 
 **Decision.** The gateway ignores every inbound frame. Clients send messages over authenticated REST, and

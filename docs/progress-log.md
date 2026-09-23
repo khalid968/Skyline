@@ -8,6 +8,67 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-23 — Phase 5 BUILT: authentication, invites, rate limiting
+
+**Owner decisions** (full text in `decisions.md`, 2026-09-23): members have **no password** (the activation code
+is the only way in; the device is the credential; no recovery codes); **admins sign in with a password and
+2FA is optional**, chosen for simplicity; each device registers an **Ed25519 signing key** now, Signal keys in
+Phase 7. The owner also asked to push: Phases 2-4 were pushed to GitHub at the start of this session.
+
+**Built:**
+
+- **Migration 009**: device `signing_key`; Signal fields nullable until Phase 7; the code->device FK deferred
+  to COMMIT so activation is one atomic transaction; token hashes on `device_sessions`;
+  `admin_credentials` and `admin_sessions`.
+- **Activation** (`POST /auth/activate`): code + device public key + signature over the code. Redeems through
+  `redeem_activation_code()`, registers the device, opens a session, all or nothing.
+- **Device tokens**: 15-min access, 30-day refresh that rotates; refresh needs a fresh Ed25519 signature;
+  a reused refresh token revokes the whole session. Logout, list/revoke own devices.
+- **Admin sign-in**: Argon2id password, optional TOTP 2FA (setup/enable/disable), password change that signs
+  out other sessions, 12h absolute / 60-min idle dashboard sessions.
+- **Session kinds are enforced**: operator routes accept only dashboard sessions, member routes only device
+  sessions. An admin's phone cannot call operator APIs.
+- **Rate limiting** (carried over from Phase 4): Redis fixed windows, per address and per username, fails
+  closed. WebSocket login now takes a real device token.
+- **CLI**: `npm run admin:create` (first admin only), `npm run user:invite` (member + one-time code, shown once).
+  **`npm run dev:device`**: a pretend phone for trying the API by hand (dev only).
+- **`docs/try-it-yourself.md`**: the owner's step-by-step manual test.
+
+**Tests: 344 pass** (109 unit, 78 db, 157 app), no leaked databases. The Phase 5 suite uses real keys and
+real tokens (no test shortcuts). **8 mutation checks, all caught**: refresh accepting any signature, reuse
+detection off, activation skipping the signature or admitting a suspended account, a phone accepted on
+operator routes, a replayable 2FA code, a suspended admin signing in, password change keeping other sessions.
+
+**Found and fixed along the way:** otplib's dependency is ESM-only and Jest could not load it (fixed by moving
+to a project-wide `babel.config.js` and rooting both Jest configs at the backend folder: note this in
+`authorization.md` gotcha 5); a failed-2FA audit entry would have been rolled back with its transaction (now
+written outside it); and the CLI password prompt could hang on piped input (rewritten; verified piped, the
+live-keyboard path is untested here, so an env-var fallback is documented).
+
+**A process slip, recorded honestly:** while testing the CLI, a command chain kept running after a syntax
+check failed, so later steps ran without the throwaway `DATABASE_URL` and would have hit the dev database. The
+CLI crashed before touching anything and the dev database was verified untouched (0 users). The re-run used
+`set -e` and a guard that refuses any database name that is not a throwaway one. **Do the same: any command
+that creates accounts must prove it is pointed at a throwaway database first.**
+
+**Deliberately NOT done:** no accounts were created in the owner's dev database. `admin:create` only makes the
+*first* admin, so that must be the owner's own.
+
+**Moved out of Phase 5:** the PIN/biometric app lock is purely on-device, so it belongs with the mobile app
+build, not the backend. Its Privacy & security settings prototype is still owed.
+
+**Known gaps** (details in `authorization.md`): `trust proxy` must be set when Nginx arrives (Phase 13) or all
+clients share one rate-limit counter; a client that blindly retries a successful refresh gets its session
+revoked; timing uniformity is by design, not measured.
+
+**Next agent:** Phase 6 (admin dashboard v1) needs the owner's explicit approval, and it is a user-visible
+surface, so **its screens must be prototyped and approved first** (the Phase 2 canvas has users, create-user,
+contact graph and edit-user boards; sign-in and 2FA screens are not drawn yet). The dashboard's API should reuse
+`issueActivationCode()` and `AuditService`, use `@RequirePermission` + `@GraphExempt` on every route that takes
+a user id, and remove `apps/mobile/lib/features/admin/`.
+
+---
+
 ## 2026-09-21 (night) — Phase 4 BUILT: backend foundation and authorization core
 
 **Owner decisions this session:** graph checks go **in SQL, nothing cached**; true E2EE for v1 with a

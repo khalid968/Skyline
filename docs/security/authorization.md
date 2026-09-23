@@ -3,15 +3,22 @@
 How the backend decides who may do what, and how to add a route without breaking it. Read this before
 writing any controller. The rule it protects is in [`contact-graph.md`](../architecture/contact-graph.md).
 
-## The model: three global guards, default deny
+## The model: four global guards, default deny
 
-Every HTTP route passes through three guards, registered globally in `app.module.js`, in this order:
+Every HTTP route passes through four guards, registered globally in `app.module.js`, in this order:
 
 | Order | Guard | Question | Failure |
 | --- | --- | --- | --- |
-| 1 | `AuthenticatedGuard` | Is there a principal, and is that account and device **still active right now**? | `401` |
-| 2 | `PermissionsGuard` | Does the caller's role hold every permission this route requires? | `403` |
-| 3 | `ContactGraphGuard` | Is every person, group or chat named in the path inside the caller's contact graph? | `404` |
+| 1 | `RateLimitGuard` | Is this address (or username) over a `@RateLimit` for this route? Runs first, so unauthenticated floods are throttled. **Fails closed**: Redis down means refused. | `429` / `503` |
+| 2 | `AuthenticatedGuard` | Is there a valid bearer token of the **right kind for this route**, and is that account (and device) **still active right now**? | `401` |
+| 3 | `PermissionsGuard` | Does the caller's role hold every permission this route requires? | `403` |
+| 4 | `ContactGraphGuard` | Is every person, group, chat or own-device named in the path inside the caller's graph? | `404` |
+
+**Two kinds of session, never interchangeable.** A route with `@RequirePermission` or `@DashboardSession` is
+an **operator route** and accepts only a **dashboard** session (`ska_` token, from `/admin/auth/login`). Every
+other authenticated route is a **member route** and accepts only a **device** session (`skd_` token, from
+activation). So an admin's own phone cannot call operator APIs, and a dashboard login cannot act as a member
+in the app. This is how the locked decision "admin tooling is separate from the app" is enforced in code.
 
 **Nothing is cached.** Each guard queries PostgreSQL on every request (an owner decision, see
 `decisions.md`). Suspending a user, revoking a device, changing a role and revoking a contact link all
@@ -70,6 +77,9 @@ export class AdminUsersController {
 | `@GroupTarget(param)` | `param` names a group; caller must be a live member. |
 | `@ChatTarget(param)` | `param` names a chat. A direct chat is reachable **only while its link is live**; a group chat only by live members. |
 | `@GraphExempt(reason)` | Escape hatch for operator routes. Needs a real reason **and** `@RequirePermission`. |
+| `@OwnDeviceTarget(param)` | `param` names a device that must belong to the caller and be live. Anyone else's is a 404. |
+| `@DashboardSession()` | An operator route that needs a dashboard session but no particular permission (sign out, 2FA, password). |
+| `@RateLimit(name, rules)` | Throttle per `ip` and/or per `body.<field>` (from `common/rate-limit/rate-limit.js`). Required on every `@Public` route that checks a secret. |
 
 Decorators stack, so a route with `:chatId` and `:userId` carries both.
 
@@ -95,9 +105,11 @@ This project is JavaScript, not TypeScript, compiled by Babel with legacy decora
    check and passes everything. **Always add `@Validated(YourDto)`.** The inventory test enforces it.
 3. **Injection is `@Dependencies(...)`**, not constructor type annotations.
 4. **Use `_underscore` methods, not `#private`.** Babel's legacy decorators are fussy about private members.
-5. **Jest needs `rootDir` at the backend root** for anything that imports `src/`. Otherwise Babel does not
-   pick up `.babelrc` for source files and every decorator is a syntax error. (Already set in
-   `test/jest-e2e.json`.)
+5. **Babel config is `babel.config.js` (project-wide), not `.babelrc`,** because tests must also compile a few
+   ESM-only dependencies (otplib -> `@scure/base`, `@noble/*`), and a `.babelrc` never applies inside
+   `node_modules`. Consequently **both Jest configs must have `rootDir` at the backend root** (Babel looks for
+   `babel.config.js` from there) and list those packages in `transformIgnorePatterns`. Get either wrong and
+   every decorator, or every `import` in those packages, is a syntax error.
 
 ## What is protected at the transport level
 
@@ -121,8 +133,10 @@ This project is JavaScript, not TypeScript, compiled by Babel with legacy decora
 - **One-directional.** The socket delivers server to client only; inbound frames are ignored. Clients
   *send* over authenticated REST, where the graph is enforced per request. This removes a whole class of
   "write a message by talking to the socket directly" bypasses.
-- **Default deny.** `WS_AUTHENTICATOR` defaults to `DenyAllWsAuthenticator`, so until Phase 5 supplies a real
-  one **nobody can connect**. A socket anyone can open is a way to receive other people's traffic.
+- **Device tokens only.** `TokenWsAuthenticator` accepts a device access token in the `Authorization`
+  header (or `?token=` for clients that cannot set headers; query strings are never logged). A refresh token
+  or a dashboard token is refused: a dashboard login has no business receiving members' messages. The
+  account and device are then re-checked against the database before the socket is admitted.
 - **Delivery re-checks the graph at the moment of delivery**, not at connect time (`FanoutService`, backed
   by `GraphService.deliverableDevices`). So revoking a link, suspending a user or revoking a device stops
   delivery on an **already-open socket**, immediately. The sender's own other devices always qualify.
@@ -137,34 +151,74 @@ This project is JavaScript, not TypeScript, compiled by Babel with legacy decora
 entry commits or rolls back **with** the change it describes (tested). It refuses any `detail` field whose
 name looks like a secret, because the table can never be edited or deleted.
 
-## The Phase 5 seam
+## Authentication (Phase 5)
 
-Authentication (turning a token into a principal) does not exist yet. Its contract with this layer:
+Full rationale in `decisions.md` (2026-09-23). How it works:
 
-- HTTP: set `request.principal = { userId, deviceId }`. `AuthenticatedGuard` does the rest, including
-  re-checking the account and device against the database.
-- WebSocket: provide a `WS_AUTHENTICATOR` returning `{ userId, deviceId }` or `null`.
+**Members (phones and desktops): no password.**
 
-Until then every non-public route answers `401`. **The tests fake the principal from headers
-(`test/app/app-harness.js`). That fake must never exist in `src/`.**
+1. An administrator creates the account and issues a one-time activation code (`npm run user:invite` until
+   the dashboard exists). The code is shown once and stored only as an HMAC hash.
+2. The device generates an **Ed25519 key pair**, keeps the private half, and calls `POST /auth/activate` with
+   the code, its public key and a signature over the code. One transaction redeems the code (through
+   `redeem_activation_code()`), registers the device and opens a session; any failure rolls all of it back.
+3. The device gets an **access token** (`skd_`, 15 minutes) and a **refresh token** (`skr_`, 30 days).
+4. `POST /auth/refresh` swaps them for a new pair, but only with a fresh signature over
+   `(timestamp, refresh token)` from the device key, so **a stolen refresh token alone is useless**. Each
+   refresh token works once; presenting an already-rotated one **revokes the whole session** (theft detection).
+5. `POST /auth/logout` ends this session. `POST /me/devices/:deviceId/revoke` removes a device for good.
+
+**Operators (web dashboard): password, two-factor optional.**
+
+1. The first admin is created with `npm run admin:create` (refuses once one exists). Passwords are Argon2id.
+2. `POST /admin/auth/login` returns a dashboard token (`ska_`, 12 hours absolute, 60 minutes idle), or, if
+   the admin turned 2FA on, a 5-minute `skm_` token that is only good for `POST /admin/auth/mfa` with a code.
+3. 2FA is TOTP (any authenticator app): `two-factor/setup` then `two-factor/enable` with a working code.
+   A code is never accepted twice. Turning it off needs the password **and** a code. Changing the password
+   signs out every other dashboard session.
+
+**Rules for anyone touching this code**
+
+- **Every failure is the same 401.** Unknown, spent, expired or revoked code; bad signature; cloned key;
+  suspended account; wrong password; unknown username (which still pays for a full Argon2 check). Tests
+  assert the bodies are byte-identical.
+- **Tokens and codes are never stored**, only `HMAC-SHA256(AUTH_TOKEN_PEPPER, label, value)`. Each kind has a
+  prefix and its own hash label, so one kind can never be looked up as another.
+- **Rate limits** (production values): activation 10 / 15 min per address; refresh 60; admin login 20 per
+  address **and** 10 per username; MFA and 2FA changes 20; password change 10.
+- **No custom cryptography.** Ed25519, HMAC, AES-GCM and the CSPRNG are Node's built-ins; Argon2 and TOTP are
+  the `argon2` and `otplib` libraries. `src/modules/auth/auth-crypto.js` only fixes how they are used.
+- **The test fakes stay in `test/`.** `test/app/app-harness.js` can set a principal from `x-test-*` headers
+  for guard tests; `realAuth: true` turns that off. Nothing in `src/` may read those headers.
 
 ## Tests
 
 | Command | Suite | Needs |
 | --- | --- | --- |
-| `npm test` | 71 unit tests (config, redaction, logger, filter, validation) | nothing |
-| `npm run test:db` | 75 schema-invariant tests | Postgres up |
-| `npm run test:app` | 97 tests: HTTP guards, WebSocket fan-out, audit, route inventory | Postgres + Redis up |
+| `npm test` | 109 unit tests (config, redaction, logger, filter, validation, auth crypto, rate-limit guard) | nothing |
+| `npm run test:db` | 78 schema-invariant tests | Postgres up |
+| `npm run test:app` | 157 tests: guards, real-token authentication, WebSocket fan-out, audit, rate limits, CLI tools, route inventory | Postgres + Redis up |
 
 `test:db` and `test:app` build a throwaway database per suite and drop it afterwards. The core
 protections were **mutation-tested**: deliberately breaking each (graph filter off, guard off, suspended
 still active, revoked device accepted, 404 leaking a message) makes the suite fail, so a green run means
-something.
+something. Phase 5 added eight more: refresh accepting any signature, reuse detection off, activation
+skipping the signature check or letting a suspended account in, a phone accepted on operator routes, a
+replayable 2FA code, a suspended admin signing in, a password change leaving other sessions alive. All
+eight were caught.
 
 ## Known gaps, stated plainly
 
-- **Rate limiting is not implemented.** It was on the Phase 4 plan and is deferred to Phase 5, where it is
-  needed first: throttling activation-code redemption is what stops code guessing.
+- **Rate limiting is per address, and every address looks the same behind a proxy.** `trust proxy` is unset,
+  so once Nginx is in front (Phase 13) every request will seem to come from it and share one counter. Set
+  `trust proxy` to the proxy's address then, or the limits become a denial of service.
+- **A benign double refresh looks like theft.** If a flaky network makes a device retry a refresh whose
+  first attempt actually succeeded, the retry presents an already-rotated token and the session is revoked;
+  the device must re-activate. Standard behaviour for rotating tokens, but the Phase 7+ client must avoid
+  blind retries of `/auth/refresh`.
+- **Timing across the whole activation path is not measured.** A malformed request returns before the
+  database; a well-formed wrong code does one query. Neither reveals anything about valid codes, but the
+  uniformity of timing is asserted by design, not by test.
 - **Timing is not measured.** An unlinked id and a nonexistent id take slightly different SQL paths. The
   difference is sub-millisecond and untested; a determined attacker with many samples is not ruled out.
 - **`trust proxy` is not set**, so `req.ip` is the proxy's address until Phase 13 puts Nginx in front.

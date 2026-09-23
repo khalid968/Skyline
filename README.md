@@ -8,11 +8,12 @@ What makes it different from Signal or WhatsApp: **there is no discovery.** A us
 
 ## Status
 
-**Phase 4 of 13 — Backend foundation and authorization core (built, awaiting review).** See [`docs/architecture/roadmap.md`](docs/architecture/roadmap.md) for the full phase plan and [`docs/progress-log.md`](docs/progress-log.md) for the current state of play. No feature logic exists yet — scaffolding, architecture and design only.
+**Phase 5 of 13 — Authentication & invites (built, awaiting review).** To try it by hand, see [`docs/try-it-yourself.md`](docs/try-it-yourself.md). See [`docs/architecture/roadmap.md`](docs/architecture/roadmap.md) for the full phase plan and [`docs/progress-log.md`](docs/progress-log.md) for the current state of play. No feature logic exists yet — scaffolding, architecture and design only.
 
 ## Documentation
 
 - [Progress log](docs/progress-log.md) — start here
+- [Try it yourself](docs/try-it-yourself.md) — manual test steps for the owner
 - [Decision log](docs/architecture/decisions.md)
 - [The contact graph](docs/architecture/contact-graph.md)
 - [Authorization — read before writing a controller](docs/security/authorization.md)

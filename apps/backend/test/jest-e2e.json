@@ -1,6 +1,14 @@
 {
-  "moduleFileExtensions": ["js", "json"],
+  "moduleFileExtensions": [
+    "js",
+    "json"
+  ],
   "rootDir": "..",
-  "roots": ["<rootDir>/test"],
-  "testRegex": ".e2e-spec.js$"
+  "roots": [
+    "<rootDir>/test"
+  ],
+  "testRegex": ".e2e-spec.js$",
+  "transformIgnorePatterns": [
+    "/node_modules/(?!(@scure|@noble|@otplib|otplib)/)"
+  ]
 }

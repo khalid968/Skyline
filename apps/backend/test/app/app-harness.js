@@ -1,10 +1,14 @@
 // Builds the REAL AppModule, configured by the REAL configureApp(), against a
-// throwaway database and the dev Redis. Only three things are substituted:
+// throwaway database and the dev Redis. By default three things are substituted:
 //   - the Postgres pool (pointed at the throwaway database),
-//   - the WebSocket authenticator (Phase 5 does not exist yet), and
-//   - a middleware that fakes "who is calling" from headers, standing in for the
-//     token authentication that Phase 5 adds.
-// Everything else, including every global guard, is what production runs.
+//   - the WebSocket authenticator (reads ?user=&device= instead of a token), and
+//   - a middleware that sets "who is calling" from test headers, so tests of the
+//     guards do not each have to activate a device first.
+// Pass `realAuth: true` to drop the last two and run authentication exactly as
+// production does: bearer tokens only. Everything else, including every global
+// guard and the rate limiter, is always what production runs.
+//
+// THE FAKES LIVE HERE AND NOWHERE ELSE. Nothing in src/ may read x-test-* headers.
 import { randomUUID } from 'crypto';
 import { Pool } from 'pg';
 import { Test } from '@nestjs/testing';
@@ -13,15 +17,17 @@ import { configureApp } from '../../src/app.setup';
 import { PG_POOL } from '../../src/database/database.service';
 import { WS_AUTHENTICATOR } from '../../src/modules/websocket/ws-authenticator';
 
-// Stands in for Phase 5. Reads a principal from test-only headers.
 function fakeAuthentication(req, _res, next) {
+  const dashboardUser = req.headers['x-test-dashboard'];
   const userId = req.headers['x-test-user'];
   const deviceId = req.headers['x-test-device'];
-  if (userId || deviceId) req.principal = { userId, deviceId };
+  if (dashboardUser)
+    req.principal = { kind: 'dashboard', userId: dashboardUser };
+  else if (userId || deviceId)
+    req.principal = { kind: 'device', userId, deviceId };
   next();
 }
 
-// Stands in for Phase 5's WebSocket authenticator. Reads ?user=&device=.
 export const queryAuthenticator = {
   async authenticate(req) {
     const url = new URL(req.url, 'http://localhost');
@@ -33,36 +39,62 @@ export const queryAuthenticator = {
 
 export const newChannel = () => `skyline:test:${randomUUID()}`;
 
+// configuration.js reads process.env when the module compiles, so these are
+// set around compilation and restored afterwards.
+function withEnv(vars, fn) {
+  const previous = {};
+  for (const [k, v] of Object.entries(vars)) {
+    previous[k] = process.env[k];
+    process.env[k] = v;
+  }
+  return fn().finally(() => {
+    for (const [k, v] of Object.entries(previous)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+}
+
 export async function createTestApp({
   db,
   controllers = [],
   channel = newChannel(),
   listen = false,
+  realAuth = false,
+  // Tests make dozens of requests from one address; limits meant for attackers
+  // would trip. Suites that TEST rate limiting pass 1.
+  rateLimitScale = 1000,
 }) {
   const pool = new Pool({ connectionString: db.url, max: 5 });
 
-  // configuration.js reads this when the module compiles.
-  const previous = process.env.REDIS_EVENTS_CHANNEL;
-  process.env.REDIS_EVENTS_CHANNEL = channel;
+  const app = await withEnv(
+    {
+      REDIS_EVENTS_CHANNEL: channel,
+      // A fresh namespace per app, so counters never leak between runs.
+      RATE_LIMIT_PREFIX: `skyline:test:${randomUUID()}`,
+      RATE_LIMIT_SCALE: String(rateLimitScale),
+    },
+    async () => {
+      let builder = Test.createTestingModule({
+        imports: [AppModule],
+        controllers,
+      })
+        .overrideProvider(PG_POOL)
+        .useValue(pool);
+      if (!realAuth)
+        builder = builder
+          .overrideProvider(WS_AUTHENTICATOR)
+          .useValue(queryAuthenticator);
 
-  const moduleRef = await Test.createTestingModule({
-    imports: [AppModule],
-    controllers,
-  })
-    .overrideProvider(PG_POOL)
-    .useValue(pool)
-    .overrideProvider(WS_AUTHENTICATOR)
-    .useValue(queryAuthenticator)
-    .compile();
-
-  const app = moduleRef.createNestApplication();
-  configureApp(app);
-  app.use(fakeAuthentication);
-  await app.init();
-
-  if (listen) await app.listen(0);
-  if (previous === undefined) delete process.env.REDIS_EVENTS_CHANNEL;
-  else process.env.REDIS_EVENTS_CHANNEL = previous;
+      const moduleRef = await builder.compile();
+      const nest = moduleRef.createNestApplication();
+      configureApp(nest);
+      if (!realAuth) nest.use(fakeAuthentication);
+      await nest.init();
+      if (listen) await nest.listen(0);
+      return nest;
+    },
+  );
 
   return {
     app,
@@ -71,11 +103,13 @@ export async function createTestApp({
     get port() {
       return app.getHttpServer().address().port;
     },
-    // The identity headers standing in for a Phase 5 token.
+    // A member signed in on a device.
     as: (userId, deviceId) => ({
       'x-test-user': userId,
       'x-test-device': deviceId,
     }),
+    // An operator signed in to the dashboard.
+    asDashboard: (userId) => ({ 'x-test-dashboard': userId }),
     async close() {
       await app.close();
     },

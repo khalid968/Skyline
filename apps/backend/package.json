@@ -6,6 +6,8 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "admin:create": "babel-node src/cli/admin-create.js",
+    "dev:device": "node scripts/dev-device.js",
     "format": "prettier --write \"**/*.js\"",
     "migrate": "node-pg-migrate --envPath .env -m src/database/migrations -j sql",
     "migrate:create": "node-pg-migrate create --envPath .env -m src/database/migrations -j sql",
@@ -18,7 +20,8 @@
     "test:app": "jest --config ./test/jest-e2e.json --runInBand app/",
     "test:cov": "jest --coverage",
     "test:db": "jest --config ./test/jest-e2e.json --runInBand db/",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "user:invite": "babel-node src/cli/invite.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -27,9 +30,11 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/platform-ws": "^11.1.28",
     "@nestjs/websockets": "^11.1.28",
+    "argon2": "^0.45.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "ioredis": "^5.11.1",
+    "otplib": "^13.5.0",
     "pg": "^8.22.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.2.0",
@@ -56,8 +61,14 @@
       "js",
       "json"
     ],
-    "rootDir": "src",
+    "rootDir": ".",
     "testRegex": ".spec.js$",
-    "coverageDirectory": "../coverage"
+    "coverageDirectory": "<rootDir>/coverage",
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(@scure|@noble|@otplib|otplib)/)"
+    ],
+    "roots": [
+      "<rootDir>/src"
+    ]
   }
 }

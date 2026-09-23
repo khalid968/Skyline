@@ -73,6 +73,29 @@ export function validateEnv(env) {
 
   const dbUrl = databaseUrl(env, problems);
 
+  if (env.RATE_LIMIT_SCALE !== undefined && env.RATE_LIMIT_SCALE !== '') {
+    const scale = Number(env.RATE_LIMIT_SCALE);
+    if (!Number.isFinite(scale) || scale <= 0) {
+      problems.push('RATE_LIMIT_SCALE must be a positive number');
+    } else if (nodeEnv === 'production' && scale !== 1) {
+      problems.push('RATE_LIMIT_SCALE may only be changed outside production');
+    }
+  }
+
+  if (nodeEnv === 'production') {
+    // These keys protect every stored activation code, session token and 2FA
+    // secret. Development falls back to fixed, clearly-labelled values;
+    // production must supply real ones.
+    for (const name of ['AUTH_TOKEN_PEPPER', 'AUTH_TOTP_KEY']) {
+      const v = env[name];
+      if (!v || v.length < 32 || v.startsWith('dev-only')) {
+        problems.push(
+          `${name} must be set to a random secret of at least 32 characters in production`,
+        );
+      }
+    }
+  }
+
   if (nodeEnv === 'production' && dbUrl) {
     let dbPassword = '';
     try {
