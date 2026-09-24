@@ -1,3 +1,4 @@
+import fs from 'fs';
 // Fails fast at boot on missing or unsafe configuration.
 //
 // Every problem is collected and reported together, so an operator fixes them
@@ -116,6 +117,20 @@ export function validateEnv(env) {
     if (PLACEHOLDER_SECRETS.has(env.STORAGE_ACCESS_KEY ?? 'skyline')) {
       problems.push(
         'STORAGE_ACCESS_KEY is missing or a development placeholder, which is not allowed in production',
+      );
+    }
+  }
+
+  if (env.FCM_SERVICE_ACCOUNT_FILE) {
+    try {
+      const sa = JSON.parse(
+        fs.readFileSync(env.FCM_SERVICE_ACCOUNT_FILE, 'utf8'),
+      );
+      if (!sa.project_id || !sa.client_email || !sa.private_key)
+        throw new Error('fields');
+    } catch {
+      problems.push(
+        'FCM_SERVICE_ACCOUNT_FILE must point to a readable Google service-account JSON file',
       );
     }
   }

@@ -11,6 +11,7 @@
 // THE FAKES LIVE HERE AND NOWHERE ELSE. Nothing in src/ may read x-test-* headers.
 import { randomUUID } from 'crypto';
 import { Pool } from 'pg';
+import { PUSH_TRANSPORT } from '../../src/modules/notifications/push.transport';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app.setup';
@@ -55,6 +56,19 @@ function withEnv(vars, fn) {
   });
 }
 
+// Records every wake-up instead of sending it. `outcome` decides the answer.
+export class RecordingPushTransport {
+  constructor() {
+    this.sent = [];
+    this.outcome = 'ok';
+  }
+
+  async send(provider, token) {
+    this.sent.push({ provider, token });
+    return this.outcome;
+  }
+}
+
 export async function createTestApp({
   db,
   controllers = [],
@@ -64,6 +78,8 @@ export async function createTestApp({
   // Tests make dozens of requests from one address; limits meant for attackers
   // would trip. Suites that TEST rate limiting pass 1.
   rateLimitScale = 1000,
+  // Push wake-ups never leave a test: a recording fake by default.
+  pushTransport = new RecordingPushTransport(),
 }) {
   const pool = new Pool({ connectionString: db.url, max: 5 });
 
@@ -80,7 +96,9 @@ export async function createTestApp({
         controllers,
       })
         .overrideProvider(PG_POOL)
-        .useValue(pool);
+        .useValue(pool)
+        .overrideProvider(PUSH_TRANSPORT)
+        .useValue(pushTransport);
       if (!realAuth)
         builder = builder
           .overrideProvider(WS_AUTHENTICATOR)
@@ -100,6 +118,7 @@ export async function createTestApp({
     app,
     pool,
     channel,
+    push: pushTransport,
     get port() {
       return app.getHttpServer().address().port;
     },

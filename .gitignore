@@ -47,3 +47,8 @@ Thumbs.db
 
 # Pretend-phone state from apps/backend/scripts/dev-device.js (holds a private key)
 .dev-device.json
+
+# --- Push credentials (never commit) ---
+*firebase-service-account*.json
+**/google-services.json
+**/GoogleService-Info.plist

@@ -23,6 +23,11 @@ export default () => {
         `postgres://${encodeURIComponent(db.username)}:${encodeURIComponent(db.password)}@${db.host}:${db.port}/${db.name}`,
       poolMax: parseInt(process.env.DATABASE_POOL_MAX, 10) || 10,
     },
+    push: {
+      // Google service-account JSON for Firebase Cloud Messaging (Android
+      // wake-ups). Unset: no push; the socket still works while the app runs.
+      fcmServiceAccountFile: process.env.FCM_SERVICE_ACCOUNT_FILE || null,
+    },
     redis: {
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT, 10) || 6379,

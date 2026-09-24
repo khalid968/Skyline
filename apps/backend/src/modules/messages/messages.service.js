@@ -12,6 +12,7 @@ import {
 } from '../../common/rate-limit/rate-limit';
 import { PublicBodyException } from '../../common/filters/all-exceptions.filter';
 import { FanoutService } from '../websocket/fanout.service';
+import { PushService } from '../notifications/push.service';
 
 // How messages move (decisions.md, 2026-09-24):
 //
@@ -43,12 +44,13 @@ const REACHABLE_DEVICES = `
                   WHERE s.device_id = d.id AND s.superseded_at IS NULL)`;
 
 @Injectable()
-@Dependencies(DatabaseService, RateLimitService, FanoutService)
+@Dependencies(DatabaseService, RateLimitService, FanoutService, PushService)
 export class MessagesService {
-  constructor(db, limiter, fanout) {
+  constructor(db, limiter, fanout, push) {
     this.db = db;
     this.limiter = limiter;
     this.fanout = fanout;
+    this.push = push;
     this.logger = new Logger('Messages');
   }
 
@@ -169,11 +171,14 @@ export class MessagesService {
         chatId: chat.rows[0].id,
         sentAt: msg.rows[0].created_at,
         duplicate: false,
+        devices: [...targets.values()],
       };
     });
 
     if (!result.duplicate) {
+      // Open apps hear the socket nudge; closed ones get a content-free push.
       await this.nudge(caller.userId, [recipientUserId, caller.userId]);
+      await this.push.wake(result.devices);
     }
     return { messageId: result.messageId, sentAt: result.sentAt };
   }
