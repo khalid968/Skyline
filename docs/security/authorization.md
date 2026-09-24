@@ -219,6 +219,31 @@ Full rationale in `decisions.md` (2026-09-23). How it works:
 - **Same origin, no CORS.** The dashboard reaches the API through `/api` on its own origin: the Vite proxy
   in development, Nginx in production. Adding CORS would open the cookie to other origins' requests, so don't.
 
+## The key directory (Phase 7)
+
+These are member routes, so they accept only a device session. Everything stored is a PUBLIC key; private
+keys never leave the device's encrypted vault.
+
+| Route | Guard | What it does |
+| --- | --- | --- |
+| `PUT /me/keys` | device session | Publish or top up this device's signed prekey, last-resort Kyber key, and one-time EC and Kyber prekeys. At most 100 keys per upload, and at most 500 unused keys of each kind. A key id is never reused by the same device. |
+| `GET /me/keys` | device session | How many one-time keys are left, so the device knows when to top up. |
+| `GET /users/:userId/keys` | `@ContactTarget(direct)` | One bundle per live, fully published device of a directly linked contact. Anyone else, yourself included, is the usual identical 404. |
+
+- **Claiming.** Fetching a bundle claims one one-time EC key and one one-time Kyber key per device,
+  atomically (`UPDATE … WHERE id = (SELECT … FOR UPDATE SKIP LOCKED)`), so two callers never receive the
+  same key. When the Kyber keys run out, the device's reusable last-resort key is served instead.
+- **Rate limits against key draining.** Each calling device may make 20 fetches per contact per hour and 300
+  in total, enforced in `KeysService` through `enforceLimit()`, because the guard runs before
+  authentication. Like every limit, it fails closed: if Redis is down, the request gets a 503.
+- **Append-only.** Published keys cannot be edited, deleted or truncated (migration 011's triggers). A
+  claimed key stays claimed, and a device's identity key, registration id and device number never change.
+- **No signature checks on the server, by design.** The fetching device's libsignal verifies them. See
+  `decisions.md`, 2026-09-24.
+- **Activation (v2)** must also send `identityKey` (libsignal's serialized key: 33 bytes starting 0x05) and
+  `registrationId`, both covered by the Ed25519 signature. A clone (an identity key already live on another
+  device) gets the same generic 401 as every other activation failure.
+
 ## Tests
 
 | Command | Suite | Needs |

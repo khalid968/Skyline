@@ -152,6 +152,47 @@ Things to try:
 
 Dashboard tests: `npm test` in `apps\dashboard` (no backend needed).
 
+## Phase 7: encryption
+
+There are no new screens yet (chats come in Phase 8). What you can check is that the encryption works.
+Open PowerShell. If `cargo` is "not recognized", close PowerShell and open a new one; the Rust installer
+updates PATH only for new windows.
+
+1. **The crypto core's own tests.** Two simulated devices talk, plus the attack cases (a tampered message, a
+   replayed message, a forged key, a swapped identity, the wrong vault key):
+
+   ```powershell
+   cd C:\Users\kkhal\Desktop\AI\Skyline\crypto-core
+   cargo test
+   ```
+
+   Look for `test result: ok` lines, with no `FAILED`.
+
+2. **Real devices against the real server.** This builds a small tool that plays two phones, then runs the
+   server test that uses it. It creates its own throwaway database and deletes it afterwards.
+
+   ```powershell
+   cargo build -p skyline_e2e
+   cd ..\apps\backend
+   npx jest --config ./test/jest-e2e.json --runInBand app/crypto-e2e
+   ```
+
+   Expect `2 passed`: the devices exchange messages, and without a contact link the server refuses to hand
+   out keys.
+
+3. **Encryption inside the Windows app.** The first run takes a few minutes, because it compiles Signal's
+   library:
+
+   ```powershell
+   cd ..\mobile
+   flutter test integration_test/crypto_test.dart -d windows
+   ```
+
+   Expect `All tests passed!`.
+
+The backend must be **restarted** (`npm run migrate:up`, then `npm run start`) to pick up migration 011 and the
+new activation format. The old `npm run dev:device` pretend phone was updated to match.
+
 ## Starting over
 
 Your development accounts live in the Docker volume. To wipe everything and start clean:

@@ -21,7 +21,11 @@ permissions, and never holds message keys or plaintext.
 
 ---
 
-## Rust toolchain not installed on the development machine — OPEN
+## Rust toolchain not installed on the development machine — CLOSED 2026-09-23
+
+**Closed:** Rust 1.98.1 (MSVC), the VS 2022 C++ Build Tools and protoc were installed with winget in Phase 7.
+The text below is kept for history.
+
 
 `cargo` is not present on the owner's Windows machine. `crypto-core` cannot be built or tested until it
 is installed. Not blocking now; **blocking from Phase 7 (Encryption)**. Install Rust via `rustup` before
@@ -39,7 +43,10 @@ PowerShell: `wsl --install --no-distribution`, reboot if prompted, start Docker 
 `C:\Users\kkhal\AppData\Local\Programs\DockerDesktop\resources\bin` and are not on the PATH of shells
 started before the install.
 
-## Flutter platform runners not yet generated — OPEN (low)
+## Flutter platform runners not yet generated — CLOSED 2026-09-24
+
+**Closed:** `android/`, `ios/` and `windows/` were generated in Phase 7 and are committed.
+
 
 `apps/mobile` is a hand-authored `lib/` + `pubspec.yaml` with no SDK-generated platform folders
 (`android/`, `ios/`, `windows/`); they are gitignored and bootstrapped locally. Run the
@@ -66,3 +73,25 @@ release 2025-09-07 — a year old** — so `latest` is not receiving updates. Fi
 The client talks S3, so the store is swappable. Decide before Phase 9 whether to keep MinIO (a pinned,
 self-built or source-built version) or move to another S3-compatible store. This touches the locked
 "MinIO = encrypted media blobs" decision, so it is the owner's call, not an agent's.
+
+## iOS build untested — OPEN (until a Mac is available)
+
+There is no Mac, so the iOS side of the Rust bridge (cargokit via the podspec in
+`apps/mobile/rust_builder/ios`) has never been built. Its crate path mirrors Android's but may need
+adjusting for CocoaPods' symlinked layout. Build it the first time a Mac or a cloud Mac exists (the owner's
+decision, 2026-09-23), before any iOS release.
+
+## The server could relabel who sent a session-starting message — OPEN (Phase 8)
+
+A session-starting (PreKey) message carries the sender's identity key. When one arrives from a device the
+recipient has never seen, the recipient trusts it on first use, under whatever sender address the server
+attached. A malicious server could present Alice's genuine first message as coming from a new device of
+Carol's. It still cannot forge content, and cannot read anything.
+
+**Phase 8 must:**
+
+- check the identity key embedded in such a message against the key directory's identity for that sender
+  device, before trusting it (the server cannot give two live devices one identity key: unique index);
+- surface identity changes and new devices as system notices.
+
+Safety-number verification remains the final guard.

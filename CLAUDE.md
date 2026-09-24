@@ -120,7 +120,7 @@ Rationale for each is in `docs/architecture/decisions.md`.
 apps/mobile/     Flutter client — feature-first Clean Architecture (lib/features/<name>/{data,domain,presentation})
 apps/backend/    NestJS (JS) — src/modules/{auth,users,devices,chats,messages,groups,media,notifications,admin,websocket}
 apps/dashboard/  Admin web app — React + Vite, plain JS (src/lib/api.js is the only fetch path; src/pages/*)
-crypto-core/     Rust workspace; core/ crate is empty until Phase 7
+crypto-core/     Rust workspace: core/ (libsignal + encrypted vault), ffi/ (flutter_rust_bridge surface), e2e/ (dev tool)
 infra/docker/    Dev docker-compose.yml (Postgres, Redis, MinIO)
 docs/            progress-log.md + architecture/ (overview, decisions, design, contact-graph, roadmap,
                  known-risks, tech-stack-decisions, folder-structure), api/, database/, security/
@@ -174,12 +174,17 @@ npm run build
 # Dev data plane (repo root) — Docker Desktop must be running
 docker compose -f infra/docker/docker-compose.yml up -d   # Postgres, Redis, MinIO
 
-# Crypto core (crypto-core/) — needs Rust, not yet installed
-cargo build && cargo test
+# Crypto core (crypto-core/) — Rust 1.98.1 pinned; libsignal's build needs protoc on PATH.
+# In a fresh shell: export PATH="$HOME/.cargo/bin:$PATH" (protoc is on the Windows user PATH)
+cargo test                               # core: vault + libsignal protocol tests
+cargo clippy --all-targets               # must stay warning-free
+cargo build -p skyline_e2e               # enables test/app/crypto-e2e (skipped without it)
+# After changing crypto-core/ffi/src/api: regenerate the Dart bindings (from apps/mobile)
+flutter_rust_bridge_codegen generate
 
-# Flutter client (apps/mobile) — one-time platform bootstrap, note: no web
-#   flutter create --platforms=android,ios,windows --org com.skyline --project-name skyline .
+# Flutter client (apps/mobile) — platform runners are committed (android, ios, windows; no web)
 flutter pub get && flutter analyze && flutter test
+flutter test integration_test/crypto_test.dart -d windows   # real native crypto core in the app build
 ```
 
 ## Local toolchain (owner's Windows 11 machine)
@@ -188,9 +193,9 @@ flutter pub get && flutter analyze && flutter test
 | --- | --- |
 | Flutter 3.35.7 / Dart 3.9.2 | ✅ installed |
 | Node 24.19 / npm 11.17 | ✅ installed |
-| Rust / cargo | ❌ **not installed** — blocking from Phase 7 |
+| Rust 1.98.1 (MSVC) / VS 2022 C++ Build Tools / protoc 36 / flutter_rust_bridge_codegen 2.13.0 | ✅ installed 2026-09-23 |
 | Docker Desktop 29.8 (WSL2) | ✅ installed and working; dev stack verified |
 
-`apps/mobile` has no SDK-generated platform runner folders yet (gitignored; see bootstrap above).
+`apps/mobile/{android,ios,windows}` are committed; `rust_builder/` (cargokit) builds `crypto-core/ffi` into the app.
 Backend boot needs the dev Postgres + Redis up (`npm run start`). Smoke tests that create accounts must
 run against a **throwaway** database on a spare port — never the owner's dev DB, never their server on :3000.

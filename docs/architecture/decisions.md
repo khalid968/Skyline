@@ -6,6 +6,48 @@ working around it.
 
 ---
 
+## 2026-09-24 — How Phase 7 was built (implementation choices)
+
+None of these changes an owner decision.
+
+- **libsignal is pinned by tag (`v0.103.1`), and `crypto-core/Cargo.lock` is committed.** Upgrades are
+  deliberate (read the release notes). The Rust toolchain is pinned to libsignal's (`1.98.1`,
+  `crypto-core/rust-toolchain.toml`).
+- **Three crates:**
+  - `core` is pure and tested: the libsignal integration and the key vault.
+  - `ffi` is a thin `flutter_rust_bridge` layer that only converts types.
+  - `e2e` is a development tool that plays two devices against a running backend.
+
+  The bridge's generated code never touches `core`, so `core` is testable without Flutter.
+- **The on-device key vault.** It is one SQLite file.
+  - Every value is sealed with AES-256-GCM-SIV. Row ids are HMAC'd, so the file does not reveal who the
+    device talks to. Both subkeys are derived with HKDF from a 32-byte storage key that lives only in the
+    OS keystore (`flutter_secure_storage`: Keychain with *this-device-only*, Android encrypted prefs,
+    Windows Credential Manager).
+  - This composes standard primitives; it is not new cryptography.
+  - A vault that exists but cannot be read with the key is refused (`VaultLocked`) and never overwritten.
+    Recovery is a new activation code, like a new phone.
+- **Identity trust is strict.** A different identity key for a device we already know is refused, never
+  accepted with a warning. Skyline identities cannot change (the server refuses to change one), so a new key
+  can only mean an attack or a bug.
+- **Activation signature v2 covers the Signal identity:**
+  `skyline-activate:v2:<code>:<identityKey b64>:<registrationId>`. Whoever holds the device credential
+  provably chose that identity key.
+- **libsignal device ids** are `devices.device_number` (1..127). A number is never reused for the same
+  person, even after revocation, so a new device can never inherit an old device's sessions.
+- **The server does not verify prekey signatures.** Doing so would mean linking libsignal into the backend,
+  which would make the backend AGPL (forbidden by the licence decision), or writing XEdDSA ourselves, which
+  would be custom cryptography. It does not need to: libsignal verifies every signature on the fetching
+  device before use (tested: a substituted signed prekey or Kyber key is refused). The server checks shapes
+  only.
+- **Key draining is rate-limited per caller device.** At most 20 bundle fetches per contact per hour and 300
+  in total. The rate-limit guard runs before authentication and cannot see the caller, so these limits are
+  enforced in the service with `enforceLimit()` from the now-global `RateLimitModule`.
+- **The Android, iOS and Windows runner folders are committed.** They carry real configuration. macOS,
+  Linux and web are not v1 platforms and are not generated.
+
+---
+
 ## 2026-09-23 — Phase 7 (Encryption) ground rules, decided by the owner
 
 - **The AGPL-3.0 licence of `libsignal` is accepted.** The Skyline client apps link `libsignal` and are

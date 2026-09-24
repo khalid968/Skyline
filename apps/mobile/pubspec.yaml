@@ -30,6 +30,7 @@ dependencies:
   flutter_rust_bridge: 2.13.0
   skyline_crypto_ffi:
     path: rust_builder
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:
