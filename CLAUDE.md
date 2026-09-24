@@ -36,8 +36,10 @@ the current state of play.
   - Proven end to end: real devices against the real backend (`crypto-e2e`), and in the app on Windows and
     Android (`integration_test/crypto_test.dart`). iOS is untested (no Mac).
   - Tests: 417 backend, 20 Rust, 3 integration. Nine mutation checks were all caught.
-  - **Phase 8 (Messaging) is next and needs approval.** Its first task is the sender-identity check in
-    `known-risks.md`.
+  - **Phase 8 is split into 8a (one-to-one chats) and 8b (groups and the rest).** Decisions are in
+    `decisions.md` (2026-09-24): empty push wake-ups through APNs and FCM, receipts on by default and
+    reciprocal, and a new device starts empty. **8a needs the owner's go**, and its first step is
+    prototypes. Its first code task is the sender-identity check in `known-risks.md`.
 - **Owner decisions 2026-09-21** (`decisions.md`): admins never see message content in v1 (a *disclosed*
   compliance archive may be designed later as an opt-in mode — build nothing toward it now); app lock
   (PIN/biometrics) is always the user's own choice, no admin override; user-set disappearing messages are

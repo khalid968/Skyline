@@ -6,6 +6,29 @@ working around it.
 
 ---
 
+## 2026-09-24 — Phase 8 (Messaging) scope and ground rules, decided by the owner
+
+- **Phase 8 is split in two, with a review after each.**
+  - **8a** is one-to-one chats that work end to end: the activation screen, chat list, encrypted
+    send/receive with offline queueing, delivery and read ticks, system notices (rename, new device),
+    safety numbers with the sender-identity check (`known-risks.md`), disappearing messages, app lock, and
+    Privacy & security settings.
+  - **8b** is groups, replies, edit/delete, reactions, mentions, pinned messages, search, drafts, archive
+    and mute.
+- **Push is an empty wake-up through Apple (APNs) and Google (FCM).** The notification carries no sender,
+  no text and no chat id: only "something new". The app wakes, fetches from the Skyline server and decrypts
+  locally. Apple and Google learn only that, and when, a device got something. This is Signal's model. It
+  needs a Firebase project (Android) and an Apple developer account (iOS). Windows is served by the
+  WebSocket while the app runs.
+- **Read receipts and typing indicators are on by default, and each person can switch them off** in
+  Privacy & security. Switching yours off also hides other people's from you, which is reciprocal, as in
+  Signal.
+- **A new device starts with no history.** Messages are encrypted per device, and the server deletes each
+  envelope's ciphertext once that device has it, so no stored backlog exists to leak. A device-to-device
+  history transfer may come later as its own design.
+
+---
+
 ## 2026-09-24 — How Phase 7 was built (implementation choices)
 
 None of these changes an owner decision.

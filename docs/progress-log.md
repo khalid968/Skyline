@@ -8,6 +8,25 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-24 (later) — Phase 7 pushed; Phase 8 planned, NOT started
+
+The owner ran the app on the Android emulator: it launches and shows the placeholder "Skyline" screen. A
+reported "crash" was the app being swiped away ("remove task" in logcat); the only crash in the log was the
+emulator's own Bluetooth service. The owner asked to push: `5728c1e` is on GitHub.
+
+Phase 8 decisions are recorded in `decisions.md`:
+
+- split into 8a (one-to-one chats) and 8b (everything else);
+- push is an empty wake-up through Apple and Google;
+- read receipts and typing indicators are on by default and can be switched off (reciprocal);
+- a new device starts empty.
+
+**Phase 8a has not started.** Its first step, once the owner says go, is to prototype the undesigned 8a
+surfaces on the canvas and get approval: delivery ticks, new-device and identity-warning notices, and empty
+and offline states. The approved boards are 1-5 and 13-15.
+
+---
+
 ## 2026-09-24 — Phase 7 BUILT: encryption, verified on Windows and Android
 
 The owner said "let's move where we left off". This session finished the phase.
