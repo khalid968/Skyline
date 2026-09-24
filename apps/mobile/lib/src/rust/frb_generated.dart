@@ -86,7 +86,8 @@ abstract class RustLibApi extends BaseApi {
       {required CryptoDevice that,
       required String userId,
       required int deviceNumber,
-      required Envelope envelope});
+      required Envelope envelope,
+      Uint8List? directoryIdentityKey});
 
   Future<Envelope> crateApiCryptoCryptoDeviceEncrypt(
       {required CryptoDevice that,
@@ -162,7 +163,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       {required CryptoDevice that,
       required String userId,
       required int deviceNumber,
-      required Envelope envelope}) {
+      required Envelope envelope,
+      Uint8List? directoryIdentityKey}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -171,6 +173,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(userId, serializer);
         sse_encode_u_32(deviceNumber, serializer);
         sse_encode_box_autoadd_envelope(envelope, serializer);
+        sse_encode_opt_list_prim_u_8_strict(directoryIdentityKey, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 1, port: port_);
       },
@@ -179,15 +182,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: sse_decode_crypto_exception,
       ),
       constMeta: kCrateApiCryptoCryptoDeviceDecryptConstMeta,
-      argValues: [that, userId, deviceNumber, envelope],
+      argValues: [that, userId, deviceNumber, envelope, directoryIdentityKey],
       apiImpl: this,
     ));
   }
 
   TaskConstMeta get kCrateApiCryptoCryptoDeviceDecryptConstMeta =>
       const TaskConstMeta(
-        debugName: 'CryptoDevice_decrypt',
-        argNames: ['that', 'userId', 'deviceNumber', 'envelope'],
+        debugName: "CryptoDevice_decrypt",
+        argNames: [
+          "that",
+          "userId",
+          "deviceNumber",
+          "envelope",
+          "directoryIdentityKey"
+        ],
       );
 
   @override
@@ -219,8 +228,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiCryptoCryptoDeviceEncryptConstMeta =>
       const TaskConstMeta(
-        debugName: 'CryptoDevice_encrypt',
-        argNames: ['that', 'userId', 'deviceNumber', 'plaintext'],
+        debugName: "CryptoDevice_encrypt",
+        argNames: ["that", "userId", "deviceNumber", "plaintext"],
       );
 
   @override
@@ -250,8 +259,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiCryptoCryptoDeviceHasSessionConstMeta =>
       const TaskConstMeta(
-        debugName: 'CryptoDevice_has_session',
-        argNames: ['that', 'userId', 'deviceNumber'],
+        debugName: "CryptoDevice_has_session",
+        argNames: ["that", "userId", "deviceNumber"],
       );
 
   @override
@@ -277,8 +286,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiCryptoCryptoDeviceIdentityConstMeta =>
       const TaskConstMeta(
-        debugName: 'CryptoDevice_identity',
-        argNames: ['that'],
+        debugName: "CryptoDevice_identity",
+        argNames: ["that"],
       );
 
   @override
@@ -305,8 +314,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiCryptoCryptoDeviceNewKyberPreKeysConstMeta =>
       const TaskConstMeta(
-        debugName: 'CryptoDevice_new_kyber_pre_keys',
-        argNames: ['that', 'count'],
+        debugName: "CryptoDevice_new_kyber_pre_keys",
+        argNames: ["that", "count"],
       );
 
   @override
@@ -333,8 +342,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta
       get kCrateApiCryptoCryptoDeviceNewLastResortKyberPreKeyConstMeta =>
           const TaskConstMeta(
-            debugName: 'CryptoDevice_new_last_resort_kyber_pre_key',
-            argNames: ['that'],
+            debugName: "CryptoDevice_new_last_resort_kyber_pre_key",
+            argNames: ["that"],
           );
 
   @override
@@ -361,8 +370,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiCryptoCryptoDeviceNewOneTimePreKeysConstMeta =>
       const TaskConstMeta(
-        debugName: 'CryptoDevice_new_one_time_pre_keys',
-        argNames: ['that', 'count'],
+        debugName: "CryptoDevice_new_one_time_pre_keys",
+        argNames: ["that", "count"],
       );
 
   @override
@@ -388,8 +397,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiCryptoCryptoDeviceNewSignedPreKeyConstMeta =>
       const TaskConstMeta(
-        debugName: 'CryptoDevice_new_signed_pre_key',
-        argNames: ['that'],
+        debugName: "CryptoDevice_new_signed_pre_key",
+        argNames: ["that"],
       );
 
   @override
@@ -416,8 +425,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiCryptoCryptoDeviceOpenConstMeta =>
       const TaskConstMeta(
-        debugName: 'CryptoDevice_open',
-        argNames: ['path', 'storageKey'],
+        debugName: "CryptoDevice_open",
+        argNames: ["path", "storageKey"],
       );
 
   @override
@@ -441,7 +450,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiCryptoCryptoDeviceOpenInMemoryConstMeta =>
       const TaskConstMeta(
-        debugName: 'CryptoDevice_open_in_memory',
+        debugName: "CryptoDevice_open_in_memory",
         argNames: [],
       );
 
@@ -474,12 +483,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiCryptoCryptoDeviceSafetyNumberConstMeta =>
       const TaskConstMeta(
-        debugName: 'CryptoDevice_safety_number',
+        debugName: "CryptoDevice_safety_number",
         argNames: [
-          'that',
-          'theirUserId',
-          'theirDeviceNumber',
-          'theirIdentityKey'
+          "that",
+          "theirUserId",
+          "theirDeviceNumber",
+          "theirIdentityKey"
         ],
       );
 
@@ -510,8 +519,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiCryptoCryptoDeviceSetLocalAddressConstMeta =>
       const TaskConstMeta(
-        debugName: 'CryptoDevice_set_local_address',
-        argNames: ['that', 'userId', 'deviceNumber'],
+        debugName: "CryptoDevice_set_local_address",
+        argNames: ["that", "userId", "deviceNumber"],
       );
 
   @override
@@ -538,8 +547,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiCryptoCryptoDeviceSignConstMeta =>
       const TaskConstMeta(
-        debugName: 'CryptoDevice_sign',
-        argNames: ['that', 'message'],
+        debugName: "CryptoDevice_sign",
+        argNames: ["that", "message"],
       );
 
   @override
@@ -569,8 +578,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiCryptoCryptoDeviceStartSessionConstMeta =>
       const TaskConstMeta(
-        debugName: 'CryptoDevice_start_session',
-        argNames: ['that', 'userId', 'bundle'],
+        debugName: "CryptoDevice_start_session",
+        argNames: ["that", "userId", "bundle"],
       );
 
   @override
@@ -592,7 +601,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   TaskConstMeta get kCrateApiCryptoInitAppConstMeta => const TaskConstMeta(
-        debugName: 'init_app',
+        debugName: "init_app",
         argNames: [],
       );
 
@@ -753,6 +762,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   OneTimePreKey? dco_decode_opt_box_autoadd_one_time_pre_key(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_one_time_pre_key(raw);
+  }
+
+  @protected
+  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_list_prim_u_8_strict(raw);
   }
 
   @protected
@@ -989,6 +1004,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_list_prim_u_8_strict(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   PreKeyBundle sse_decode_pre_key_bundle(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_registrationId = sse_decode_u_32(deserializer);
@@ -1210,6 +1236,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_list_prim_u_8_strict(
+      Uint8List? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_list_prim_u_8_strict(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_pre_key_bundle(PreKeyBundle self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.registrationId, serializer);
@@ -1278,15 +1315,19 @@ class CryptoDeviceImpl extends RustOpaque implements CryptoDevice {
         RustLib.instance.api.rust_arc_decrement_strong_count_CryptoDevicePtr,
   );
 
+  /// `directory_identity_key`: the key directory's identity key for the
+  /// sending device. Required for a first message from an unseen device.
   Future<Uint8List> decrypt(
           {required String userId,
           required int deviceNumber,
-          required Envelope envelope}) =>
+          required Envelope envelope,
+          Uint8List? directoryIdentityKey}) =>
       RustLib.instance.api.crateApiCryptoCryptoDeviceDecrypt(
           that: this,
           userId: userId,
           deviceNumber: deviceNumber,
-          envelope: envelope);
+          envelope: envelope,
+          directoryIdentityKey: directoryIdentityKey);
 
   Future<Envelope> encrypt(
           {required String userId,

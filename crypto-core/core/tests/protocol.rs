@@ -66,9 +66,25 @@ impl Device {
             .unwrap()
     }
 
+    /// Receives with the sender's REAL identity key as the directory's answer.
     fn receive(&self, from: &Device, env: &Envelope) -> Result<String, CryptoError> {
+        let directory = from.crypto.identity().unwrap().identity_key;
+        self.receive_checked(from, env, Some(directory))
+    }
+
+    fn receive_checked(
+        &self,
+        from: &Device,
+        env: &Envelope,
+        directory: Option<Vec<u8>>,
+    ) -> Result<String, CryptoError> {
         self.crypto
-            .decrypt(from.user_id.clone(), from.device_number, copy(env))
+            .decrypt(
+                from.user_id.clone(),
+                from.device_number,
+                copy(env),
+                directory,
+            )
             .map(|b| String::from_utf8(b).unwrap())
     }
 }
@@ -234,6 +250,31 @@ fn a_one_time_prekey_handed_out_twice_works_only_once() {
         "first"
     );
     assert!(bob.receive(&carol, &carol.send(&bob, "second")).is_err());
+}
+
+#[test]
+fn a_first_message_must_match_the_directory_identity() {
+    // A server relabelling Alice's genuine first message as coming from
+    // Carol's new device: the key inside is Alice's, the directory's is Carol's.
+    let (alice, bob) = connected();
+    let carol = Device::new("6f0b6a1e-0000-4000-8000-00000000000c", 1);
+    let first = alice.send(&bob, "hello");
+
+    let carols_key = carol.crypto.identity().unwrap().identity_key;
+    let err = bob
+        .receive_checked(&carol, &first, Some(carols_key))
+        .unwrap_err();
+    assert_eq!(err.kind, CryptoErrorKind::UntrustedIdentity);
+    // Without any directory answer it is refused too.
+    assert_eq!(
+        bob.receive_checked(&alice, &first, None).unwrap_err().kind,
+        CryptoErrorKind::UntrustedIdentity
+    );
+    // The genuine sender, with the directory's matching key, is accepted, and
+    // after that the stored key is what counts.
+    assert_eq!(bob.receive(&alice, &first).unwrap(), "hello");
+    let m = alice.send(&bob, "again");
+    assert_eq!(bob.receive_checked(&alice, &m, None).unwrap(), "again");
 }
 
 #[test]

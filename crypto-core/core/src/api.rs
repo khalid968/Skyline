@@ -364,11 +364,21 @@ impl SkylineCrypto {
 
     /// Decrypts one envelope from a contact's device. A tampered, replayed or
     /// misaddressed message is an error and changes nothing.
+    ///
+    /// `directory_identity_key` is the identity key the server's key directory
+    /// lists for that sending device. It is REQUIRED for a session-starting
+    /// message from a device this one has never seen: the key inside the
+    /// message must match it, or the message is refused as an untrusted
+    /// identity. Otherwise a server could present someone's genuine first
+    /// message as coming from a different person's new device
+    /// (known-risks.md). For devices already known, libsignal's own check
+    /// against the stored key applies and this argument is ignored.
     pub fn decrypt(
         &self,
         user_id: String,
         device_number: u32,
         envelope: Envelope,
+        directory_identity_key: Option<Vec<u8>>,
     ) -> Result<Vec<u8>> {
         let remote = address(&user_id, device_number)?;
         let message = match envelope.kind {
@@ -383,6 +393,25 @@ impl SkylineCrypto {
             let local = local_address(vault)?;
             // One independent view per store argument; each only borrows the vault.
             let view = || VaultStore { vault };
+
+            if let CiphertextMessage::PreKeySignalMessage(m) = &message {
+                let known = block_on(view().get_identity(&remote))?;
+                if known.is_none() {
+                    let claimed = m.identity_key().serialize();
+                    let matches = directory_identity_key
+                        .as_deref()
+                        .is_some_and(|d| d == claimed.as_ref());
+                    if !matches {
+                        return Err(CryptoError::new(
+                            CryptoErrorKind::UntrustedIdentity,
+                            format!(
+                                "the first message from {remote} carries an identity key the directory does not list for that device"
+                            ),
+                        ));
+                    }
+                }
+            }
+
             let (mut sessions, mut identities, mut prekeys, signed, mut kyber) =
                 (view(), view(), view(), view(), view());
             Ok(block_on(message_decrypt(

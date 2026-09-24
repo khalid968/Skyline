@@ -53,7 +53,13 @@ void main() {
       plaintext: utf8.encode('hello from Dart'),
     );
     expect(first.kind, EnvelopeKind.preKey);
-    final read = await b.decrypt(userId: alice, deviceNumber: 1, envelope: first);
+    // A first message needs the key directory's identity for the sender.
+    final read = await b.decrypt(
+      userId: alice,
+      deviceNumber: 1,
+      envelope: first,
+      directoryIdentityKey: (await a.identity()).identityKey,
+    );
     expect(utf8.decode(read), 'hello from Dart');
 
     final reply = await b.encrypt(

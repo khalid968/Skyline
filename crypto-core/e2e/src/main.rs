@@ -64,17 +64,42 @@ fn run(base: &str, alice_id: &str, alice_code: &str, bob_id: &str, bob_code: &st
     let secret = "Meet at the usual place at 7.";
     let first = alice
         .crypto
-        .encrypt(bob.user_id.clone(), bob.device_number, secret.as_bytes().to_vec())
+        .encrypt(
+            bob.user_id.clone(),
+            bob.device_number,
+            secret.as_bytes().to_vec(),
+        )
         .map_err(err)?;
     if first.kind != EnvelopeKind::PreKey {
         return Err("first message was not a session-starting message".into());
     }
-    if first.body.windows(secret.len()).any(|w| w == secret.as_bytes()) {
+    if first
+        .body
+        .windows(secret.len())
+        .any(|w| w == secret.as_bytes())
+    {
         return Err("plaintext visible in ciphertext".into());
     }
+    // Bob checks Alice's first message against the key directory's answer
+    // for her device (the Phase 8 sender-identity check).
+    let listed = get(base, &format!("/users/{alice_id}/devices"), &bob.token)?;
+    let alice_listed = listed
+        .as_array()
+        .and_then(|a| {
+            a.iter()
+                .find(|d| d["deviceNumber"].as_u64() == Some(alice.device_number as u64))
+        })
+        .and_then(|d| d["identityKey"].as_str())
+        .ok_or("the directory does not list Alice's device")?;
+    let alice_listed = B64.decode(alice_listed).map_err(|e| e.to_string())?;
     let read = bob
         .crypto
-        .decrypt(alice.user_id.clone(), alice.device_number, first)
+        .decrypt(
+            alice.user_id.clone(),
+            alice.device_number,
+            first,
+            Some(alice_listed),
+        )
         .map_err(err)?;
     if read != secret.as_bytes() {
         return Err("Bob read something else".into());
@@ -82,11 +107,15 @@ fn run(base: &str, alice_id: &str, alice_code: &str, bob_id: &str, bob_code: &st
 
     let reply = bob
         .crypto
-        .encrypt(alice.user_id.clone(), alice.device_number, b"See you there.".to_vec())
+        .encrypt(
+            alice.user_id.clone(),
+            alice.device_number,
+            b"See you there.".to_vec(),
+        )
         .map_err(err)?;
     let reply_read = alice
         .crypto
-        .decrypt(bob.user_id.clone(), bob.device_number, reply)
+        .decrypt(bob.user_id.clone(), bob.device_number, reply, None)
         .map_err(err)?;
     if reply_read != b"See you there." {
         return Err("Alice read something else".into());
@@ -100,7 +129,11 @@ fn run(base: &str, alice_id: &str, alice_code: &str, bob_id: &str, bob_code: &st
     // Both sides compute the same safety number from what each holds.
     let alice_sees = alice
         .crypto
-        .safety_number(bob.user_id.clone(), bob.device_number, bob_identity_from_server)
+        .safety_number(
+            bob.user_id.clone(),
+            bob.device_number,
+            bob_identity_from_server,
+        )
         .map_err(err)?;
     let bob_sees = bob
         .crypto
@@ -156,7 +189,10 @@ fn activate(base: &str, user_id: &str, code: &str, name: &str) -> Res<Device> {
         crypto,
         user_id: user_id.to_string(),
         device_number,
-        token: r["accessToken"].as_str().ok_or("no accessToken")?.to_string(),
+        token: r["accessToken"]
+            .as_str()
+            .ok_or("no accessToken")?
+            .to_string(),
     })
 }
 
@@ -165,9 +201,7 @@ fn publish(base: &str, d: &Device) -> Res<Value> {
     let last = d.crypto.new_last_resort_kyber_pre_key().map_err(err)?;
     let one_time = d.crypto.new_one_time_pre_keys(10).map_err(err)?;
     let kyber = d.crypto.new_kyber_pre_keys(10).map_err(err)?;
-    let signed_json = |k: &SignedPreKeyPublic| {
-        json!({ "keyId": k.key_id, "publicKey": B64.encode(&k.public_key), "signature": B64.encode(&k.signature) })
-    };
+    let signed_json = |k: &SignedPreKeyPublic| json!({ "keyId": k.key_id, "publicKey": B64.encode(&k.public_key), "signature": B64.encode(&k.signature) });
     let body = json!({
         "signedPreKey": signed_json(&signed),
         "lastResortKyberPreKey": signed_json(&last),

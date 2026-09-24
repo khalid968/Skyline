@@ -170,7 +170,12 @@ impl CryptoDevice {
         Ok(self.0.has_session(user_id, device_number)?)
     }
 
-    pub fn encrypt(&self, user_id: String, device_number: u32, plaintext: Vec<u8>) -> Result<Envelope> {
+    pub fn encrypt(
+        &self,
+        user_id: String,
+        device_number: u32,
+        plaintext: Vec<u8>,
+    ) -> Result<Envelope> {
         let e = self.0.encrypt(user_id, device_number, plaintext)?;
         Ok(Envelope {
             kind: match e.kind {
@@ -181,7 +186,15 @@ impl CryptoDevice {
         })
     }
 
-    pub fn decrypt(&self, user_id: String, device_number: u32, envelope: Envelope) -> Result<Vec<u8>> {
+    /// `directory_identity_key`: the key directory's identity key for the
+    /// sending device. Required for a first message from an unseen device.
+    pub fn decrypt(
+        &self,
+        user_id: String,
+        device_number: u32,
+        envelope: Envelope,
+        directory_identity_key: Option<Vec<u8>>,
+    ) -> Result<Vec<u8>> {
         Ok(self.0.decrypt(
             user_id,
             device_number,
@@ -192,6 +205,7 @@ impl CryptoDevice {
                 },
                 body: envelope.body,
             },
+            directory_identity_key,
         )?)
     }
 

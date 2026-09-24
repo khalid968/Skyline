@@ -11,10 +11,13 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CryptoDevice>>
 abstract class CryptoDevice implements RustOpaqueInterface {
+  /// `directory_identity_key`: the key directory's identity key for the
+  /// sending device. Required for a first message from an unseen device.
   Future<Uint8List> decrypt(
       {required String userId,
       required int deviceNumber,
-      required Envelope envelope});
+      required Envelope envelope,
+      Uint8List? directoryIdentityKey});
 
   Future<Envelope> encrypt(
       {required String userId,

@@ -91,6 +91,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OneTimePreKey? dco_decode_opt_box_autoadd_one_time_pre_key(dynamic raw);
 
   @protected
+  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
   PreKeyBundle dco_decode_pre_key_bundle(dynamic raw);
 
   @protected
@@ -181,6 +184,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   OneTimePreKey? sse_decode_opt_box_autoadd_one_time_pre_key(
       SseDeserializer deserializer);
+
+  @protected
+  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
   PreKeyBundle sse_decode_pre_key_bundle(SseDeserializer deserializer);
@@ -278,6 +284,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_one_time_pre_key(
       OneTimePreKey? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_list_prim_u_8_strict(
+      Uint8List? self, SseSerializer serializer);
 
   @protected
   void sse_encode_pre_key_bundle(PreKeyBundle self, SseSerializer serializer);
