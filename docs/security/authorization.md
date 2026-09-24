@@ -244,6 +244,30 @@ keys never leave the device's encrypted vault.
   `registrationId`, both covered by the Ed25519 signature. A clone (an identity key already live on another
   device) gets the same generic 401 as every other activation failure.
 
+## Messaging and push (Phase 8a)
+
+These are member routes (device sessions only). Every route that names another person needs a live
+**direct** link; anything else is the identical 404.
+
+| Route | Guard | What it does |
+| --- | --- | --- |
+| `GET /me/contacts` | device session | Directly linked people, each with their reachable devices and identity keys. |
+| `GET /users/:userId/devices` | `@ContactTarget(direct)` | One contact's reachable devices: used to check a first message's sender. |
+| `POST /users/:userId/messages` | `@ContactTarget(direct)` | One ciphertext per device: EXACTLY the contact's reachable devices plus the sender's other ones. Anything else is a 409 listing `missing`/`extra`. Idempotent by the client's `messageId`. 120 per device per minute. |
+| `POST /users/:userId/signals` | `@ContactTarget(direct)` | Typing indicators: relayed live to connected devices, never stored. |
+| `GET /me/inbox` | device session | This device's undelivered copies and system notices. **Re-checks the graph now:** a message from someone whose link was revoked stays undelivered. |
+| `POST /me/inbox/ack` | device session | Only this device's own copies. Erases the ciphertext (a trigger makes it one-way) and tells the sender "delivered". |
+| `POST /me/messages/status` | device session | Delivery state of your own messages. |
+| `GET /me/device-keys` | device session | Bundles for your OTHER devices (same claiming and limits as a contact's). |
+| `PUT` / `DELETE /me/push` | device session | This device's push token (one per device). |
+
+- **Push wake-ups carry nothing:** the payload is always `{"t":"inbox"}`, with no sender, no text and no
+  chat. A device is woken at most once per 5 s; a token the provider reports as dead is forgotten; revoked
+  devices are never woken. Firebase is off until `FCM_SERVICE_ACCOUNT_FILE` is set, and tests use a
+  recording transport (`test/app/app-harness.js`).
+- **A 409 body may be structured** (`PublicBodyException` for status 409). No graph check ever answers 409,
+  so 404s stay indistinguishable.
+
 ## Tests
 
 | Command | Suite | Needs |
