@@ -81,7 +81,13 @@ There is no Mac, so the iOS side of the Rust bridge (cargokit via the podspec in
 adjusting for CocoaPods' symlinked layout. Build it the first time a Mac or a cloud Mac exists (the owner's
 decision, 2026-09-23), before any iOS release.
 
-## The server could relabel who sent a session-starting message — OPEN (Phase 8)
+## The server could relabel who sent a session-starting message — CLOSED 2026-09-24
+
+**Closed:** `SkylineCrypto::decrypt` now requires the key directory's identity key for a first message from
+an unseen device, and refuses the message if the key inside differs (Rust test
+`a_first_message_must_match_the_directory_identity`). The app passes the directory's answer from
+`GET /me/contacts` or `GET /me/devices`. The text below is kept for history.
+
 
 A session-starting (PreKey) message carries the sender's identity key. When one arrives from a device the
 recipient has never seen, the recipient trusts it on first use, under whatever sender address the server

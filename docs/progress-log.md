@@ -8,6 +8,59 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-24 (evening) — Phase 8a IN PROGRESS: one-to-one messaging works end to end
+
+The owner approved boards 16-19 ("this looks good") and said go.
+
+**Done (local commits; nothing pushed since `dd267a8`):**
+
+- **Server (`1b0f32f`):**
+  - Migration 012: message `seq`; one-way ciphertext erasure on delivery; a per-device system cursor.
+  - `modules/messages`: contacts with reachable devices; send (exact device coverage or a structured 409;
+    idempotent); an inbox that re-checks the graph; ack (erases the ciphertext and sends a delivered
+    receipt); status; live-only typing signals.
+  - `GET /me/device-keys`, and `/me/devices` now returns identity keys.
+  - 11 app and 4 db tests; four mutations caught.
+- **Crypto core:**
+  - `decrypt` requires the directory's identity for a first message from an unseen device (`09497ab`).
+    The known-risk is closed.
+  - An encrypted **records** store in the vault holds the app's local history (`5e12dd5`; decision
+    recorded).
+- **App (`f596b0e`):**
+  - The design tokens replace the seed theme.
+  - Fonts are bundled, never fetched at runtime (Google Fonts would be a third-party call).
+  - Stroke-SVG icons; an API client with signed refresh; a WebSocket with backoff.
+  - The messaging engine: `features/messages/data/messenger.dart`.
+  - Screens: activation (1), chat list (2/5/18), conversation (3/16/17/19), message details, the timer
+    sheet (15), safety numbers (4), and Privacy & security (13, with the two receipt/typing switches the
+    owner decided on).
+- **Proven end to end:**
+  - `integration_test/messaging_test.dart` passes on Windows against a real server and a throwaway
+    database. It covers activate, contacts, send, receive, delivered, read, reply and the timer notice.
+  - `apps/backend/scripts/e2e-fixture.js create|drop` builds that fixture and refuses any database whose
+    name is not `skyline_e2e_*`.
+- **Found by that test:** a single upload of 50 Kyber keys is about 105 KB, and the server's limit is
+  100 KB (413). Keys are now uploaded in batches, and a failed upload is repaired on the next sync.
+
+**Housekeeping:**
+
+- Migrations 011 and 012 were applied to the owner's dev database by accident, via a `migrate:up` in a
+  chained command. It is additive and creates no accounts.
+- Two test databases leaked by an earlier force-stopped jest run were dropped.
+
+**Still to do in 8a:**
+
+1. App lock (board 14: PIN, face or fingerprint; `local_auth`).
+2. Scanning a safety-number QR code (board 4's "Scan their code"; camera plugin; Android/iOS only).
+3. Push wake-ups: needs a Firebase project from the owner, and an Apple developer account for iOS.
+4. Docs: `authorization.md` messaging routes, try-it-yourself, CLAUDE.md.
+5. Full test runs, then the phase report.
+
+**Known limit:** with read receipts OFF, your other devices learn a chat was read only when it is opened
+there.
+
+---
+
 ## 2026-09-24 (later) — Phase 7 pushed; Phase 8 planned, NOT started
 
 The owner ran the app on the Android emulator: it launches and shows the placeholder "Skyline" screen. A
