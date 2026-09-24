@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/app/app_controller.dart';
+import 'core/push/push.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/settings/presentation/lock_screen.dart';
@@ -11,6 +12,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Loads the crypto core (Signal's libsignal, built from crypto-core/).
   await RustLib.init();
+  // Firebase, for content-free wake-ups only (Android).
+  await initPush();
   runApp(const ProviderScope(child: SkylineApp()));
 }
 

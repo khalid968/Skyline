@@ -4,12 +4,14 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
+  firebase_core
   flutter_secure_storage_windows
   local_auth_windows
   sqlite3_flutter_libs
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
+  flutter_local_notifications_windows
   flutter_zxing
   jni
   skyline_crypto_ffi

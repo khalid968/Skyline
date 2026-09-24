@@ -13,6 +13,7 @@ import '../api/api_client.dart';
 import '../api/session.dart';
 import '../config.dart';
 import '../crypto/device_crypto.dart';
+import '../push/push.dart';
 import '../realtime/realtime_client.dart';
 
 enum AppPhase { loading, activate, ready, vaultLocked, failed }
@@ -35,6 +36,7 @@ class AppController extends ChangeNotifier {
   Messenger? messenger;
   ActivationService? activation;
   AppLock? lock;
+  PushRegistrar? push;
 
   Future<void> boot() async {
     try {
@@ -77,6 +79,8 @@ class AppController extends ChangeNotifier {
     messenger = m;
     phase = AppPhase.ready;
     await m.start();
+    push = PushRegistrar(api: api!, messenger: m);
+    unawaited(push!.start());
   }
 
   void _watchSignedOut() {
@@ -86,6 +90,8 @@ class AppController extends ChangeNotifier {
     // history is still this person's), but this device must be activated
     // again with a new code to talk to anyone.
     m.removeListener(_watchSignedOut);
+    unawaited(push?.stop());
+    push = null;
     unawaited(sessions.clear());
     m.dispose();
     messenger = null;

@@ -140,9 +140,12 @@ class _ChatRow extends StatelessWidget {
     final preview = typing
         ? 'typing…'
         : (chat == null || chat.lastText.isEmpty ? 'Say hello — messages are end-to-end encrypted' : chat.lastText);
+    // One clear sentence for screen readers, instead of every text in the row.
     return Semantics(
       button: true,
-      label: '${row.name}${unread > 0 ? ', $unread unread' : ''}',
+      excludeSemantics: true,
+      label: '${row.name}. $preview${unread > 0 ? '. $unread unread' : ''}',
+      onTap: () => context.push('/chat/${row.peer}'),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: () => context.push('/chat/${row.peer}'),
