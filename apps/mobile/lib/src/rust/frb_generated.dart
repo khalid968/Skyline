@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1590362888;
+  int get rustContentHash => 1198300315;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -89,11 +89,22 @@ abstract class RustLibApi extends BaseApi {
       required Envelope envelope,
       Uint8List? directoryIdentityKey});
 
+  Future<bool> crateApiCryptoCryptoDeviceDeleteRecord(
+      {required CryptoDevice that, required String kind, required String id});
+
+  Future<int> crateApiCryptoCryptoDeviceDeleteRecordGroup(
+      {required CryptoDevice that,
+      required String kind,
+      required String group});
+
   Future<Envelope> crateApiCryptoCryptoDeviceEncrypt(
       {required CryptoDevice that,
       required String userId,
       required int deviceNumber,
       required List<int> plaintext});
+
+  Future<Uint8List?> crateApiCryptoCryptoDeviceGetRecord(
+      {required CryptoDevice that, required String kind, required String id});
 
   Future<bool> crateApiCryptoCryptoDeviceHasSession(
       {required CryptoDevice that,
@@ -102,6 +113,13 @@ abstract class RustLibApi extends BaseApi {
 
   Future<DeviceIdentity> crateApiCryptoCryptoDeviceIdentity(
       {required CryptoDevice that});
+
+  Future<List<StoredRecord>> crateApiCryptoCryptoDeviceListRecords(
+      {required CryptoDevice that,
+      required String kind,
+      required String group,
+      PlatformInt64? beforeSort,
+      required int limit});
 
   Future<List<SignedPreKey>> crateApiCryptoCryptoDeviceNewKyberPreKeys(
       {required CryptoDevice that, required int count});
@@ -119,6 +137,14 @@ abstract class RustLibApi extends BaseApi {
       {required String path, required List<int> storageKey});
 
   Future<CryptoDevice> crateApiCryptoCryptoDeviceOpenInMemory();
+
+  Future<void> crateApiCryptoCryptoDevicePutRecord(
+      {required CryptoDevice that,
+      required String kind,
+      required String id,
+      required String group,
+      required PlatformInt64 sort,
+      required List<int> value});
 
   Future<SafetyNumber> crateApiCryptoCryptoDeviceSafetyNumber(
       {required CryptoDevice that,
@@ -200,6 +226,66 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<bool> crateApiCryptoCryptoDeviceDeleteRecord(
+      {required CryptoDevice that, required String kind, required String id}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCryptoDevice(
+            that, serializer);
+        sse_encode_String(kind, serializer);
+        sse_encode_String(id, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 2, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_bool,
+        decodeErrorData: sse_decode_crypto_exception,
+      ),
+      constMeta: kCrateApiCryptoCryptoDeviceDeleteRecordConstMeta,
+      argValues: [that, kind, id],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCryptoCryptoDeviceDeleteRecordConstMeta =>
+      const TaskConstMeta(
+        debugName: "CryptoDevice_delete_record",
+        argNames: ["that", "kind", "id"],
+      );
+
+  @override
+  Future<int> crateApiCryptoCryptoDeviceDeleteRecordGroup(
+      {required CryptoDevice that,
+      required String kind,
+      required String group}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCryptoDevice(
+            that, serializer);
+        sse_encode_String(kind, serializer);
+        sse_encode_String(group, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 3, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_32,
+        decodeErrorData: sse_decode_crypto_exception,
+      ),
+      constMeta: kCrateApiCryptoCryptoDeviceDeleteRecordGroupConstMeta,
+      argValues: [that, kind, group],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCryptoCryptoDeviceDeleteRecordGroupConstMeta =>
+      const TaskConstMeta(
+        debugName: "CryptoDevice_delete_record_group",
+        argNames: ["that", "kind", "group"],
+      );
+
+  @override
   Future<Envelope> crateApiCryptoCryptoDeviceEncrypt(
       {required CryptoDevice that,
       required String userId,
@@ -214,7 +300,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_32(deviceNumber, serializer);
         sse_encode_list_prim_u_8_loose(plaintext, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 2, port: port_);
+            funcId: 4, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_envelope,
@@ -233,6 +319,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<Uint8List?> crateApiCryptoCryptoDeviceGetRecord(
+      {required CryptoDevice that, required String kind, required String id}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCryptoDevice(
+            that, serializer);
+        sse_encode_String(kind, serializer);
+        sse_encode_String(id, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 5, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_opt_list_prim_u_8_strict,
+        decodeErrorData: sse_decode_crypto_exception,
+      ),
+      constMeta: kCrateApiCryptoCryptoDeviceGetRecordConstMeta,
+      argValues: [that, kind, id],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCryptoCryptoDeviceGetRecordConstMeta =>
+      const TaskConstMeta(
+        debugName: "CryptoDevice_get_record",
+        argNames: ["that", "kind", "id"],
+      );
+
+  @override
   Future<bool> crateApiCryptoCryptoDeviceHasSession(
       {required CryptoDevice that,
       required String userId,
@@ -245,7 +360,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(userId, serializer);
         sse_encode_u_32(deviceNumber, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 3, port: port_);
+            funcId: 6, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -272,7 +387,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCryptoDevice(
             that, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 4, port: port_);
+            funcId: 7, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_device_identity,
@@ -291,6 +406,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<List<StoredRecord>> crateApiCryptoCryptoDeviceListRecords(
+      {required CryptoDevice that,
+      required String kind,
+      required String group,
+      PlatformInt64? beforeSort,
+      required int limit}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCryptoDevice(
+            that, serializer);
+        sse_encode_String(kind, serializer);
+        sse_encode_String(group, serializer);
+        sse_encode_opt_box_autoadd_i_64(beforeSort, serializer);
+        sse_encode_u_32(limit, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 8, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_stored_record,
+        decodeErrorData: sse_decode_crypto_exception,
+      ),
+      constMeta: kCrateApiCryptoCryptoDeviceListRecordsConstMeta,
+      argValues: [that, kind, group, beforeSort, limit],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCryptoCryptoDeviceListRecordsConstMeta =>
+      const TaskConstMeta(
+        debugName: "CryptoDevice_list_records",
+        argNames: ["that", "kind", "group", "beforeSort", "limit"],
+      );
+
+  @override
   Future<List<SignedPreKey>> crateApiCryptoCryptoDeviceNewKyberPreKeys(
       {required CryptoDevice that, required int count}) {
     return handler.executeNormal(NormalTask(
@@ -300,7 +450,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that, serializer);
         sse_encode_u_32(count, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 5, port: port_);
+            funcId: 9, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_signed_pre_key,
@@ -327,7 +477,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCryptoDevice(
             that, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 6, port: port_);
+            funcId: 10, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_signed_pre_key,
@@ -356,7 +506,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that, serializer);
         sse_encode_u_32(count, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 7, port: port_);
+            funcId: 11, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_one_time_pre_key,
@@ -383,7 +533,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCryptoDevice(
             that, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 8, port: port_);
+            funcId: 12, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_signed_pre_key,
@@ -410,7 +560,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(path, serializer);
         sse_encode_list_prim_u_8_loose(storageKey, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 9, port: port_);
+            funcId: 13, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData:
@@ -435,7 +585,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 10, port: port_);
+            funcId: 14, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData:
@@ -455,6 +605,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiCryptoCryptoDevicePutRecord(
+      {required CryptoDevice that,
+      required String kind,
+      required String id,
+      required String group,
+      required PlatformInt64 sort,
+      required List<int> value}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCryptoDevice(
+            that, serializer);
+        sse_encode_String(kind, serializer);
+        sse_encode_String(id, serializer);
+        sse_encode_String(group, serializer);
+        sse_encode_i_64(sort, serializer);
+        sse_encode_list_prim_u_8_loose(value, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 15, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_crypto_exception,
+      ),
+      constMeta: kCrateApiCryptoCryptoDevicePutRecordConstMeta,
+      argValues: [that, kind, id, group, sort, value],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCryptoCryptoDevicePutRecordConstMeta =>
+      const TaskConstMeta(
+        debugName: "CryptoDevice_put_record",
+        argNames: ["that", "kind", "id", "group", "sort", "value"],
+      );
+
+  @override
   Future<SafetyNumber> crateApiCryptoCryptoDeviceSafetyNumber(
       {required CryptoDevice that,
       required String theirUserId,
@@ -469,7 +656,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_32(theirDeviceNumber, serializer);
         sse_encode_list_prim_u_8_loose(theirIdentityKey, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 11, port: port_);
+            funcId: 16, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_safety_number,
@@ -505,7 +692,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(userId, serializer);
         sse_encode_u_32(deviceNumber, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 12, port: port_);
+            funcId: 17, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -533,7 +720,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that, serializer);
         sse_encode_list_prim_u_8_loose(message, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 13, port: port_);
+            funcId: 18, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -564,7 +751,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(userId, serializer);
         sse_encode_box_autoadd_pre_key_bundle(bundle, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 14, port: port_);
+            funcId: 19, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -588,7 +775,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 15, port: port_);
+            funcId: 20, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -653,6 +840,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Envelope dco_decode_box_autoadd_envelope(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_envelope(raw);
+  }
+
+  @protected
+  PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_i_64(raw);
   }
 
   @protected
@@ -723,6 +916,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PlatformInt64 dco_decode_i_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeI64(raw);
+  }
+
+  @protected
   List<OneTimePreKey> dco_decode_list_one_time_pre_key(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_one_time_pre_key).toList();
@@ -747,6 +946,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<StoredRecord> dco_decode_list_stored_record(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_stored_record).toList();
+  }
+
+  @protected
   OneTimePreKey dco_decode_one_time_pre_key(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -756,6 +961,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       keyId: dco_decode_u_32(arr[0]),
       publicKey: dco_decode_list_prim_u_8_strict(arr[1]),
     );
+  }
+
+  @protected
+  PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_i_64(raw);
   }
 
   @protected
@@ -808,6 +1019,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       keyId: dco_decode_u_32(arr[0]),
       publicKey: dco_decode_list_prim_u_8_strict(arr[1]),
       signature: dco_decode_list_prim_u_8_strict(arr[2]),
+    );
+  }
+
+  @protected
+  StoredRecord dco_decode_stored_record(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return StoredRecord(
+      sort: dco_decode_i_64(arr[0]),
+      value: dco_decode_list_prim_u_8_strict(arr[1]),
     );
   }
 
@@ -882,6 +1105,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_i_64(deserializer));
+  }
+
+  @protected
   OneTimePreKey sse_decode_box_autoadd_one_time_pre_key(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -944,6 +1173,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getPlatformInt64();
+  }
+
+  @protected
   List<OneTimePreKey> sse_decode_list_one_time_pre_key(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -984,11 +1219,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<StoredRecord> sse_decode_list_stored_record(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <StoredRecord>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_stored_record(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   OneTimePreKey sse_decode_one_time_pre_key(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_keyId = sse_decode_u_32(deserializer);
     var var_publicKey = sse_decode_list_prim_u_8_strict(deserializer);
     return OneTimePreKey(keyId: var_keyId, publicKey: var_publicKey);
+  }
+
+  @protected
+  PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_i_64(deserializer));
+    } else {
+      return null;
+    }
   }
 
   @protected
@@ -1048,6 +1307,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_signature = sse_decode_list_prim_u_8_strict(deserializer);
     return SignedPreKey(
         keyId: var_keyId, publicKey: var_publicKey, signature: var_signature);
+  }
+
+  @protected
+  StoredRecord sse_decode_stored_record(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_sort = sse_decode_i_64(deserializer);
+    var var_value = sse_decode_list_prim_u_8_strict(deserializer);
+    return StoredRecord(sort: var_sort, value: var_value);
   }
 
   @protected
@@ -1123,6 +1390,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_i_64(
+      PlatformInt64 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_one_time_pre_key(
       OneTimePreKey self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -1180,6 +1454,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putPlatformInt64(self);
+  }
+
+  @protected
   void sse_encode_list_one_time_pre_key(
       List<OneTimePreKey> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -1217,11 +1497,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_stored_record(
+      List<StoredRecord> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_stored_record(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_one_time_pre_key(
       OneTimePreKey self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.keyId, serializer);
     sse_encode_list_prim_u_8_strict(self.publicKey, serializer);
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_64(
+      PlatformInt64? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_i_64(self, serializer);
+    }
   }
 
   @protected
@@ -1270,6 +1571,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.keyId, serializer);
     sse_encode_list_prim_u_8_strict(self.publicKey, serializer);
     sse_encode_list_prim_u_8_strict(self.signature, serializer);
+  }
+
+  @protected
+  void sse_encode_stored_record(StoredRecord self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.sort, serializer);
+    sse_encode_list_prim_u_8_strict(self.value, serializer);
   }
 
   @protected
@@ -1329,6 +1637,15 @@ class CryptoDeviceImpl extends RustOpaque implements CryptoDevice {
           envelope: envelope,
           directoryIdentityKey: directoryIdentityKey);
 
+  Future<bool> deleteRecord({required String kind, required String id}) =>
+      RustLib.instance.api.crateApiCryptoCryptoDeviceDeleteRecord(
+          that: this, kind: kind, id: id);
+
+  Future<int> deleteRecordGroup(
+          {required String kind, required String group}) =>
+      RustLib.instance.api.crateApiCryptoCryptoDeviceDeleteRecordGroup(
+          that: this, kind: kind, group: group);
+
   Future<Envelope> encrypt(
           {required String userId,
           required int deviceNumber,
@@ -1339,6 +1656,10 @@ class CryptoDeviceImpl extends RustOpaque implements CryptoDevice {
           deviceNumber: deviceNumber,
           plaintext: plaintext);
 
+  Future<Uint8List?> getRecord({required String kind, required String id}) =>
+      RustLib.instance.api
+          .crateApiCryptoCryptoDeviceGetRecord(that: this, kind: kind, id: id);
+
   Future<bool> hasSession(
           {required String userId, required int deviceNumber}) =>
       RustLib.instance.api.crateApiCryptoCryptoDeviceHasSession(
@@ -1348,6 +1669,18 @@ class CryptoDeviceImpl extends RustOpaque implements CryptoDevice {
       RustLib.instance.api.crateApiCryptoCryptoDeviceIdentity(
         that: this,
       );
+
+  Future<List<StoredRecord>> listRecords(
+          {required String kind,
+          required String group,
+          PlatformInt64? beforeSort,
+          required int limit}) =>
+      RustLib.instance.api.crateApiCryptoCryptoDeviceListRecords(
+          that: this,
+          kind: kind,
+          group: group,
+          beforeSort: beforeSort,
+          limit: limit);
 
   Future<List<SignedPreKey>> newKyberPreKeys({required int count}) =>
       RustLib.instance.api
@@ -1366,6 +1699,20 @@ class CryptoDeviceImpl extends RustOpaque implements CryptoDevice {
       RustLib.instance.api.crateApiCryptoCryptoDeviceNewSignedPreKey(
         that: this,
       );
+
+  Future<void> putRecord(
+          {required String kind,
+          required String id,
+          required String group,
+          required PlatformInt64 sort,
+          required List<int> value}) =>
+      RustLib.instance.api.crateApiCryptoCryptoDevicePutRecord(
+          that: this,
+          kind: kind,
+          id: id,
+          group: group,
+          sort: sort,
+          value: value);
 
   Future<SafetyNumber> safetyNumber(
           {required String theirUserId,

@@ -76,6 +76,11 @@ pub struct Envelope {
     pub body: Vec<u8>,
 }
 
+pub struct StoredRecord {
+    pub sort: i64,
+    pub value: Vec<u8>,
+}
+
 pub struct SafetyNumber {
     pub displayable: String,
     pub scannable: Vec<u8>,
@@ -222,6 +227,49 @@ impl CryptoDevice {
             displayable: s.displayable,
             scannable: s.scannable,
         })
+    }
+
+    // The app's own encrypted records (messages, chat summaries).
+
+    pub fn put_record(
+        &self,
+        kind: String,
+        id: String,
+        group: String,
+        sort: i64,
+        value: Vec<u8>,
+    ) -> Result<()> {
+        Ok(self.0.put_record(kind, id, group, sort, value)?)
+    }
+
+    pub fn get_record(&self, kind: String, id: String) -> Result<Option<Vec<u8>>> {
+        Ok(self.0.get_record(kind, id)?)
+    }
+
+    pub fn list_records(
+        &self,
+        kind: String,
+        group: String,
+        before_sort: Option<i64>,
+        limit: u32,
+    ) -> Result<Vec<StoredRecord>> {
+        Ok(self
+            .0
+            .list_records(kind, group, before_sort, limit)?
+            .into_iter()
+            .map(|r| StoredRecord {
+                sort: r.sort,
+                value: r.value,
+            })
+            .collect())
+    }
+
+    pub fn delete_record(&self, kind: String, id: String) -> Result<bool> {
+        Ok(self.0.delete_record(kind, id)?)
+    }
+
+    pub fn delete_record_group(&self, kind: String, group: String) -> Result<u32> {
+        Ok(self.0.delete_record_group(kind, group)?)
     }
 }
 

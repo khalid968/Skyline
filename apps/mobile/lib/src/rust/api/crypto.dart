@@ -19,14 +19,26 @@ abstract class CryptoDevice implements RustOpaqueInterface {
       required Envelope envelope,
       Uint8List? directoryIdentityKey});
 
+  Future<bool> deleteRecord({required String kind, required String id});
+
+  Future<int> deleteRecordGroup({required String kind, required String group});
+
   Future<Envelope> encrypt(
       {required String userId,
       required int deviceNumber,
       required List<int> plaintext});
 
+  Future<Uint8List?> getRecord({required String kind, required String id});
+
   Future<bool> hasSession({required String userId, required int deviceNumber});
 
   Future<DeviceIdentity> identity();
+
+  Future<List<StoredRecord>> listRecords(
+      {required String kind,
+      required String group,
+      PlatformInt64? beforeSort,
+      required int limit});
 
   Future<List<SignedPreKey>> newKyberPreKeys({required int count});
 
@@ -46,6 +58,13 @@ abstract class CryptoDevice implements RustOpaqueInterface {
   /// A throwaway in-memory device (tests and diagnostics only).
   static Future<CryptoDevice> openInMemory() =>
       RustLib.instance.api.crateApiCryptoCryptoDeviceOpenInMemory();
+
+  Future<void> putRecord(
+      {required String kind,
+      required String id,
+      required String group,
+      required PlatformInt64 sort,
+      required List<int> value});
 
   Future<SafetyNumber> safetyNumber(
       {required String theirUserId,
@@ -250,4 +269,25 @@ class SignedPreKey {
           keyId == other.keyId &&
           publicKey == other.publicKey &&
           signature == other.signature;
+}
+
+class StoredRecord {
+  final PlatformInt64 sort;
+  final Uint8List value;
+
+  const StoredRecord({
+    required this.sort,
+    required this.value,
+  });
+
+  @override
+  int get hashCode => sort.hashCode ^ value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is StoredRecord &&
+          runtimeType == other.runtimeType &&
+          sort == other.sort &&
+          value == other.value;
 }

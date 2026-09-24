@@ -469,3 +469,78 @@ fn the_vault_on_disk_is_encrypted_and_needs_its_key() {
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
     haystack.windows(needle.len()).any(|w| w == needle)
 }
+
+#[test]
+fn records_are_sealed_ordered_and_deletable() {
+    let d = Device::new(ALICE, 1);
+    let chat = "chat-with-bob";
+    for (i, text) in ["first", "second", "third"].iter().enumerate() {
+        d.crypto
+            .put_record(
+                "message".into(),
+                format!("message-id-{i:04}"),
+                chat.into(),
+                1000 + i as i64,
+                format!("{{\"text\":\"{text}\"}}").into_bytes(),
+            )
+            .unwrap();
+    }
+    d.crypto
+        .put_record(
+            "message".into(),
+            "other".into(),
+            "chat-with-carol".into(),
+            5,
+            b"x".to_vec(),
+        )
+        .unwrap();
+
+    let page = d
+        .crypto
+        .list_records("message".into(), chat.into(), None, 2)
+        .unwrap();
+    let texts: Vec<String> = page
+        .iter()
+        .map(|r| String::from_utf8(r.value.clone()).unwrap())
+        .collect();
+    assert_eq!(texts, vec!["{\"text\":\"third\"}", "{\"text\":\"second\"}"]);
+    let older = d
+        .crypto
+        .list_records("message".into(), chat.into(), Some(page[1].sort), 10)
+        .unwrap();
+    assert_eq!(older.len(), 1);
+
+    // Nothing readable in the file: not the text, not the chat or message ids.
+    let raw = d.crypto.raw_vault_for_tests().concat();
+    for needle in ["third", "chat-with-bob", "message-id-0002"] {
+        assert!(
+            !contains(&raw, needle.as_bytes()),
+            "{needle} visible on disk"
+        );
+    }
+
+    assert!(
+        d.crypto
+            .delete_record("message".into(), "message-id-0002".into())
+            .unwrap()
+    );
+    assert!(
+        d.crypto
+            .get_record("message".into(), "message-id-0002".into())
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        d.crypto
+            .delete_record_group("message".into(), chat.into())
+            .unwrap(),
+        2
+    );
+    assert_eq!(
+        d.crypto
+            .list_records("message".into(), "chat-with-carol".into(), None, 10)
+            .unwrap()
+            .len(),
+        1
+    );
+}

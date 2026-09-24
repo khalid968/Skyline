@@ -35,6 +35,11 @@ These are implementation choices within the owner's Phase 8 decisions.
   order, with a per-device cursor. A new device's cursor starts at "now", so it starts empty.
 - **Messages are idempotent by a client-chosen id**, so a retry after a dropped connection never delivers
   twice.
+- **Message history on the device lives in the crypto core's vault** ("records": the same SQLite file, the
+  same AES-256-GCM-SIV key held in the OS keystore). Record and chat ids are HMAC'd; only a sort number (the
+  time) is readable in the file. SQLCipher was the alternative, but its maintained Flutter packages need
+  Dart 3.10+ (this toolchain has 3.9.2) and the older ones are end-of-life. This way adds no dependency and
+  no cryptography.
 - **A 409 may carry a structured body** (`PublicBodyException`). The contact graph never answers 409, so
   404s still cannot be told apart.
 

@@ -57,7 +57,10 @@ impl Vault {
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA secure_delete = ON;
-             CREATE TABLE IF NOT EXISTS vault (id BLOB PRIMARY KEY, value BLOB NOT NULL);",
+             CREATE TABLE IF NOT EXISTS vault (id BLOB PRIMARY KEY, value BLOB NOT NULL);
+             CREATE TABLE IF NOT EXISTS records (
+               id BLOB PRIMARY KEY, grp BLOB NOT NULL, sort INTEGER NOT NULL, value BLOB NOT NULL);
+             CREATE INDEX IF NOT EXISTS records_grp_sort ON records (grp, sort);",
         )
         .map_err(storage)?;
 
@@ -86,45 +89,12 @@ impl Vault {
             })
             .optional()
             .map_err(storage)?;
-        let Some(sealed) = sealed else {
-            return Ok(None);
-        };
-        if sealed.len() < NONCE_BYTES {
-            return Err(CryptoError::storage("corrupt vault entry"));
-        }
-        let (nonce, body) = sealed.split_at(NONCE_BYTES);
-        let plain = self
-            .cipher
-            .decrypt(
-                &Nonce::try_from(nonce).map_err(|_| CryptoError::locked())?,
-                Payload {
-                    msg: body,
-                    aad: &id,
-                },
-            )
-            // Wrong storage key, or a tampered/moved row. Either way: refuse.
-            .map_err(|_| CryptoError::locked())?;
-        Ok(Some(plain))
+        sealed.map(|s| self.open_sealed(&id, &s)).transpose()
     }
 
     pub fn put(&self, ns: &str, key: &[u8], value: &[u8]) -> Result<(), CryptoError> {
         let id = self.row_id(ns, key);
-        let mut nonce = [0u8; NONCE_BYTES];
-        OsRng
-            .try_fill_bytes(&mut nonce)
-            .map_err(|_| CryptoError::storage("no randomness"))?;
-        let body = self
-            .cipher
-            .encrypt(
-                &Nonce::from(nonce),
-                Payload {
-                    msg: value,
-                    aad: &id,
-                },
-            )
-            .map_err(|_| CryptoError::storage("sealing failed"))?;
-        let mut sealed = nonce.to_vec();
-        sealed.extend_from_slice(&body);
+        let sealed = self.seal(&id, value)?;
         self.conn
             .execute(
                 "INSERT INTO vault (id, value) VALUES (?1, ?2)
@@ -133,6 +103,148 @@ impl Vault {
             )
             .map_err(storage)?;
         Ok(())
+    }
+
+    /// AES-256-GCM-SIV with a fresh nonce; `aad` binds the value to its row.
+    fn seal(&self, aad: &[u8], value: &[u8]) -> Result<Vec<u8>, CryptoError> {
+        let mut nonce = [0u8; NONCE_BYTES];
+        OsRng
+            .try_fill_bytes(&mut nonce)
+            .map_err(|_| CryptoError::storage("no randomness"))?;
+        let body = self
+            .cipher
+            .encrypt(&Nonce::from(nonce), Payload { msg: value, aad })
+            .map_err(|_| CryptoError::storage("sealing failed"))?;
+        let mut sealed = nonce.to_vec();
+        sealed.extend_from_slice(&body);
+        Ok(sealed)
+    }
+
+    fn open_sealed(&self, aad: &[u8], sealed: &[u8]) -> Result<Vec<u8>, CryptoError> {
+        if sealed.len() < NONCE_BYTES {
+            return Err(CryptoError::storage("corrupt vault entry"));
+        }
+        let (nonce, body) = sealed.split_at(NONCE_BYTES);
+        self.cipher
+            .decrypt(
+                &Nonce::try_from(nonce).map_err(|_| CryptoError::locked())?,
+                Payload { msg: body, aad },
+            )
+            // Wrong storage key, or a tampered/moved row. Either way: refuse.
+            .map_err(|_| CryptoError::locked())
+    }
+
+    // ------------------------------------------------------------ records
+    //
+    // The app's own encrypted data (messages, chat summaries): same key, same
+    // AEAD. The row id and the group are HMACs, so the file shows neither
+    // which chat a record belongs to nor its id; only `sort` (the app's
+    // ordering number, a timestamp) is readable, so a chat can be paged.
+
+    fn record_id(&self, kind: &str, id: &str) -> Vec<u8> {
+        self.row_id(&format!("record:{kind}"), id.as_bytes())
+    }
+
+    fn record_group(&self, kind: &str, group: &str) -> Vec<u8> {
+        self.row_id(&format!("record-group:{kind}"), group.as_bytes())
+    }
+
+    pub fn record_put(
+        &self,
+        kind: &str,
+        id: &str,
+        group: &str,
+        sort: i64,
+        value: &[u8],
+    ) -> Result<(), CryptoError> {
+        let rid = self.record_id(kind, id);
+        let sealed = self.seal(&rid, value)?;
+        self.conn
+            .execute(
+                "INSERT INTO records (id, grp, sort, value) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT (id) DO UPDATE SET grp = excluded.grp, sort = excluded.sort,
+                                                value = excluded.value",
+                params![rid, self.record_group(kind, group), sort, sealed],
+            )
+            .map_err(storage)?;
+        Ok(())
+    }
+
+    pub fn record_get(&self, kind: &str, id: &str) -> Result<Option<Vec<u8>>, CryptoError> {
+        let rid = self.record_id(kind, id);
+        let sealed: Option<Vec<u8>> = self
+            .conn
+            .query_row(
+                "SELECT value FROM records WHERE id = ?1",
+                params![rid],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(storage)?;
+        sealed.map(|s| self.open_sealed(&rid, &s)).transpose()
+    }
+
+    /// Newest first: records of one group with `sort` below `before` (all when
+    /// `None`), at most `limit`.
+    pub fn record_list(
+        &self,
+        kind: &str,
+        group: &str,
+        before: Option<i64>,
+        limit: u32,
+    ) -> Result<Vec<(i64, Vec<u8>)>, CryptoError> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, sort, value FROM records
+                  WHERE grp = ?1 AND sort < ?2
+                  ORDER BY sort DESC LIMIT ?3",
+            )
+            .map_err(storage)?;
+        let rows = stmt
+            .query_map(
+                params![
+                    self.record_group(kind, group),
+                    before.unwrap_or(i64::MAX),
+                    limit
+                ],
+                |r| {
+                    Ok((
+                        r.get::<_, Vec<u8>>(0)?,
+                        r.get::<_, i64>(1)?,
+                        r.get::<_, Vec<u8>>(2)?,
+                    ))
+                },
+            )
+            .map_err(storage)?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (rid, sort, sealed) = row.map_err(storage)?;
+            out.push((sort, self.open_sealed(&rid, &sealed)?));
+        }
+        Ok(out)
+    }
+
+    pub fn record_delete(&self, kind: &str, id: &str) -> Result<bool, CryptoError> {
+        let n = self
+            .conn
+            .execute(
+                "DELETE FROM records WHERE id = ?1",
+                params![self.record_id(kind, id)],
+            )
+            .map_err(storage)?;
+        Ok(n > 0)
+    }
+
+    pub fn record_delete_group(&self, kind: &str, group: &str) -> Result<u32, CryptoError> {
+        let n = self
+            .conn
+            .execute(
+                "DELETE FROM records WHERE grp = ?1",
+                params![self.record_group(kind, group)],
+            )
+            .map_err(storage)?;
+        Ok(n as u32)
     }
 
     pub fn delete(&self, ns: &str, key: &[u8]) -> Result<(), CryptoError> {
@@ -149,7 +261,11 @@ impl Vault {
     pub fn is_empty(&self) -> Result<bool, CryptoError> {
         let n: i64 = self
             .conn
-            .query_row("SELECT count(*) FROM vault", [], |r| r.get(0))
+            .query_row(
+                "SELECT (SELECT count(*) FROM vault) + (SELECT count(*) FROM records)",
+                [],
+                |r| r.get(0),
+            )
             .map_err(storage)?;
         Ok(n == 0)
     }
@@ -169,9 +285,19 @@ impl Vault {
     /// Every sealed value, raw. Only for tests that prove nothing is plaintext.
     #[doc(hidden)]
     pub fn raw_values_for_tests(&self) -> Vec<Vec<u8>> {
-        let mut stmt = self.conn.prepare("SELECT id, value FROM vault").unwrap();
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, x'', value FROM vault UNION ALL SELECT id, grp, value FROM records",
+            )
+            .unwrap();
         stmt.query_map([], |r| {
-            Ok([r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?].concat())
+            Ok([
+                r.get::<_, Vec<u8>>(0)?,
+                r.get::<_, Vec<u8>>(1)?,
+                r.get::<_, Vec<u8>>(2)?,
+            ]
+            .concat())
         })
         .unwrap()
         .map(|r| r.unwrap())

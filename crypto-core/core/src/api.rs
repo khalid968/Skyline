@@ -88,6 +88,12 @@ pub struct Envelope {
     pub body: Vec<u8>,
 }
 
+/// One of the app's records, unsealed.
+pub struct StoredRecord {
+    pub sort: i64,
+    pub value: Vec<u8>,
+}
+
 /// The numbers two people compare to verify one device of each other's.
 pub struct SafetyNumber {
     /// 60 digits, shown in groups of five.
@@ -457,6 +463,52 @@ impl SkylineCrypto {
             displayable: fp.display_string().map_err(protocol)?,
             scannable: fp.scannable.serialize().map_err(protocol)?,
         })
+    }
+
+    // ------------------------------------------------ the app's own records
+
+    /// Stores (or replaces) one of the app's records, sealed in the vault:
+    /// a message, a chat summary. `kind` separates record types, `group`
+    /// collects records listed together (a chat's messages), and `sort` orders
+    /// them (a timestamp). Only `sort` is readable in the file.
+    pub fn put_record(
+        &self,
+        kind: String,
+        id: String,
+        group: String,
+        sort: i64,
+        value: Vec<u8>,
+    ) -> Result<()> {
+        self.lock().record_put(&kind, &id, &group, sort, &value)
+    }
+
+    pub fn get_record(&self, kind: String, id: String) -> Result<Option<Vec<u8>>> {
+        self.lock().record_get(&kind, &id)
+    }
+
+    /// Newest first, `sort` strictly below `before_sort` (all when `None`).
+    pub fn list_records(
+        &self,
+        kind: String,
+        group: String,
+        before_sort: Option<i64>,
+        limit: u32,
+    ) -> Result<Vec<StoredRecord>> {
+        Ok(self
+            .lock()
+            .record_list(&kind, &group, before_sort, limit.min(1000))?
+            .into_iter()
+            .map(|(sort, value)| StoredRecord { sort, value })
+            .collect())
+    }
+
+    /// Deletes for good (SQLite `secure_delete` overwrites the freed space).
+    pub fn delete_record(&self, kind: String, id: String) -> Result<bool> {
+        self.lock().record_delete(&kind, &id)
+    }
+
+    pub fn delete_record_group(&self, kind: String, group: String) -> Result<u32> {
+        self.lock().record_delete_group(&kind, &group)
     }
 
     #[doc(hidden)]
