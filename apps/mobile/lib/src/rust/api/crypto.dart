@@ -86,6 +86,12 @@ abstract class CryptoDevice implements RustOpaqueInterface {
 
   Future<void> startSession(
       {required String userId, required PreKeyBundle bundle});
+
+  Future<bool> verifyScannedSafetyNumber(
+      {required String theirUserId,
+      required int theirDeviceNumber,
+      required List<int> theirIdentityKey,
+      required List<int> scanned});
 }
 
 enum CryptoErrorKind {

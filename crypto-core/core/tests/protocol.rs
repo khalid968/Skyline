@@ -575,3 +575,51 @@ fn app_lock_pin_checks_and_backs_off() {
     d.crypto.clear_app_lock_pin().unwrap();
     assert!(!d.crypto.has_app_lock_pin().unwrap());
 }
+
+#[test]
+fn a_scanned_safety_number_matches_only_the_right_pair() {
+    let alice = Device::new(ALICE, 1);
+    let bob = Device::new(BOB, 1);
+    let carol = Device::new("6f0b6a1e-0000-4000-8000-00000000000c", 1);
+    let a = alice.crypto.identity().unwrap().identity_key;
+    let b = bob.crypto.identity().unwrap().identity_key;
+    let c = carol.crypto.identity().unwrap().identity_key;
+
+    // Bob shows his QR code; Alice scans it.
+    let on_bobs_screen = bob
+        .crypto
+        .safety_number(ALICE.into(), 1, a.clone())
+        .unwrap()
+        .scannable;
+    assert!(
+        alice
+            .crypto
+            .verify_scanned_safety_number(BOB.into(), 1, b.clone(), on_bobs_screen.clone())
+            .unwrap()
+    );
+    // The same code does not verify a different person.
+    assert!(
+        !alice
+            .crypto
+            .verify_scanned_safety_number(BOB.into(), 1, c, on_bobs_screen)
+            .unwrap()
+    );
+    // Nor does Alice's own code, or garbage.
+    let own = alice
+        .crypto
+        .safety_number(BOB.into(), 1, b.clone())
+        .unwrap()
+        .scannable;
+    assert!(
+        !alice
+            .crypto
+            .verify_scanned_safety_number(BOB.into(), 1, b.clone(), own)
+            .unwrap()
+    );
+    assert!(
+        !alice
+            .crypto
+            .verify_scanned_safety_number(BOB.into(), 1, b, vec![1, 2, 3])
+            .unwrap()
+    );
+}

@@ -597,6 +597,34 @@ impl SkylineCrypto {
         self.lock().record_delete_group(&kind, &group)
     }
 
+    /// Compares the QR code scanned from the other person's screen with this
+    /// device's own view of the pair (libsignal's scannable-fingerprint check).
+    /// True only if both keys match on both sides.
+    pub fn verify_scanned_safety_number(
+        &self,
+        their_user_id: String,
+        their_device_number: u32,
+        their_identity_key: Vec<u8>,
+        scanned: Vec<u8>,
+    ) -> Result<bool> {
+        let vault = self.lock();
+        let local = local_address(&vault)?;
+        let mine = VaultStore { vault: &vault }.identity_key_pair()?;
+        let theirs = IdentityKey::decode(&their_identity_key)?;
+        let remote = address(&their_user_id, their_device_number)?;
+        let fp = Fingerprint::new(
+            FINGERPRINT_VERSION,
+            FINGERPRINT_ITERATIONS,
+            local.to_string().as_bytes(),
+            mine.identity_key(),
+            remote.to_string().as_bytes(),
+            &theirs,
+        )
+        .map_err(protocol)?;
+        // A garbled or foreign QR code is simply "does not match".
+        Ok(fp.scannable.compare(&scanned).unwrap_or(false))
+    }
+
     #[doc(hidden)]
     pub fn raw_vault_for_tests(&self) -> Vec<Vec<u8>> {
         self.lock().raw_values_for_tests()

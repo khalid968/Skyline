@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -672063452;
+  int get rustContentHash => -1750168426;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -176,6 +176,13 @@ abstract class RustLibApi extends BaseApi {
       {required CryptoDevice that,
       required String userId,
       required PreKeyBundle bundle});
+
+  Future<bool> crateApiCryptoCryptoDeviceVerifyScannedSafetyNumber(
+      {required CryptoDevice that,
+      required String theirUserId,
+      required int theirDeviceNumber,
+      required List<int> theirIdentityKey,
+      required List<int> scanned});
 
   Future<void> crateApiCryptoInitApp();
 
@@ -892,12 +899,60 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<bool> crateApiCryptoCryptoDeviceVerifyScannedSafetyNumber(
+      {required CryptoDevice that,
+      required String theirUserId,
+      required int theirDeviceNumber,
+      required List<int> theirIdentityKey,
+      required List<int> scanned}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCryptoDevice(
+            that, serializer);
+        sse_encode_String(theirUserId, serializer);
+        sse_encode_u_32(theirDeviceNumber, serializer);
+        sse_encode_list_prim_u_8_loose(theirIdentityKey, serializer);
+        sse_encode_list_prim_u_8_loose(scanned, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 24, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_bool,
+        decodeErrorData: sse_decode_crypto_exception,
+      ),
+      constMeta: kCrateApiCryptoCryptoDeviceVerifyScannedSafetyNumberConstMeta,
+      argValues: [
+        that,
+        theirUserId,
+        theirDeviceNumber,
+        theirIdentityKey,
+        scanned
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiCryptoCryptoDeviceVerifyScannedSafetyNumberConstMeta =>
+          const TaskConstMeta(
+            debugName: "CryptoDevice_verify_scanned_safety_number",
+            argNames: [
+              "that",
+              "theirUserId",
+              "theirDeviceNumber",
+              "theirIdentityKey",
+              "scanned"
+            ],
+          );
+
+  @override
   Future<void> crateApiCryptoInitApp() {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 24, port: port_);
+            funcId: 25, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1902,4 +1957,16 @@ class CryptoDeviceImpl extends RustOpaque implements CryptoDevice {
           {required String userId, required PreKeyBundle bundle}) =>
       RustLib.instance.api.crateApiCryptoCryptoDeviceStartSession(
           that: this, userId: userId, bundle: bundle);
+
+  Future<bool> verifyScannedSafetyNumber(
+          {required String theirUserId,
+          required int theirDeviceNumber,
+          required List<int> theirIdentityKey,
+          required List<int> scanned}) =>
+      RustLib.instance.api.crateApiCryptoCryptoDeviceVerifyScannedSafetyNumber(
+          that: this,
+          theirUserId: theirUserId,
+          theirDeviceNumber: theirDeviceNumber,
+          theirIdentityKey: theirIdentityKey,
+          scanned: scanned);
 }

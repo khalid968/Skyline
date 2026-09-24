@@ -234,6 +234,21 @@ impl CryptoDevice {
         })
     }
 
+    pub fn verify_scanned_safety_number(
+        &self,
+        their_user_id: String,
+        their_device_number: u32,
+        their_identity_key: Vec<u8>,
+        scanned: Vec<u8>,
+    ) -> Result<bool> {
+        Ok(self.0.verify_scanned_safety_number(
+            their_user_id,
+            their_device_number,
+            their_identity_key,
+            scanned,
+        )?)
+    }
+
     // App lock (board 14): Argon2id PIN in the vault, with backoff.
 
     pub fn set_app_lock_pin(&self, pin: String) -> Result<()> {

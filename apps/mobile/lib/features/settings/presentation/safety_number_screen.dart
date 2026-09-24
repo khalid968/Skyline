@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_zxing/flutter_zxing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/app/app_controller.dart';
@@ -43,6 +45,33 @@ class _SafetyNumberScreenState extends ConsumerState<SafetyNumberScreen> {
     await messenger.store.putDevice(d);
     setState(() {});
     messenger.changed(); // the chat header follows the store
+  }
+
+  Future<void> _scan(KnownDevice d) async {
+    final scanned = await Navigator.of(context).push<String>(
+      MaterialPageRoute(fullscreenDialog: true, builder: (_) => const _ScanPage()),
+    );
+    if (scanned == null || !mounted) return;
+    List<int> bytes;
+    try {
+      bytes = base64.decode(scanned);
+    } on FormatException {
+      bytes = const [];
+    }
+    final match = await messenger.crypto.verifyScannedSafetyNumber(
+      theirUserId: widget.peer,
+      theirDeviceNumber: d.deviceNumber,
+      theirIdentityKey: base64.decode(d.identityKey),
+      scanned: bytes,
+    );
+    if (!mounted) return;
+    if (match) await _setVerified(d, true);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(match
+          ? 'The codes match. This device is now verified.'
+          : 'The codes do NOT match. Do not mark this device verified; tell your administrator.'),
+    ));
   }
 
   @override
@@ -158,6 +187,15 @@ class _SafetyNumberScreenState extends ConsumerState<SafetyNumberScreen> {
                       ]),
                     ),
                   const SizedBox(height: 20),
+                  // Scanning is on phones (the camera, decoded on the device
+                  // by zxing-cpp; nothing leaves it). On a PC, compare digits.
+                  if (Platform.isAndroid || Platform.isIOS) ...[
+                    FilledButton(
+                      onPressed: () => _scan(d),
+                      child: const Text('Scan their code'),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   if (d.verifiedAt == null)
                     FilledButton(
                       onPressed: () => _setVerified(d, true),
@@ -208,4 +246,20 @@ String _date(DateTime d) {
   ];
   final l = d.toLocal();
   return '${l.day} ${months[l.month - 1]} ${l.year}';
+}
+
+class _ScanPage extends StatelessWidget {
+  const _ScanPage();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Scan their code')),
+        body: ReaderWidget(
+          codeFormat: Format.qrCode,
+          showGallery: false,
+          onScan: (code) {
+            if (code.isValid && code.text != null) Navigator.of(context).pop(code.text);
+          },
+        ),
+      );
 }

@@ -40,6 +40,12 @@ These are implementation choices within the owner's Phase 8 decisions.
   time) is readable in the file. SQLCipher was the alternative, but its maintained Flutter packages need
   Dart 3.10+ (this toolchain has 3.9.2) and the older ones are end-of-life. This way adds no dependency and
   no cryptography.
+- **The QR scanner is zxing-cpp (`flutter_zxing` 2.2.1), not `mobile_scanner`.** On Android, `mobile_scanner`
+  is built on Google's ML Kit, which reports usage data to Google: that is telemetry, which Skyline forbids.
+  zxing-cpp decodes entirely on the device. Scanning is offered on phones; on a PC you compare digits. The
+  match itself is libsignal's scannable-fingerprint comparison, done in the crypto core.
+- **The app-lock PIN is an Argon2id hash inside the vault**, and the wrong-attempt count and backoff are
+  kept in the core, so force-closing the app does not reset them.
 - **A 409 may carry a structured body** (`PublicBodyException`). The contact graph never answers 409, so
   404s still cannot be told apart.
 
