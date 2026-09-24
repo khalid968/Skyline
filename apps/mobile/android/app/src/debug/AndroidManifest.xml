@@ -4,4 +4,8 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- DEBUG ONLY: plain HTTP to the development server on the host PC
+         (10.0.2.2 from the emulator). Release builds allow HTTPS only. -->
+    <application
+        android:networkSecurityConfig="@xml/network_security_config" />
 </manifest>

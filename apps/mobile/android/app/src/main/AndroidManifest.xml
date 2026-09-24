@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Skyline talks to its server (HTTPS only in release builds). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="skyline"
+        android:label="Skyline"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

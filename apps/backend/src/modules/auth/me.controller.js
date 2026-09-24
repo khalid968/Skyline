@@ -45,7 +45,7 @@ export class MeController {
   @Bind(Req())
   async devices(req) {
     const { rows } = await this.db.query(
-      `SELECT id, name, platform, created_at, last_seen_at
+      `SELECT id, name, platform, created_at, last_seen_at, device_number, identity_key
          FROM devices
         WHERE user_id = $1 AND revoked_at IS NULL
         ORDER BY created_at`,
@@ -58,6 +58,10 @@ export class MeController {
       createdAt: d.created_at,
       lastSeenAt: d.last_seen_at,
       current: d.id === req.account.deviceId,
+      // For checking a first message from your own other devices against the
+      // directory (the same check as for a contact's).
+      deviceNumber: d.device_number,
+      identityKey: d.identity_key ? d.identity_key.toString('base64') : null,
     }));
   }
 

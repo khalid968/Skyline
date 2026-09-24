@@ -1,10 +1,7 @@
-import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../src/rust/api/crypto.dart';
 
@@ -19,7 +16,8 @@ export '../../src/rust/api/crypto.dart'
         OneTimePreKey,
         PreKeyBundle,
         SafetyNumber,
-        SignedPreKey;
+        SignedPreKey,
+        StoredRecord;
 
 /// Where the vault's storage key lives. In the app: the OS keystore (iOS
 /// Keychain, Android Keystore-backed storage, Windows Credential Manager with
@@ -73,17 +71,6 @@ Future<CryptoDevice> openDeviceCrypto({
   }
   return CryptoDevice.open(path: vaultPath, storageKey: key);
 }
-
-/// The device's crypto, opened once per app run. Everything that encrypts,
-/// decrypts or signs goes through this.
-final deviceCryptoProvider = FutureProvider<CryptoDevice>((ref) async {
-  final dir = await getApplicationSupportDirectory();
-  await Directory(dir.path).create(recursive: true);
-  return openDeviceCrypto(
-    vaultPath: '${dir.path}${Platform.pathSeparator}skyline-vault.db',
-    keys: SecureStorageKeyStore(),
-  );
-});
 
 Uint8List _randomKey() {
   final rng = Random.secure();
