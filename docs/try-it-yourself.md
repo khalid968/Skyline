@@ -193,6 +193,58 @@ updates PATH only for new windows.
 The backend must be **restarted** (`npm run migrate:up`, then `npm run start`) to pick up migration 011 and the
 new activation format. The old `npm run dev:device` pretend phone was updated to match.
 
+## Phase 8a: real messaging between two devices
+
+You will run your own server, create two people in the dashboard, and chat between the Windows app and the
+Android emulator.
+
+1. **Update and restart the server** (first terminal):
+
+   ```powershell
+   cd C:\Users\kkhal\Desktop\AI\Skyline\apps\backend
+   npm run migrate:up
+   npm run start
+   ```
+
+   Optional, for Android push: in `apps\backend\.env` add the line
+   `FCM_SERVICE_ACCOUNT_FILE=C:/Users/kkhal/Skyline-secrets/skyline-a090f-firebase-adminsdk-fbsvc-b632fb1e41.json`
+   before starting the server.
+
+2. **In the dashboard** (`cd apps\dashboard; npm run dev`, then open http://localhost:5173): create two
+   members, for example Amina and Omar, and link them to each other on **Contact graph**. Copy each one's
+   activation code.
+
+3. **Windows app**, as Amina:
+
+   ```powershell
+   cd C:\Users\kkhal\Desktop\AI\Skyline\apps\mobile
+   flutter run -d windows
+   ```
+
+   Enter Amina's code and a device name. Omar appears in the chat list.
+
+4. **Android app**, as Omar: start the emulator from Android Studio (Device Manager). If it crashes, start it
+   from PowerShell with `emulator -avd Medium_Phone_API_36.1 -gpu swiftshader_indirect`. Then:
+
+   ```powershell
+   flutter run -d emulator-5554
+   ```
+
+   Enter Omar's code. The emulator reaches your PC's server at `10.0.2.2:3000` automatically.
+
+5. **Talk.** Send from one and watch it arrive on the other: one tick, then two ticks, then the white "read"
+   badge when it is opened. Things to try:
+
+   - Tap a message you sent to see what each mark means.
+   - Tap the clock in a chat to set a disappearing timer. Both sides see a notice.
+   - Tap the name at the top to compare safety numbers. On the phone, "Scan their code" reads the other
+     screen's QR code.
+   - Settings (the gear): turn on app lock with a PIN. Close and reopen: Skyline is locked.
+   - Close the emulator app (swipe it away), then send from Windows: with push configured, the phone shows
+     "Skyline · New message", with nothing about who or what.
+   - Stop the server: the app shows "You are offline", and messages you write wait with a clock, then send
+     when the server is back.
+
 ## Starting over
 
 Your development accounts live in the Docker volume. To wipe everything and start clean:
