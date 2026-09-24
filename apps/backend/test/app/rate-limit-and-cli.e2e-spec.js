@@ -33,7 +33,9 @@ describe('rate limits and operator tools (real Redis, real processes)', () => {
       cwd: BACKEND,
       shell: true,
       encoding: 'utf8',
-      timeout: 60000,
+      // babel-node compiles the CLI on a cold start, which can take over a
+      // minute on Windows when the whole suite is running.
+      timeout: 120000,
       env: { ...process.env, DATABASE_URL: db.url, ...env },
     });
 
@@ -127,7 +129,7 @@ describe('rate limits and operator tools (real Redis, real processes)', () => {
       } finally {
         await fresh.close();
       }
-    }, 90000);
+    }, 180000);
 
     it('admin:create refuses to make a second administrator by accident', () => {
       const r = cli('admin-create', '--username boss2', {

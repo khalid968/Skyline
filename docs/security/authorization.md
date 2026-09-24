@@ -248,9 +248,9 @@ keys never leave the device's encrypted vault.
 
 | Command | Suite | Needs |
 | --- | --- | --- |
-| `npm test` | 109 unit tests (config, redaction, logger, filter, validation, auth crypto, rate-limit guard) | nothing |
-| `npm run test:db` | 78 schema-invariant tests | Postgres up |
-| `npm run test:app` | 200 tests: guards, real-token authentication, WebSocket fan-out, audit, rate limits, CLI tools, admin API and owner protection, dashboard cookie and CSRF, route inventory | Postgres + Redis up |
+| `npm test` | 110 unit tests (config, redaction, logger, filter, validation, auth crypto, rate-limit guard) | nothing |
+| `npm run test:db` | 91 schema-invariant tests (incl. the key directory) | Postgres up |
+| `npm run test:app` | 216 tests: guards, the key directory, real libsignal devices end to end (`crypto-e2e`, needs `cargo build -p skyline_e2e` or it is skipped), real-token authentication, WebSocket fan-out, audit, rate limits, CLI tools, admin API and owner protection, dashboard cookie and CSRF, route inventory | Postgres + Redis up |
 | `npm test` in `apps/dashboard` | 18 dashboard tests (API client, sign-in and 2FA, must-change lock, create user, contact graph, owner read-only) | nothing |
 
 `test:db` and `test:app` build a throwaway database per suite and drop it afterwards. The core

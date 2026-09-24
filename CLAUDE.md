@@ -28,7 +28,16 @@ the current state of play.
   optional 2FA, account page. Backend: `modules/admin/`, migration 010 (protected **owner**,
   `must_change_password`). Session = HttpOnly cookie + CSRF header rule, same-origin via `/api` proxy, **no
   CORS**. 387 backend + 18 dashboard tests pass. Groups & audit viewer are v2 (Phase 11).
-  **Phase 7 (Encryption) is next: needs approval, and Rust is still not installed.**
+- **Phase 7 (Encryption) — ✅ built 2026-09-24**, awaiting the owner's review.
+  - `crypto-core/core`: libsignal v0.103.1 plus an encrypted SQLite key vault. Every device has its own
+    identity, and identity trust is strict.
+  - Backend: migration 011 (the key directory) and activation v2.
+  - `crypto-core/ffi`, `apps/mobile/rust_builder` (cargokit) and `lib/core/crypto/`.
+  - Proven end to end: real devices against the real backend (`crypto-e2e`), and in the app on Windows and
+    Android (`integration_test/crypto_test.dart`). iOS is untested (no Mac).
+  - Tests: 417 backend, 20 Rust, 3 integration. Nine mutation checks were all caught.
+  - **Phase 8 (Messaging) is next and needs approval.** Its first task is the sender-identity check in
+    `known-risks.md`.
 - **Owner decisions 2026-09-21** (`decisions.md`): admins never see message content in v1 (a *disclosed*
   compliance archive may be designed later as an opt-in mode — build nothing toward it now); app lock
   (PIN/biometrics) is always the user's own choice, no admin override; user-set disappearing messages are
@@ -155,8 +164,8 @@ npm run format             # prettier --write "**/*.js"
 
 # Migrations (apps/backend) — plain SQL via node-pg-migrate; needs DATABASE_URL in .env
 npm run migrate:up                       # apply; migrate:down rolls back one; migrate:redo redoes the last
-npm run test:db                          # 78 schema-invariant tests against a throwaway database
-npm run test:app                         # 157 tests: guards, real-token auth, WebSocket, rate limits, CLI, route inventory
+npm run test:db                          # 91 schema-invariant tests against a throwaway database
+npm run test:app                         # 216 tests: guards, auth, admin API, key directory, crypto e2e, WebSocket, rate limits, CLI, route inventory
                                          #   (needs the dev Postgres AND Redis up; each suite drops its own DB)
 npm run migrate:create -- add-something  # scaffold a new .sql migration
 

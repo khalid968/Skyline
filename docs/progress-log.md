@@ -8,6 +8,57 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-24 — Phase 7 BUILT: encryption, verified on Windows and Android
+
+The owner said "let's move where we left off". This session finished the phase.
+
+**Done:**
+
+- **App crypto service:** `lib/core/crypto/device_crypto.dart`. The vault's storage key is 32 bytes from
+  `Random.secure`, kept in `flutter_secure_storage` and never next to the vault file. A vault whose key is
+  lost is refused, never replaced. `RustLib.init()` runs at startup.
+- **Analyzer:** `flutter analyze` is clean. `rust_builder/**` and the generated `lib/src/rust/**` are
+  excluded from analysis.
+- **Integration test** (`integration_test/crypto_test.dart`): 3 tests. They pass **on Windows** (in the real
+  app build) and **on the Android emulator** (x86_64 build; cargokit cross-compiled libsignal).
+- **Backend suite:** the full `test:app` now passes in one run (216 tests). The earlier "hang" was CPU
+  contention with a cargo build. One CLI test was timing-sensitive under full load: `babel-node` cold start
+  took more than 60s. Its time limits were raised (120s for the process, 180s for the test).
+- **Mutation checks:** four more on the key directory, all caught:
+  - the graph check removed from bundle fetch;
+  - one-time keys never marked claimed;
+  - no per-contact fetch limit;
+  - malformed keys accepted.
+
+  With the five crypto-store checks earlier, that is nine in total.
+- **Docs:** decisions (how Phase 7 was built), known risks (Rust and runners closed; iOS untested and
+  sender relabelling open for Phase 8), `authorization.md` (key directory), `try-it-yourself.md` (Phase 7),
+  the roadmap, CLAUDE.md and the mobile README.
+
+**Toolchain additions:** the VS Build Tools needed the "C++ ATL" component for `flutter_secure_storage` on
+Windows. The owner approved the installer's admin prompt.
+
+- Installer quirk: `setup.exe modify` rejects `--wait` (exit code 87); leave that flag out.
+- Emulator quirk: the Android emulator crashed with the default GPU mode on this PC ("A device attached to
+  the system is not functioning"). Start it with `-gpu swiftshader_indirect`.
+
+**Totals:**
+
+- 417 backend tests: 110 unit, 91 db, 216 app.
+- 20 Rust tests.
+- 3 integration tests, run on Windows and on Android.
+- 18 dashboard tests, unchanged.
+
+**Next agent should:**
+
+1. Wait for the owner's review. **Phase 8 (Messaging) needs explicit approval.**
+2. Phase 8's first task: before trusting a session-starting message from an unknown device, check its
+   identity key against the key directory (`known-risks.md`).
+3. The owner must restart their backend (run `npm run migrate:up` first) to get migration 011 and
+   activation v2.
+
+---
+
 ## 2026-09-23 (night, later) — Phase 7 IN PROGRESS (owner closed the session mid-phase)
 
 The owner said "yes go ahead" on Phase 7. Nothing from Phase 7 is pushed; local commits only.

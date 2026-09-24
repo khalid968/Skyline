@@ -33,8 +33,10 @@ See `design.md` for the standing design-review rule.
    with optional 2FA, protected owner. (Group membership moved to dashboard v2, Phase 11 — owner decision.) **This is a hard prerequisite for using Skyline**: accounts
    are created by hand and contacts are assigned by hand, so nobody can sign in until this ships.
 
-7. **Encryption** — `libsignal-client` in `crypto-core`, `flutter_rust_bridge` bindings, on-device key
-   generation and storage, X3DH session establishment, Double Ratchet messaging, safety numbers.
+7. **Encryption** — ✅ built 2026-09-24, awaiting review. libsignal v0.103.1 in `crypto-core`,
+   `flutter_rust_bridge` bindings, an on-device encrypted key vault, the server key directory, PQXDH session
+   setup (libsignal's successor to X3DH), Double Ratchet messaging, safety numbers. Verified in the app on
+   Windows and Android; iOS is untested (no Mac).
 
 8. **Messaging** — private chats, group chats, replies/threads, edit/delete, typing/read/delivered
    receipts, pinned messages, search, reactions, mentions, drafts, archive/mute, disappearing messages.
