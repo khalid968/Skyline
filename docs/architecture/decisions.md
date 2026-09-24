@@ -6,6 +6,40 @@ working around it.
 
 ---
 
+## 2026-09-24 — How messages move (Phase 8a design; boards 16-19 approved)
+
+These are implementation choices within the owner's Phase 8 decisions.
+
+- **One inbox, pulled.** Each device fetches its own encrypted copies from `GET /me/inbox` and acknowledges
+  them. The WebSocket, and later push, only send a content-free nudge (`inbox`) that tells the device to
+  pull. Ciphertext never goes through fan-out, and "online", "woken by push" and "back from offline" are one
+  code path.
+- **The server erases ciphertext on acknowledgement.** The envelope row stays for the delivery tick, with
+  `ciphertext` NULL. A trigger makes that one-way: bytes can never change, and never come back.
+- **Every live device gets a copy:** each of the recipient's devices and each of the sender's OTHER devices
+  (so your PC shows what you sent from your phone). A send that does not cover exactly that set is refused
+  with 409, listing what is missing or unknown. The client fetches the missing bundles and retries. This is
+  Signal's model.
+- **Read receipts are encrypted messages**, indistinguishable from others to the server, which therefore
+  never learns when anyone read anything. **Typing indicators** are encrypted too, relayed only to devices
+  that are online, and never stored.
+- **The disappearing-message timer lives inside the encrypted messages.** Setting it is itself a message,
+  shown as a notice on both sides. Devices delete on their own. The server does not know a chat's timer
+  (`chats.disappear_seconds` stays unused) and has nothing to delete, because it erased the ciphertext on
+  delivery.
+- **"Added a new device" notices come from the client**, generated when a contact's device list grows. A
+  server announcement would be the server vouching for itself; the client's own observation is what a
+  malicious server cannot fake quietly. Before trusting the first message from any device, the client
+  checks its identity key against the key directory (the Phase 8 item in `known-risks.md`).
+- **Server system messages** (the admin rename, a locked decision) reach devices through the same inbox, in
+  order, with a per-device cursor. A new device's cursor starts at "now", so it starts empty.
+- **Messages are idempotent by a client-chosen id**, so a retry after a dropped connection never delivers
+  twice.
+- **A 409 may carry a structured body** (`PublicBodyException`). The contact graph never answers 409, so
+  404s still cannot be told apart.
+
+---
+
 ## 2026-09-24 — Phase 8 (Messaging) scope and ground rules, decided by the owner
 
 - **Phase 8 is split in two, with a review after each.**

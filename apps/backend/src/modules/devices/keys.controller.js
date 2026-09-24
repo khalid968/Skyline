@@ -39,6 +39,14 @@ export class KeysController {
     return this.keys.counts(req.account.deviceId);
   }
 
+  // Bundles for this person's OTHER devices, so a message sent from the phone
+  // is also encrypted for their PC. Same claiming and limits as a contact's.
+  @Get('me/device-keys')
+  @Bind(Req(), Res({ passthrough: true }))
+  ownBundles(req, res) {
+    return this.keys.bundles(req.account, req.account.userId, res);
+  }
+
   // Everything needed to start an encrypted session with each of a contact's
   // devices. Direct link required; anyone else is a 404.
   @Get('users/:userId/keys')

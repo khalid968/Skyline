@@ -30,10 +30,10 @@ Private to the owner. Current boards:
 | 13 · Privacy & security (mobile) | Approved 2026-09-23 — app lock, default disappearing timer |
 | 14 · App locked (mobile) | Approved 2026-09-23 — PIN pad works in Play |
 | 15 · Disappearing-message timer (mobile) | Approved 2026-09-23 — presets to 1 year plus custom; announced in the chat |
-| 16 · Message status (mobile) | Phase 8a, awaiting approval: sending, sent, delivered, read and not-sent marks; tap for details |
-| 17 · Security notices in a chat (mobile) | Phase 8a, awaiting approval: new device, admin rename, blocked message with a mismatched key |
-| 18 · No contacts yet (mobile) | Phase 8a, awaiting approval: empty chat list, no search |
-| 19 · Offline and reconnecting (mobile) | Phase 8a, awaiting approval: offline banner, queued messages |
+| 16 · Message status (mobile) | Approved 2026-09-24: sending, sent, delivered, read and not-sent marks; tap for details |
+| 17 · Security notices in a chat (mobile) | Approved 2026-09-24: new device, admin rename, blocked message with a mismatched key |
+| 18 · No contacts yet (mobile) | Approved 2026-09-24: empty chat list, no search |
+| 19 · Offline and reconnecting (mobile) | Approved 2026-09-24: offline banner, queued messages |
 
 Boards 2–7 are clickable in Play mode. Board 7 has working toggles.
 

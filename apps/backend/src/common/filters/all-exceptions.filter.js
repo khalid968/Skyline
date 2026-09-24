@@ -66,7 +66,8 @@ function messageOf(status, exception) {
 
 // For the rare server error whose body the thrower has deliberately decided is
 // safe to publish, such as the up/down list in a readiness failure. Honoured
-// for 5xx only: a 4xx body must stay generic (see the sameness rule above), so
+// for 5xx, and for 409 (a send whose device list is stale lists the devices to
+// fix). Every other 4xx body stays generic (see the sameness rule above), so
 // this can never be used to make a 404 distinguishable from another 404.
 export class PublicBodyException extends HttpException {
   constructor(status, body) {
@@ -99,7 +100,10 @@ export class AllExceptionsFilter {
 
     if (res.headersSent) return;
 
-    if (exception instanceof PublicBodyException && status >= 500) {
+    if (
+      exception instanceof PublicBodyException &&
+      (status >= 500 || status === 409)
+    ) {
       res.status(status).json(exception.publicBody);
       return;
     }

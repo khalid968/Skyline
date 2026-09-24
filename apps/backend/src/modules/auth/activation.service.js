@@ -105,9 +105,12 @@ export class ActivationService {
         }
 
         await client.query(
+          // system_seq starts at the newest message: a new device starts
+          // empty (decisions.md, Phase 8), with no old system notices either.
           `INSERT INTO devices (id, user_id, name, platform, signing_key,
-                                identity_key, registration_id, device_number)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                                identity_key, registration_id, device_number, system_seq)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+                   (SELECT COALESCE(max(seq), 0) FROM messages))`,
           [
             deviceId,
             userId,

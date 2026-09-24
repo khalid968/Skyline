@@ -5,7 +5,10 @@ import {
   Logger,
 } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
-import { RateLimitService, enforceLimit } from '../../common/rate-limit/rate-limit';
+import {
+  RateLimitService,
+  enforceLimit,
+} from '../../common/rate-limit/rate-limit';
 
 // The key directory: devices publish PUBLIC prekeys here, and a device that
 // wants to start an encrypted conversation fetches a bundle for each of the
@@ -208,9 +211,10 @@ export class KeysService {
            FROM devices d
            JOIN signed_prekeys s ON s.device_id = d.id AND s.superseded_at IS NULL
           WHERE d.user_id = $1 AND d.revoked_at IS NULL
+            AND d.id <> $2
             AND d.identity_key IS NOT NULL AND d.device_number IS NOT NULL
           ORDER BY d.device_number`,
-        [targetUserId],
+        [targetUserId, caller.deviceId],
       );
 
       const bundles = [];

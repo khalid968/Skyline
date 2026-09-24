@@ -14,13 +14,22 @@ import { newDeviceKey, newIdentityKey, activationFields } from './device-key';
 // Shapes of real libsignal public keys (content is random: the server never
 // uses them, and cannot check signatures by design).
 const b64 = (buf) => buf.toString('base64');
-const ecKey = () => b64(Buffer.concat([Buffer.from([5]), crypto.randomBytes(32)]));
+const ecKey = () =>
+  b64(Buffer.concat([Buffer.from([5]), crypto.randomBytes(32)]));
 const kyberKey = () =>
   b64(Buffer.concat([Buffer.from([8]), crypto.randomBytes(1568)]));
 const signature = () => b64(crypto.randomBytes(64));
 
-const signed = (keyId) => ({ keyId, publicKey: ecKey(), signature: signature() });
-const kyber = (keyId) => ({ keyId, publicKey: kyberKey(), signature: signature() });
+const signed = (keyId) => ({
+  keyId,
+  publicKey: ecKey(),
+  signature: signature(),
+});
+const kyber = (keyId) => ({
+  keyId,
+  publicKey: kyberKey(),
+  signature: signature(),
+});
 const oneTime = (keyId) => ({ keyId, publicKey: ecKey() });
 const range = (from, n) => Array.from({ length: n }, (_, i) => from + i);
 
@@ -120,14 +129,19 @@ describe('key directory (real tokens, real database)', () => {
       const code = await issueCode(user.id);
       const fields = activationFields(code, key);
       const attempts = {
-        'identity swapped after signing': { ...fields, identityKey: newIdentityKey() },
+        'identity swapped after signing': {
+          ...fields,
+          identityKey: newIdentityKey(),
+        },
         'registration id swapped after signing': {
           ...fields,
           registrationId: (key.registrationId % 16383) + 1,
         },
         'not a Curve25519 key (wrong type byte)': (() => {
           const k = { ...key };
-          k.identityKey = b64(Buffer.concat([Buffer.from([6]), crypto.randomBytes(32)]));
+          k.identityKey = b64(
+            Buffer.concat([Buffer.from([6]), crypto.randomBytes(32)]),
+          );
           return activationFields(code, k);
         })(),
       };
@@ -135,7 +149,11 @@ describe('key directory (real tokens, real database)', () => {
         const res = await api()
           .post('/auth/activate')
           .send({ code, deviceName: 'Phone', platform: 'ios', ...body });
-        expect([label, res.status, res.body.message]).toEqual([label, 401, 'Unauthorized']);
+        expect([label, res.status, res.body.message]).toEqual([
+          label,
+          401,
+          'Unauthorized',
+        ]);
       }
       // ...and the code was not spent by any of them.
       const res = await api()
@@ -151,14 +169,24 @@ describe('key directory (real tokens, real database)', () => {
       const firstCode = await issueCode(a.id);
       const ok = await api()
         .post('/auth/activate')
-        .send({ code: firstCode, deviceName: 'P', platform: 'ios', ...activationFields(firstCode, key) });
+        .send({
+          code: firstCode,
+          deviceName: 'P',
+          platform: 'ios',
+          ...activationFields(firstCode, key),
+        });
       expect(ok.status).toBe(201);
 
       const clone = { ...newDeviceKey(), identityKey: key.identityKey };
       const code = await issueCode(b.id);
       const res = await api()
         .post('/auth/activate')
-        .send({ code, deviceName: 'P', platform: 'ios', ...activationFields(code, clone) });
+        .send({
+          code,
+          deviceName: 'P',
+          platform: 'ios',
+          ...activationFields(code, clone),
+        });
       expect(res.status).toBe(401);
     });
   });
@@ -181,7 +209,10 @@ describe('key directory (real tokens, real database)', () => {
 
     it('rotating the signed prekey replaces the one that is served', async () => {
       const m = await member('rotator');
-      const res = await api().put('/me/keys').set(m.h).send({ signedPreKey: signed(2) });
+      const res = await api()
+        .put('/me/keys')
+        .set(m.h)
+        .send({ signedPreKey: signed(2) });
       expect(res.body.signedPreKey.keyId).toBe(2);
     });
 
@@ -191,7 +222,11 @@ describe('key directory (real tokens, real database)', () => {
         .put('/me/keys')
         .set(m.h)
         .send({
-          signedPreKey: { keyId: 1, publicKey: b64(crypto.randomBytes(33)), signature: signature() },
+          signedPreKey: {
+            keyId: 1,
+            publicKey: b64(crypto.randomBytes(33)),
+            signature: signature(),
+          },
           oneTimePreKeys: [oneTime(1), oneTime(1)],
           kyberPreKeys: [{ ...kyber(1), publicKey: ecKey().padEnd(1400, 'A') }],
         });
@@ -204,18 +239,31 @@ describe('key directory (real tokens, real database)', () => {
         ]),
       );
       const counts = await api().get('/me/keys').set(m.h);
-      expect(counts.body).toMatchObject({ oneTimePreKeys: 0, signedPreKey: null });
+      expect(counts.body).toMatchObject({
+        oneTimePreKeys: 0,
+        signedPreKey: null,
+      });
     });
 
     it('rejects an empty upload, unknown fields, and a key id used before', async () => {
       const m = await member('repeat');
       expect((await api().put('/me/keys').set(m.h).send({})).status).toBe(400);
       expect(
-        (await api().put('/me/keys').set(m.h).send({ oneTimePreKeys: [oneTime(50)], extra: 1 })).status,
+        (
+          await api()
+            .put('/me/keys')
+            .set(m.h)
+            .send({ oneTimePreKeys: [oneTime(50)], extra: 1 })
+        ).status,
       ).toBe(400);
-      const reuse = await api().put('/me/keys').set(m.h).send({ oneTimePreKeys: [oneTime(1)] });
+      const reuse = await api()
+        .put('/me/keys')
+        .set(m.h)
+        .send({ oneTimePreKeys: [oneTime(1)] });
       expect(reuse.status).toBe(400);
-      expect(reuse.body.message).toEqual(['a keyId in this upload was already used by this device']);
+      expect(reuse.body.message).toEqual([
+        'a keyId in this upload was already used by this device',
+      ]);
     });
 
     it(`caps unused one-time keys at ${MAX_UNCLAIMED} per device`, async () => {
@@ -235,9 +283,12 @@ describe('key directory (real tokens, real database)', () => {
     });
 
     it('is a member route: a dashboard session cannot publish keys', async () => {
-      const res = await api().put('/me/keys').set(bearer(`ska_${'A'.repeat(43)}`)).send({
-        oneTimePreKeys: [oneTime(1)],
-      });
+      const res = await api()
+        .put('/me/keys')
+        .set(bearer(`ska_${'A'.repeat(43)}`))
+        .send({
+          oneTimePreKeys: [oneTime(1)],
+        });
       expect(res.status).toBe(401);
     });
   });
@@ -262,8 +313,16 @@ describe('key directory (real tokens, real database)', () => {
         deviceNumber: 1,
         registrationId: bob.key.registrationId,
         identityKey: bob.key.identityKey,
-        signedPreKey: { keyId: 1, publicKey: expect.any(String), signature: expect.any(String) },
-        kyberPreKey: { keyId: 1, publicKey: expect.any(String), signature: expect.any(String) },
+        signedPreKey: {
+          keyId: 1,
+          publicKey: expect.any(String),
+          signature: expect.any(String),
+        },
+        kyberPreKey: {
+          keyId: 1,
+          publicKey: expect.any(String),
+          signature: expect.any(String),
+        },
         preKey: { keyId: 1, publicKey: expect.any(String) },
       });
     });
@@ -291,7 +350,12 @@ describe('key directory (real tokens, real database)', () => {
       const alice = await member('alice3');
       const stranger = await member('stranger');
       const formerFriend = await member('former');
-      const linkId = await link(db.client, alice.user.id, formerFriend.user.id, issuer.id);
+      const linkId = await link(
+        db.client,
+        alice.user.id,
+        formerFriend.user.id,
+        issuer.id,
+      );
       await db.client.query(
         'UPDATE contact_links SET revoked_at = now(), revoked_by = $2 WHERE id = $1',
         [linkId, issuer.id],
@@ -300,7 +364,7 @@ describe('key directory (real tokens, real database)', () => {
       const cases = {
         'a stranger': stranger.user.id,
         'a revoked link': formerFriend.user.id,
-        'yourself': alice.user.id,
+        yourself: alice.user.id,
         'nobody at all': crypto.randomUUID(),
         'not an id': 'not-a-uuid',
       };
@@ -321,7 +385,10 @@ describe('key directory (real tokens, real database)', () => {
       const alice = await member('alice4');
       const bob = await member('bob4');
       await link(db.client, alice.user.id, bob.user.id, issuer.id);
-      await db.client.query('UPDATE devices SET revoked_at = now() WHERE id = $1', [bob.deviceId]);
+      await db.client.query(
+        'UPDATE devices SET revoked_at = now() WHERE id = $1',
+        [bob.deviceId],
+      );
       const res = await fetchKeys(alice, bob.user.id);
       expect(res.body.devices).toEqual([]);
     });
@@ -340,7 +407,9 @@ describe('key directory (real tokens, real database)', () => {
       const bob = await member('drained', { oneTimeCount: 10 });
       await link(db.client, alice.user.id, bob.user.id, issuer.id);
       const get = () =>
-        request(strict.app.getHttpServer()).get(`/users/${bob.user.id}/keys`).set(alice.h);
+        request(strict.app.getHttpServer())
+          .get(`/users/${bob.user.id}/keys`)
+          .set(alice.h);
 
       expect((await get()).status).toBe(200);
       expect((await get()).status).toBe(200);

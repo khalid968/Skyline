@@ -170,7 +170,11 @@ describe('key directory (database layer)', () => {
         const err = await failure(q(sql, [rows[0].id, signalPublicKey()]));
         expect(err.code).toBe(SQLSTATE.check);
       }
-      for (const table of ['one_time_prekeys', 'kyber_prekeys', 'signed_prekeys']) {
+      for (const table of [
+        'one_time_prekeys',
+        'kyber_prekeys',
+        'signed_prekeys',
+      ]) {
         const err = await failure(q(`TRUNCATE ${table}`));
         expect([table, err.code]).toEqual([table, SQLSTATE.check]);
       }

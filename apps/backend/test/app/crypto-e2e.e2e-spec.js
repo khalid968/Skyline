@@ -31,7 +31,9 @@ const haveTool = fs.existsSync(TOOL);
 const suite = haveTool ? describe : describe.skip;
 if (!haveTool) {
   // eslint-disable-next-line no-console
-  console.warn(`crypto e2e skipped: build ${TOOL} first (cargo build -p skyline_e2e)`);
+  console.warn(
+    `crypto e2e skipped: build ${TOOL} first (cargo build -p skyline_e2e)`,
+  );
 }
 
 suite('crypto end to end (real libsignal devices, real backend)', () => {
@@ -56,8 +58,14 @@ suite('crypto end to end (real libsignal devices, real backend)', () => {
 
   const code = async (userId) =>
     normalizeActivationCode(
-      (await issueActivationCode(db.client, { pepper, userId, issuedBy: issuer.id, audit }))
-        .code,
+      (
+        await issueActivationCode(db.client, {
+          pepper,
+          userId,
+          issuedBy: issuer.id,
+          audit,
+        })
+      ).code,
     );
 
   // Asynchronous on purpose: the server under test runs in THIS process, so a
@@ -96,7 +104,9 @@ suite('crypto end to end (real libsignal devices, real backend)', () => {
     const { rows } = await db.client.query(
       'SELECT user_id, identity_key FROM devices ORDER BY created_at',
     );
-    const byUser = Object.fromEntries(rows.map((d) => [d.user_id, d.identity_key.toString('base64')]));
+    const byUser = Object.fromEntries(
+      rows.map((d) => [d.user_id, d.identity_key.toString('base64')]),
+    );
     expect(byUser[alice.id]).toBe(out.alice.identityKey);
     expect(byUser[bob.id]).toBe(out.bob.identityKey);
 
@@ -106,7 +116,9 @@ suite('crypto end to end (real libsignal devices, real backend)', () => {
       SELECT DISTINCT octet_length(public_key) AS n FROM signed_prekeys
       UNION SELECT DISTINCT octet_length(public_key) FROM one_time_prekeys
       UNION SELECT DISTINCT octet_length(public_key) FROM kyber_prekeys`);
-    expect(sizes.rows.map((x) => x.n).sort((a, b) => a - b)).toEqual([33, 1569]);
+    expect(sizes.rows.map((x) => x.n).sort((a, b) => a - b)).toEqual([
+      33, 1569,
+    ]);
   }, 120000);
 
   it('without a contact link, the key directory refuses (404) and no session can start', async () => {
