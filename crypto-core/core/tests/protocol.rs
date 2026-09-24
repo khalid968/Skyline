@@ -544,3 +544,34 @@ fn records_are_sealed_ordered_and_deletable() {
         1
     );
 }
+
+#[test]
+fn app_lock_pin_checks_and_backs_off() {
+    let d = Device::new(ALICE, 1);
+    assert!(!d.crypto.has_app_lock_pin().unwrap());
+    assert!(d.crypto.set_app_lock_pin("12345".into()).is_err());
+    assert!(d.crypto.set_app_lock_pin("12345a".into()).is_err());
+    d.crypto.set_app_lock_pin("482915".into()).unwrap();
+    assert!(d.crypto.has_app_lock_pin().unwrap());
+
+    assert!(d.crypto.check_app_lock_pin("482915".into()).unwrap().ok);
+    for i in 1..=4 {
+        let c = d.crypto.check_app_lock_pin("000000".into()).unwrap();
+        assert!(!c.ok);
+        assert_eq!(c.wait_seconds, 0, "attempt {i} waits no time");
+    }
+    let fifth = d.crypto.check_app_lock_pin("000000".into()).unwrap();
+    assert_eq!(fifth.wait_seconds, 30);
+    // While waiting, even the right PIN is not accepted.
+    let blocked = d.crypto.check_app_lock_pin("482915".into()).unwrap();
+    assert!(!blocked.ok && blocked.wait_seconds > 0);
+
+    // The PIN is not stored in the clear anywhere in the vault.
+    assert!(!contains(
+        &d.crypto.raw_vault_for_tests().concat(),
+        b"482915"
+    ));
+
+    d.crypto.clear_app_lock_pin().unwrap();
+    assert!(!d.crypto.has_app_lock_pin().unwrap());
+}

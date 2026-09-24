@@ -1,5 +1,7 @@
 package com.skyline.skyline
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// FlutterFragmentActivity: the biometric prompt (app lock, local_auth) needs
+// a FragmentActivity host.
+class MainActivity : FlutterFragmentActivity()

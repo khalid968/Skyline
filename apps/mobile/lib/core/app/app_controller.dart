@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../features/auth/data/activation_service.dart';
 import '../../features/messages/data/local_store.dart';
 import '../../features/messages/data/messenger.dart';
+import '../../features/settings/data/app_lock.dart';
 import '../api/api_client.dart';
 import '../api/session.dart';
 import '../config.dart';
@@ -33,6 +34,7 @@ class AppController extends ChangeNotifier {
   LocalStore? store;
   Messenger? messenger;
   ActivationService? activation;
+  AppLock? lock;
 
   Future<void> boot() async {
     try {
@@ -41,6 +43,8 @@ class AppController extends ChangeNotifier {
       api = ApiClient(base: AppConfig.apiBase, sessions: sessions, crypto: crypto!);
       store = LocalStore(crypto!);
       activation = ActivationService(api: api!, crypto: crypto!, sessions: sessions);
+      lock = AppLock(crypto: crypto!, store: store!);
+      await lock!.load();
       final session = await sessions.read();
       if (session == null) {
         phase = AppPhase.activate;

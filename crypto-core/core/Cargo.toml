@@ -30,3 +30,5 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 uuid = "1"
 thiserror = "2"
 zeroize = "1.8"
+# App-lock PIN hashing (Argon2id, RustCrypto; same version libsignal uses).
+argon2 = "0.5"

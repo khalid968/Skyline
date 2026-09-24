@@ -11,6 +11,10 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CryptoDevice>>
 abstract class CryptoDevice implements RustOpaqueInterface {
+  Future<PinCheck> checkAppLockPin({required String pin});
+
+  Future<void> clearAppLockPin();
+
   /// `directory_identity_key`: the key directory's identity key for the
   /// sending device. Required for a first message from an unseen device.
   Future<Uint8List> decrypt(
@@ -29,6 +33,8 @@ abstract class CryptoDevice implements RustOpaqueInterface {
       required List<int> plaintext});
 
   Future<Uint8List?> getRecord({required String kind, required String id});
+
+  Future<bool> hasAppLockPin();
 
   Future<bool> hasSession({required String userId, required int deviceNumber});
 
@@ -70,6 +76,8 @@ abstract class CryptoDevice implements RustOpaqueInterface {
       {required String theirUserId,
       required int theirDeviceNumber,
       required List<int> theirIdentityKey});
+
+  Future<void> setAppLockPin({required String pin});
 
   Future<void> setLocalAddress(
       {required String userId, required int deviceNumber});
@@ -185,6 +193,27 @@ class OneTimePreKey {
           runtimeType == other.runtimeType &&
           keyId == other.keyId &&
           publicKey == other.publicKey;
+}
+
+class PinCheck {
+  final bool ok;
+  final int waitSeconds;
+
+  const PinCheck({
+    required this.ok,
+    required this.waitSeconds,
+  });
+
+  @override
+  int get hashCode => ok.hashCode ^ waitSeconds.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PinCheck &&
+          runtimeType == other.runtimeType &&
+          ok == other.ok &&
+          waitSeconds == other.waitSeconds;
 }
 
 class PreKeyBundle {

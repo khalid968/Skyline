@@ -104,6 +104,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  PinCheck dco_decode_pin_check(dynamic raw);
+
+  @protected
   PreKeyBundle dco_decode_pre_key_bundle(dynamic raw);
 
   @protected
@@ -213,6 +216,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  PinCheck sse_decode_pin_check(SseDeserializer deserializer);
 
   @protected
   PreKeyBundle sse_decode_pre_key_bundle(SseDeserializer deserializer);
@@ -332,6 +338,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_list_prim_u_8_strict(
       Uint8List? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pin_check(PinCheck self, SseSerializer serializer);
 
   @protected
   void sse_encode_pre_key_bundle(PreKeyBundle self, SseSerializer serializer);

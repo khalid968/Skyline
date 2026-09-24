@@ -81,6 +81,11 @@ pub struct StoredRecord {
     pub value: Vec<u8>,
 }
 
+pub struct PinCheck {
+    pub ok: bool,
+    pub wait_seconds: u32,
+}
+
 pub struct SafetyNumber {
     pub displayable: String,
     pub scannable: Vec<u8>,
@@ -226,6 +231,28 @@ impl CryptoDevice {
         Ok(SafetyNumber {
             displayable: s.displayable,
             scannable: s.scannable,
+        })
+    }
+
+    // App lock (board 14): Argon2id PIN in the vault, with backoff.
+
+    pub fn set_app_lock_pin(&self, pin: String) -> Result<()> {
+        Ok(self.0.set_app_lock_pin(pin)?)
+    }
+
+    pub fn clear_app_lock_pin(&self) -> Result<()> {
+        Ok(self.0.clear_app_lock_pin()?)
+    }
+
+    pub fn has_app_lock_pin(&self) -> Result<bool> {
+        Ok(self.0.has_app_lock_pin()?)
+    }
+
+    pub fn check_app_lock_pin(&self, pin: String) -> Result<PinCheck> {
+        let c = self.0.check_app_lock_pin(pin)?;
+        Ok(PinCheck {
+            ok: c.ok,
+            wait_seconds: c.wait_seconds,
         })
     }
 

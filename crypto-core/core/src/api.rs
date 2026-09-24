@@ -33,6 +33,8 @@ const META_LOCAL_ADDRESS: &[u8] = b"local-address";
 const META_NEXT_PREKEY: &[u8] = b"next-prekey-id";
 const META_NEXT_SIGNED: &[u8] = b"next-signed-prekey-id";
 const META_NEXT_KYBER: &[u8] = b"next-kyber-prekey-id";
+const META_PIN_HASH: &[u8] = b"app-lock-pin";
+const META_PIN_STATE: &[u8] = b"app-lock-attempts";
 
 /// Key ids are 24-bit, as in Signal and in the server's key directory.
 const MAX_KEY_ID: u32 = 0x00FF_FFFF;
@@ -86,6 +88,13 @@ pub enum EnvelopeKind {
 pub struct Envelope {
     pub kind: EnvelopeKind,
     pub body: Vec<u8>,
+}
+
+/// The answer to a PIN attempt (board 14).
+pub struct PinCheck {
+    pub ok: bool,
+    /// Seconds before another attempt is accepted (0 = now).
+    pub wait_seconds: u32,
 }
 
 /// One of the app's records, unsealed.
@@ -465,6 +474,83 @@ impl SkylineCrypto {
         })
     }
 
+    // ------------------------------------------------------------ app lock
+
+    /// Sets (or replaces) the 6-digit app-lock PIN. Stored as an Argon2id hash
+    /// inside the vault, so it is both encrypted and slow to guess.
+    pub fn set_app_lock_pin(&self, pin: String) -> Result<()> {
+        use argon2::password_hash::{PasswordHasher, SaltString};
+        if pin.len() != 6 || !pin.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(CryptoError::invalid("the PIN must be 6 digits"));
+        }
+        let mut salt = [0u8; 16];
+        rng().fill_bytes(&mut salt);
+        let salt = SaltString::encode_b64(&salt).map_err(protocol)?;
+        let hash = argon2::Argon2::default()
+            .hash_password(pin.as_bytes(), &salt)
+            .map_err(protocol)?
+            .to_string();
+        self.atomic(|vault| {
+            vault.put(META, META_PIN_HASH, hash.as_bytes())?;
+            vault.put(META, META_PIN_STATE, &pin_state(0, 0))
+        })
+    }
+
+    pub fn clear_app_lock_pin(&self) -> Result<()> {
+        self.atomic(|vault| {
+            vault.delete(META, META_PIN_HASH)?;
+            vault.delete(META, META_PIN_STATE)
+        })
+    }
+
+    pub fn has_app_lock_pin(&self) -> Result<bool> {
+        Ok(self.lock().get(META, META_PIN_HASH)?.is_some())
+    }
+
+    /// Checks a PIN. After 5 wrong PINs each further attempt waits 30 s, then
+    /// 60 s, 120 s and so on (board 14). The count lives in the vault, so
+    /// closing the app does not reset it. A correct PIN resets it.
+    pub fn check_app_lock_pin(&self, pin: String) -> Result<PinCheck> {
+        use argon2::password_hash::{PasswordHash, PasswordVerifier};
+        self.atomic(|vault| {
+            let Some(stored) = vault.get(META, META_PIN_HASH)? else {
+                return Err(CryptoError::invalid("no PIN is set"));
+            };
+            let (failures, until) = read_pin_state(vault.get(META, META_PIN_STATE)?);
+            let now = unix_seconds();
+            if now < until {
+                return Ok(PinCheck {
+                    ok: false,
+                    wait_seconds: (until - now) as u32,
+                });
+            }
+            let text =
+                String::from_utf8(stored).map_err(|_| CryptoError::storage("bad PIN hash"))?;
+            let parsed = PasswordHash::new(&text).map_err(protocol)?;
+            let ok = argon2::Argon2::default()
+                .verify_password(pin.as_bytes(), &parsed)
+                .is_ok();
+            if ok {
+                vault.put(META, META_PIN_STATE, &pin_state(0, 0))?;
+                return Ok(PinCheck {
+                    ok: true,
+                    wait_seconds: 0,
+                });
+            }
+            let failures = failures + 1;
+            let wait = if failures >= 5 {
+                30u64.saturating_mul(1u64 << (failures - 5).min(10))
+            } else {
+                0
+            };
+            vault.put(META, META_PIN_STATE, &pin_state(failures, now + wait))?;
+            Ok(PinCheck {
+                ok: false,
+                wait_seconds: wait as u32,
+            })
+        })
+    }
+
     // ------------------------------------------------ the app's own records
 
     /// Stores (or replaces) one of the app's records, sealed in the vault:
@@ -518,6 +604,29 @@ impl SkylineCrypto {
 }
 
 // ------------------------------------------------------------------ helpers
+
+fn unix_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn pin_state(failures: u32, until: u64) -> Vec<u8> {
+    let mut v = failures.to_le_bytes().to_vec();
+    v.extend_from_slice(&until.to_le_bytes());
+    v
+}
+
+fn read_pin_state(raw: Option<Vec<u8>>) -> (u32, u64) {
+    match raw {
+        Some(v) if v.len() == 12 => (
+            u32::from_le_bytes(v[0..4].try_into().unwrap()),
+            u64::from_le_bytes(v[4..12].try_into().unwrap()),
+        ),
+        _ => (0, 0),
+    }
+}
 
 fn protocol(e: impl std::fmt::Display) -> CryptoError {
     CryptoError::protocol(e.to_string())

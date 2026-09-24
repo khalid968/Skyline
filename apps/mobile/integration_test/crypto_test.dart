@@ -118,4 +118,18 @@ void main() {
       }
     }
   });
+
+  testWidgets('the app-lock PIN is checked in the core and backs off', (_) async {
+    final d = await CryptoDevice.openInMemory();
+    expect(await d.hasAppLockPin(), isFalse);
+    await d.setAppLockPin(pin: '274810');
+    expect((await d.checkAppLockPin(pin: '274810')).ok, isTrue);
+    for (var i = 0; i < 4; i++) {
+      final r = await d.checkAppLockPin(pin: '000000');
+      expect(r.ok, isFalse);
+      expect(r.waitSeconds, 0);
+    }
+    expect((await d.checkAppLockPin(pin: '000000')).waitSeconds, 30);
+    expect((await d.checkAppLockPin(pin: '274810')).ok, isFalse, reason: 'still waiting');
+  });
 }

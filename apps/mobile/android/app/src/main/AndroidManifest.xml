@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Skyline talks to its server (HTTPS only in release builds). -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- App lock with fingerprint or face (the user's own choice). -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <application
         android:label="Skyline"
         android:name="${applicationName}"
