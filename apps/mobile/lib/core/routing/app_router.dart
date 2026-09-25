@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/messages/presentation/search_screen.dart';
 import '../../features/messages/presentation/group_info_screen.dart';
 import '../../features/media/presentation/media_gallery_screen.dart';
 import '../../features/auth/presentation/activation_screen.dart';
@@ -34,6 +35,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/problem', builder: (context, state) => _Problem(locked: app.phase == AppPhase.vaultLocked)),
       GoRoute(path: '/', builder: (context, state) => const ChatListScreen()),
       GoRoute(path: '/settings', builder: (context, state) => const PrivacyScreen()),
+      GoRoute(path: '/search', builder: (context, state) => const SearchScreen()),
       GoRoute(
         path: '/chat/:peer',
         builder: (context, s) => ConversationScreen(peer: s.pathParameters['peer']!),

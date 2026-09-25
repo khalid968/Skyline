@@ -40,17 +40,31 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   final Map<String, String> _mentioned = {};
   String? _mentionQuery;
   int _pin = 0;
+  Timer? _draftTimer;
 
   @override
   void initState() {
     super.initState();
     messenger.openChat = widget.peer;
     unawaited(messenger.markRead(widget.peer));
+    // Board 26: pick up where you left off.
+    messenger.draft(widget.peer).then((d) {
+      if (d != null && mounted && _input.text.isEmpty) _input.text = d;
+    });
+    _input.addListener(_draftSoon);
+  }
+
+  void _draftSoon() {
+    if (_editing != null) return; // an edit is not a draft
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 600), () => messenger.saveDraft(widget.peer, _input.text));
   }
 
   @override
   void dispose() {
     if (messenger.openChat == widget.peer) messenger.openChat = null;
+    _draftTimer?.cancel();
+    if (_editing == null) unawaited(messenger.saveDraft(widget.peer, _input.text));
     _input.dispose();
     super.dispose();
   }

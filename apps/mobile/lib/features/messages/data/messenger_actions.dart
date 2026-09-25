@@ -35,6 +35,7 @@ extension MessageActions on Messenger {
       ..text = text
       ..editedAt = now;
     await store.putMessage(m);
+    await _refreshPreview(m.peerUserId);
     changed();
     await _sendControl(m.peerUserId, {'type': 'edit', 'target': m.id, 'body': text, 'sentAt': now.millisecondsSinceEpoch});
   }
@@ -151,6 +152,7 @@ extension MessageActions on Messenger {
           ..text = body
           ..editedAt = sentAt;
         await store.putMessage(m);
+        await _refreshPreview(peer);
       case 'delete':
         if (!byAuthor || m.deleted) return;
         if (sentAt.difference(m.sentAt) > deleteWindow + _slack) return;
@@ -183,7 +185,28 @@ extension MessageActions on Messenger {
     await store.putMessage(m);
     final chat = await store.chat(m.peerUserId);
     if (chat != null && chat.pins.remove(m.id)) await store.putChat(chat);
+    await _refreshPreview(m.peerUserId);
     changed();
+  }
+
+  /// The chat list's line follows the newest message after an edit or a
+  /// deletion, so it never shows words that were taken back.
+  Future<void> _refreshPreview(String peer) async {
+    final chat = await store.chat(peer);
+    if (chat == null) return;
+    final latest = (await store.messages(peer, limit: 30)).where((x) => !x.isNotice).firstOrNull;
+    if (latest == null) return;
+    final body = latest.deleted ? 'This message was deleted' : _preview(latest);
+    final who = !chat.isGroup
+        ? ''
+        : latest.fromMe
+            ? 'You: '
+            : '${(latest.senderName ?? 'Someone').split(' ').first}: ';
+    final line = '$who$body';
+    if (chat.lastText != line) {
+      chat.lastText = line;
+      await store.putChat(chat);
+    }
   }
 
   Future<void> _applyPin(LocalMessage m, bool pinned, {required bool byMe, String? name, required DateTime at}) async {

@@ -13,8 +13,10 @@ import 'package:skyline/core/app/app_controller.dart';
 import 'package:skyline/core/realtime/realtime_client.dart';
 import 'package:skyline/core/theme/app_theme.dart';
 import 'package:skyline/features/messages/data/messenger.dart';
+import 'package:skyline/features/chats/presentation/chat_list_screen.dart';
 import 'package:skyline/features/messages/presentation/conversation_screen.dart';
 import 'package:skyline/features/messages/presentation/group_info_screen.dart';
+import 'package:skyline/features/messages/presentation/search_screen.dart';
 import 'package:skyline/src/rust/frb_generated.dart';
 
 import 'messaging_test.dart' show device, eventually;
@@ -117,6 +119,22 @@ void main() {
     await _shot(tester, '28-message-actions');
     await _show(tester, alice, const GroupInfoScreen(groupId: groupId));
     await _shot(tester, '29-group-info');
+
+    // Board 26: the chat list, with a muted group and a draft; board 30: search.
+    await tester.runAsync(() async {
+      await alice.setMuted(groupId, true);
+      final bobId = alice.contacts.first.userId;
+      await alice.saveDraft(bobId, 'I will bring the survey on');
+    });
+    await _show(tester, alice, const ChatListScreen());
+    await _shot(tester, '26-chat-list');
+    await _show(tester, alice, const SearchScreen());
+    await tester.enterText(find.byType(TextField), 'gate');
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 150)));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await _shot(tester, '30-search');
     await tester.runAsync(() async {
       alice.dispose();
       bob.dispose();

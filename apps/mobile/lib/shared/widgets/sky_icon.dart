@@ -41,6 +41,8 @@ enum SkyIcons {
   pin('<path d="M9 4h6l-1 6 3 3H7l3-3Z"/><path d="M12 16v4.5"/>'),
   info('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.8h.01"/>'),
   trash('<path d="M4.5 6.5h15"/><path d="M9.5 6.5V4.5h5v2"/><path d="m6.5 6.5 1 13h9l1-13"/>'),
+  search('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>'),
+  archive('<rect x="3.5" y="4.5" width="17" height="4.5" rx="1.2"/><path d="M5 9v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V9"/><path d="M10 13h4"/>'),
   bellOff('<path d="M18 8.5a6 6 0 0 0-11.2-3"/><path d="M6 8.5c0 7-3 9-3 9h13"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><path d="m3 3 18 18"/>');
 
   const SkyIcons(this.paths);

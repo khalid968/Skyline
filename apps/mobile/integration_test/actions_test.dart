@@ -77,6 +77,8 @@ void main() {
     await bob.deleteForEveryone(answer.id);
     final gone = await until(alice, answer.id, (m) => m.deleted);
     expect(gone.text, isEmpty);
+    // The chat list no longer shows the words that were taken back.
+    await eventually(() async => (await alice.store.chat(bobId))!.lastText == 'This message was deleted' ? true : null);
     await eventually(() async => (await alice.store.chat(bobId))!.pins.isEmpty ? true : null);
 
     // Deleting for me touches nobody else.

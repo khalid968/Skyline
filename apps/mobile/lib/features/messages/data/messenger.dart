@@ -1149,6 +1149,24 @@ class Messenger extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Archive (board 26), this device only. An archived chat comes back when
+  /// someone writes, unless it is muted.
+  Future<bool> isArchived(String peer) async => (await store.setting('archived:$peer') as bool?) ?? false;
+
+  Future<void> setArchived(String peer, bool on) async {
+    await store.putSetting('archived:$peer', on);
+    notifyListeners();
+  }
+
+  /// Drafts (board 26): a half-written message, kept in the vault per chat.
+  Future<String?> draft(String peer) async {
+    final d = await store.setting('draft:$peer') as String?;
+    return d == null || d.trim().isEmpty ? null : d;
+  }
+
+  Future<void> saveDraft(String peer, String text) =>
+      store.putSetting('draft:$peer', text.trim().isEmpty ? null : text);
+
   Future<bool> readReceiptsEnabled() async => (await store.setting('readReceipts') as bool?) ?? true;
   Future<bool> typingIndicatorsEnabled() async => (await store.setting('typing') as bool?) ?? true;
 
@@ -1184,7 +1202,13 @@ class Messenger extends ChangeNotifier {
     chat
       ..lastText = text
       ..lastAt = at;
-    if (unread) chat.unread++;
+    if (unread) {
+      chat.unread++;
+      // Someone wrote: an archived chat comes back, unless muted (board 26).
+      if (await isArchived(chat.peerUserId) && !await isMuted(chat.peerUserId)) {
+        await store.putSetting('archived:${chat.peerUserId}', false);
+      }
+    }
     await store.putChat(chat);
   }
 
