@@ -98,8 +98,11 @@ class CallService extends ChangeNotifier {
   MediaStream? _local;
   MediaStreamTrack? _camera;
   MediaStreamTrack? _screen;
-  RTCRtpTransceiver? _video;
-  RTCRtpSender? _videoSender;
+  // The video channel is looked up from the connection each time it is
+  // needed (_videoChannel), never kept: on Android the plugin disposes the
+  // objects it handed out once the call is negotiated, and a kept one
+  // silently stops working.
+  bool _hasVideo = false;
   String? _pendingOffer; // incoming, until accepted
   int? _offerDevice; // the caller's device that sent the offer
   int? _answerDevice; // the callee's device that answered
@@ -219,7 +222,7 @@ class CallService extends ChangeNotifier {
   /// back if it was on.
   Future<void> toggleShare() async {
     final call = current;
-    if (call == null || _videoSender == null) return;
+    if (call == null || !_hasVideo) return;
     if (call.sharing) {
       await _stopShare();
     } else {
@@ -249,7 +252,7 @@ class CallService extends ChangeNotifier {
         }
         _screen = screen.getVideoTracks().first;
         _screen!.onEnded = () => unawaited(_stopShare());
-        await _videoSender!.replaceTrack(_screen);
+        await (await _videoChannel())?.sender.replaceTrack(_screen);
         call.sharing = true;
         _sendState();
       } on Object {
@@ -264,7 +267,7 @@ class CallService extends ChangeNotifier {
     await _screen?.stop();
     _screen = null;
     if (Platform.isAndroid) await _shareService.invokeMethod<bool>('stop');
-    await _videoSender?.replaceTrack(call?.cameraOn == true ? _camera : null);
+    await (await _videoChannel())?.sender.replaceTrack(call?.cameraOn == true ? _camera : null);
     if (call != null) {
       call.sharing = false;
       _sendState();
@@ -285,10 +288,10 @@ class CallService extends ChangeNotifier {
         localRenderer.srcObject = cam;
       }
       _camera!.enabled = true;
-      if (!call.sharing) await _videoSender?.replaceTrack(_camera);
+      if (!call.sharing) await (await _videoChannel())?.sender.replaceTrack(_camera);
     } else if (_camera != null) {
       _camera!.enabled = false;
-      if (!call.sharing) await _videoSender?.replaceTrack(null);
+      if (!call.sharing) await (await _videoChannel())?.sender.replaceTrack(null);
     }
     call.cameraOn = on && captureMedia;
     _sendState();
@@ -337,31 +340,37 @@ class CallService extends ChangeNotifier {
     // offer (_adoptVideo). A transceiver made here by the answerer would
     // not be matched to the offer and would never send.
     if (offering) {
-      _video = await _pc!.addTransceiver(
+      await _pc!.addTransceiver(
         kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
         init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv, streams: [_local!]),
       );
-      _videoSender = _video!.sender;
+      _hasVideo = true;
     }
   }
 
   /// Answerer: after reading the offer, send on its video channel too, in
   /// the same stream as our audio.
   Future<void> _adoptVideo() async {
-    for (final t in await _pc!.getTransceivers()) {
-      if (t.receiver.track?.kind == 'video') {
-        await t.setDirection(TransceiverDirection.SendRecv);
-        await t.sender.setStreams([_local!]);
-        _video = t;
-        _videoSender = t.sender;
-        return;
-      }
+    final t = await _videoChannel();
+    if (t == null) return;
+    await t.setDirection(TransceiverDirection.SendRecv);
+    await t.sender.setStreams([_local!]);
+    _hasVideo = true;
+  }
+
+  /// The call's one video channel, fetched fresh from the connection.
+  Future<RTCRtpTransceiver?> _videoChannel() async {
+    final pc = _pc;
+    if (pc == null) return null;
+    for (final t in await pc.getTransceivers()) {
+      if (t.receiver.track?.kind == 'video') return t;
     }
+    return null;
   }
 
   /// Test hook: the negotiated direction of the video channel ("sendrecv"
   /// when both sides can turn their camera or a screen share on).
-  Future<TransceiverDirection?> videoDirection() async => _video?.getCurrentDirection();
+  Future<TransceiverDirection?> videoDirection() async => (await _videoChannel())?.getCurrentDirection();
 
   /// The server lists the relay as "localhost" in development; a phone or an
   /// emulator reaches it at the same host it reaches the server on.
@@ -501,8 +510,7 @@ class CallService extends ChangeNotifier {
       _local = null;
       _camera = null;
       _screen = null;
-      _video = null;
-      _videoSender = null;
+      _hasVideo = false;
       _pendingOffer = null;
       _offerDevice = null;
       _answerDevice = null;

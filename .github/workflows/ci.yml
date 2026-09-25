@@ -137,7 +137,9 @@ jobs:
 
   windows:
     name: App on Windows (native crypto in the app)
-    runs-on: windows-2025
+    # windows-2022: Flutter 3.35's Windows build targets Visual Studio 2022,
+    # which the windows-2025 image no longer carries.
+    runs-on: windows-2022
     timeout-minutes: 60
     defaults:
       run:
@@ -214,8 +216,17 @@ jobs:
            "oauth_client":[],"api_key":[{"current_key":"placeholder-not-a-key"}],
            "services":{"appinvite_service":{"other_platform_oauth_client":[]}}}],"configuration_version":"1"}
           JSON
+      # libsignal compiled for Android takes more disk than the runner has
+      # free; drop toolchains this job never uses.
+      - name: Free disk space
+        working-directory: /
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/node_modules /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
       - run: flutter pub get
-      - run: flutter build apk --debug
+      # One ABI (arm64, every current phone) proves the build; four would
+      # quadruple the Rust compile for no extra confidence.
+      - run: flutter build apk --debug --target-platform android-arm64
 
   security:
     name: Secrets and dependency audits

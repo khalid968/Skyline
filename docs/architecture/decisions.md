@@ -6,6 +6,20 @@ working around it.
 
 ---
 
+## 2026-09-26 (late night) — First CI run: fixes, and iOS 15 as the minimum
+
+The first GitHub Actions run found three things that a single Windows PC could not:
+- **iOS: the minimum is now iOS 15.0.** It was 13.0, but the video-thumbnail plugin needs 14 and current
+  Firebase needs 15, so the app could never have built for iPhone as it was. iOS 15 runs on the iPhone 6s
+  and later. A Podfile is now committed with the platform set.
+- **Android (a real bug, found on the emulator): the app kept the video channel object after the call
+  was set up.** On Android the plugin disposes it once negotiation finishes, so turning on the camera or
+  a screen share there could have silently done nothing. The call service now looks the channel up from
+  the connection every time.
+- **CI machines:** Windows runs on `windows-2022` (Flutter 3.35 expects Visual Studio 2022). The Android
+  job frees disk space and builds arm64 only. The timing tests get a 120 s timeout, because Argon2 is
+  slower on shared runners (that was a timeout, not a leak).
+
 ## 2026-09-26 (night) — Phase 12 as built: implementation choices
 
 - **Unavailable (board 40), server side:**

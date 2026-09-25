@@ -46,6 +46,10 @@ async function race(a, b, samples) {
 
 const close = ([ma, mb], { absMs, rel }) => Math.abs(ma - mb) <= Math.max(absMs, rel * Math.max(ma, mb));
 
+// Many requests each (Argon2 alone is tens of milliseconds, more on shared CI
+// machines), so every test gets far more than Jest's default 5 seconds.
+jest.setTimeout(120000);
+
 describe('timing: the same answer takes the same time', () => {
   let db;
   let t;
