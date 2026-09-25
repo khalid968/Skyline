@@ -1,7 +1,8 @@
 // Development only: a THROWAWAY database for end-to-end tests of the app.
 //
 //   npx babel-node scripts/e2e-fixture.js create   -> prints JSON: the database
-//        URL, two linked people and a one-time activation code for each
+//        URL, two linked people (alice, bob), a third (carol, NOT linked to
+//        alice), a group of all three, and a one-time activation code each
 //   npx babel-node scripts/e2e-fixture.js drop <database-name>
 //
 // It refuses any database whose name does not start with skyline_e2e_, so it
@@ -62,11 +63,20 @@ async function create() {
     const issuer = await mk('fixture.admin', 'Fixture Admin', 'admin', 'active');
     const alice = await mk('alice.e2e', 'Alice Example');
     const bob = await mk('bob.e2e', 'Bob Example');
+    const carol = await mk('carol.e2e', 'Carol Example');
     const [lo, hi] = [alice, bob].sort();
     await db.query(
       `INSERT INTO contact_links (user_a_id, user_b_id, created_by) VALUES ($1, $2, $3)`,
       [lo, hi, issuer],
     );
+    // Phase 8b: a group with all three (carol shares it with alice, no link).
+    const group = (
+      await db.query(`INSERT INTO groups (name, created_by) VALUES ('Test group', $1) RETURNING id`, [issuer])
+    ).rows[0].id;
+    await db.query(`INSERT INTO chats (kind, group_id) VALUES ('group', $1)`, [group]);
+    for (const m of [alice, bob, carol]) {
+      await db.query(`INSERT INTO group_members (group_id, user_id, added_by) VALUES ($1, $2, $3)`, [group, m, issuer]);
+    }
     const code = async (userId) =>
       (await issueActivationCode(db, { pepper, userId, issuedBy: issuer, audit })).code;
     process.stdout.write(
@@ -75,6 +85,8 @@ async function create() {
         url,
         alice: { userId: alice, code: await code(alice) },
         bob: { userId: bob, code: await code(bob) },
+        carol: { userId: carol, code: await code(carol) },
+        groupId: group,
       }),
     );
   } finally {

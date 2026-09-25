@@ -14,6 +14,8 @@ import '../../media/data/media_service.dart';
 import '../domain/models.dart';
 import 'local_store.dart';
 
+part 'messenger_groups.dart';
+
 /// A contact as the directory reports them, with their reachable devices.
 class Contact {
   Contact({
@@ -78,6 +80,7 @@ class Messenger extends ChangeNotifier {
   final _uuid = const Uuid();
   final Map<String, Contact> _contacts = {};
   final Map<int, String> _ownIdentities = {}; // our other devices
+  final Map<String, Group> _groups = {};
   final Map<String, DateTime> _typingUntil = {};
   StreamSubscription<RealtimeEvent>? _eventsSub;
   StreamSubscription<ConnectionStatus>? _statusSub;
@@ -92,6 +95,8 @@ class Messenger extends ChangeNotifier {
   List<Contact> get contacts => _contacts.values.toList()
     ..sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
   Contact? contact(String userId) => _contacts[userId];
+  Group? group(String groupId) => _groups[groupId];
+  List<Group> get groups => _groups.values.toList();
   bool isTyping(String peer) => (_typingUntil[peer]?.isAfter(DateTime.now())) ?? false;
 
   // ------------------------------------------------------------ lifecycle
@@ -105,6 +110,7 @@ class Messenger extends ChangeNotifier {
     });
     _sweeper = Timer.periodic(const Duration(seconds: 15), (_) => sweepExpired());
     unawaited(refreshContacts().catchError((Object _) {}));
+    unawaited(refreshGroups().catchError((Object _) {}));
     unawaited(_topUpKeys());
     unawaited(media.sweepViewCache());
     realtime.start();
@@ -615,8 +621,12 @@ class Messenger extends ChangeNotifier {
   /// (e.g. a changed identity): it fails, visibly.
   Future<void> _deliver(LocalMessage m, Map<String, Object?> content) async {
     try {
-      await _post(m.peerUserId, m.id, content,
-          attachmentIds: m.isMedia ? [for (final i in m.items) i.attachmentId!] : null);
+      final attachments = m.isMedia ? [for (final i in m.items) i.attachmentId!] : null;
+      if (await _isGroup(m.peerUserId)) {
+        await _postGroup(m.peerUserId, m.id, content, attachmentIds: attachments);
+      } else {
+        await _post(m.peerUserId, m.id, content, attachmentIds: attachments);
+      }
       m.status = MessageStatus.sent;
     } on ApiException catch (e) {
       m.status = e.offline ? MessageStatus.waiting : MessageStatus.failed;
@@ -791,6 +801,7 @@ class Messenger extends ChangeNotifier {
   }
 
   Future<void> _receive(Map<String, Object?> e) async {
+    if (e['kind'] == 'sender_key') return _receiveGroup(e);
     final sender = e['senderUserId']! as String;
     final device = e['senderDeviceNumber']! as int;
     final kind = e['kind'] == 'prekey' ? EnvelopeKind.preKey : EnvelopeKind.whisper;
@@ -804,8 +815,10 @@ class Messenger extends ChangeNotifier {
         directoryIdentityKey: await _directoryIdentity(sender, device),
       );
     } on CryptoException catch (err) {
-      // Refused: never shown, never opened. Board 17's red notice.
-      final peer = fromMe ? null : sender;
+      // Refused: never shown, never opened. Board 17's red notice (in the
+      // group, for a key share from a member who is not a contact).
+      final groupId = e['groupId'] as String?;
+      final peer = fromMe ? null : (groupId ?? sender);
       if (peer != null) {
         await _notice(
           peer,
@@ -822,10 +835,20 @@ class Messenger extends ChangeNotifier {
     } on Object {
       return;
     }
+    if (content['type'] == 'skey') return _acceptSenderKey(sender, device, content);
     // The chat: from a contact it is the sender; from our own other device it
     // is whoever that device addressed.
     final peer = fromMe ? content['peer'] as String? : sender;
     if (peer == null) return;
+    await _handleContent(peer, sender, device, content);
+  }
+
+  /// One decrypted message, one-to-one ([group] false: [peer] is the other
+  /// person) or in a group ([peer] is the group id, [sender] who wrote it).
+  Future<void> _handleContent(String peer, String sender, int device, Map<String, Object?> content,
+      {bool group = false}) async {
+    final fromMe = sender == me;
+    final senderName = group && !fromMe ? (_groups[peer]?.member(sender)?.displayName ?? 'Someone') : null;
     final sentAt = DateTime.fromMillisecondsSinceEpoch(
       (content['sentAt'] as int?) ?? DateTime.now().millisecondsSinceEpoch,
     );
@@ -855,7 +878,9 @@ class Messenger extends ChangeNotifier {
           expiresAt: fromMe && timer != null ? sentAt.add(Duration(seconds: timer)) : null,
           kind: isMedia ? MessageKind.media : MessageKind.text,
           items: [for (final i in items) i!],
-          viewOnce: viewOnce,
+          viewOnce: viewOnce && !group, // view once is one-to-one only
+          senderUserId: group ? sender : null,
+          senderName: senderName,
         );
         // Our own view-once, sent from another of our devices: we cannot
         // open it here either.
@@ -866,7 +891,8 @@ class Messenger extends ChangeNotifier {
         }
         await store.putMessage(m);
         final chat = await _ensureChat(peer);
-        await _touchChat(chat, _preview(m), sentAt, unread: !fromMe && openChat != peer);
+        final line = !group ? _preview(m) : '${fromMe ? 'You' : senderName!.split(' ').first}: ${_preview(m)}';
+        await _touchChat(chat, line, sentAt, unread: !fromMe && openChat != peer);
         if (!fromMe) _typingUntil.remove(peer);
         if (!fromMe && openChat == peer) unawaited(markRead(peer));
         for (var i = 0; i < m.items.length; i++) {
@@ -887,7 +913,7 @@ class Messenger extends ChangeNotifier {
           sentAt: sentAt,
           kind: MessageKind.notice,
           notice: NoticeType.timerChanged,
-          noticeData: {'seconds': seconds, 'byMe': fromMe},
+          noticeData: {'seconds': seconds, 'byMe': fromMe, if (senderName != null) 'name': senderName},
           status: MessageStatus.delivered,
         ));
       case 'opened':
@@ -934,18 +960,39 @@ class Messenger extends ChangeNotifier {
         b64 = _ownIdentities[device];
       }
     } else {
-      var c = _contacts[userId];
-      if (c == null || !c.devices.any((d) => d.deviceNumber == device)) {
-        await refreshContacts();
-        c = _contacts[userId];
+      String? lookup() =>
+          _contacts[userId]?.devices.where((d) => d.deviceNumber == device).firstOrNull?.identityKey ??
+          [
+            for (final g in _groups.values)
+              ...?g.member(userId)?.devices.where((d) => d.deviceNumber == device),
+          ].firstOrNull?.identityKey;
+      b64 = lookup();
+      if (b64 == null) {
+        // A member we share a group with but no link (their key shares come
+        // pairwise too), or a device we have not seen yet.
+        await refreshContacts().catchError((Object _) {});
+        await refreshGroups().catchError((Object _) {});
+        b64 = lookup();
       }
-      b64 = c?.devices.where((d) => d.deviceNumber == device).firstOrNull?.identityKey;
     }
     return b64 == null ? null : base64.decode(b64);
   }
 
   Future<void> _systemNotice(Map<String, Object?> s) async {
     final event = s['event'] as Map<String, Object?>? ?? const {};
+    final groupId = s['groupId'] as String?;
+    if (groupId != null && (event['type'] as String? ?? '').startsWith('group_')) {
+      return _groupNotice(groupId, event);
+    }
+    if (groupId != null && event['type'] == 'user_renamed') {
+      // A member renamed by an administrator, announced in the group (they
+      // may not be a contact of ours at all).
+      final from = event['from'] as Map<String, Object?>? ?? const {};
+      final to = event['to'] as Map<String, Object?>? ?? const {};
+      if (event['userId'] == me) return;
+      await _notice(groupId, NoticeType.renamed, {'from': from['displayName'], 'to': to['displayName']});
+      return;
+    }
     if (event['type'] == 'user_renamed') {
       final userId = event['userId'] as String?;
       if (userId == null || userId == me) return;
@@ -996,6 +1043,7 @@ class Messenger extends ChangeNotifier {
     }
     notifyListeners();
     if (newlyRead.isEmpty) return;
+    if (await _isGroup(peer)) return; // groups send no read receipts (8b)
     // With receipts off nothing is sent at all. (Our own other devices then
     // clear this chat's unread count only when it is opened there: syncing
     // read state privately would need a self-addressed route. Known limit.)
@@ -1086,6 +1134,15 @@ class Messenger extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Mute (boards 26 and 29), kept on this device only. A muted chat still
+  /// syncs; it just stays quiet.
+  Future<bool> isMuted(String peer) async => (await store.setting('muted:$peer') as bool?) ?? false;
+
+  Future<void> setMuted(String peer, bool on) async {
+    await store.putSetting('muted:$peer', on);
+    notifyListeners();
+  }
+
   Future<bool> readReceiptsEnabled() async => (await store.setting('readReceipts') as bool?) ?? true;
   Future<bool> typingIndicatorsEnabled() async => (await store.setting('typing') as bool?) ?? true;
 
@@ -1105,11 +1162,13 @@ class Messenger extends ChangeNotifier {
     final existing = await store.chat(peer);
     if (existing != null) return existing;
     final c = _contacts[peer];
+    final g = _groups[peer];
     final chat = ChatSummary(
       peerUserId: peer,
-      displayName: c?.displayName ?? 'Unknown',
+      displayName: g?.name ?? c?.displayName ?? 'Unknown',
       username: c?.username ?? '',
       lastAt: DateTime.now(),
+      isGroup: g != null,
     );
     await store.putChat(chat);
     return chat;
@@ -1122,6 +1181,9 @@ class Messenger extends ChangeNotifier {
     if (unread) chat.unread++;
     await store.putChat(chat);
   }
+
+  Future<bool> _isGroup(String peer) async =>
+      _isGroupChat(peer) || ((await store.chat(peer))?.isGroup ?? false);
 
   /// The chat list's one-line summary of a message.
   String _preview(LocalMessage m) =>

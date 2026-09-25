@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/messages/presentation/group_info_screen.dart';
 import '../../features/media/presentation/media_gallery_screen.dart';
 import '../../features/auth/presentation/activation_screen.dart';
 import '../../features/chats/presentation/chat_list_screen.dart';
@@ -40,6 +41,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'verify',
             builder: (context, s) => SafetyNumberScreen(peer: s.pathParameters['peer']!),
+          ),
+          GoRoute(
+            path: 'info',
+            builder: (context, s) => GroupInfoScreen(groupId: s.pathParameters['peer']!),
           ),
           GoRoute(
             path: 'media',

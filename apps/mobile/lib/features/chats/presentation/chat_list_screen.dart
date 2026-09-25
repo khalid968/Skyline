@@ -152,7 +152,7 @@ class _ChatRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           child: Row(children: [
-            Avatar(name: row.name, seed: row.peer),
+            Avatar(name: row.name, seed: row.peer, square: chat?.isGroup ?? false),
             const SizedBox(width: 13),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

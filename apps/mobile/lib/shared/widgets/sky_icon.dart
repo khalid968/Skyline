@@ -34,7 +34,8 @@ enum SkyIcons {
   download('<path d="M12 4v11"/><path d="m7 10.5 5 5 5-5"/><path d="M5 19.5h14"/>'),
   play('<path d="M7 4.5v15l12-7.5Z"/>'),
   pause('<path d="M8 5v14"/><path d="M16 5v14"/>'),
-  close('<path d="M6 6l12 12M18 6 6 18"/>');
+  close('<path d="M6 6l12 12M18 6 6 18"/>'),
+  bellOff('<path d="M18 8.5a6 6 0 0 0-11.2-3"/><path d="M6 8.5c0 7-3 9-3 9h13"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><path d="m3 3 18 18"/>');
 
   const SkyIcons(this.paths);
   final String paths;

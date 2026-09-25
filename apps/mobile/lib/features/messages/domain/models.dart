@@ -7,7 +7,7 @@ enum MessageStatus { sending, waiting, sent, delivered, read, failed }
 enum MessageKind { text, notice, media }
 
 /// The kinds of notice shown inline in a chat (boards 15-17).
-enum NoticeType { newDevice, renamed, blocked, undecryptable, timerChanged }
+enum NoticeType { newDevice, renamed, blocked, undecryptable, timerChanged, groupEvent }
 
 class LocalMessage {
   LocalMessage({
@@ -28,6 +28,8 @@ class LocalMessage {
     List<MediaInfo>? items,
     this.viewOnce = false,
     this.openedAt,
+    this.senderUserId,
+    this.senderName,
   }) : items = items ?? [if (media != null) media];
 
   final String id;
@@ -52,6 +54,12 @@ class LocalMessage {
 
   /// When a view-once message was opened (by them, if we sent it).
   DateTime? openedAt;
+
+  /// Who sent it, in a group (null in a one-to-one chat, where it is the
+  /// peer or us). The name is kept as it was, so it survives the sender
+  /// leaving the group.
+  final String? senderUserId;
+  final String? senderName;
 
   MediaInfo? get media => items.isEmpty ? null : items.first;
   bool get isNotice => kind == MessageKind.notice;
@@ -86,6 +94,8 @@ class LocalMessage {
         if (items.isNotEmpty) 'items': [for (final i in items) i.toJson()],
         if (viewOnce) 'viewOnce': true,
         'openedAt': openedAt?.millisecondsSinceEpoch,
+        if (senderUserId != null) 'sender': senderUserId,
+        if (senderName != null) 'senderName': senderName,
       };
 
   static LocalMessage fromJson(Map<String, Object?> j) => LocalMessage(
@@ -108,6 +118,8 @@ class LocalMessage {
         ],
         viewOnce: j['viewOnce'] == true,
         openedAt: _time(j['openedAt']),
+        senderUserId: j['sender'] as String?,
+        senderName: j['senderName'] as String?,
       );
 }
 
@@ -260,6 +272,8 @@ class ChatSummary {
     this.lastAt,
     this.unread = 0,
     this.timerSeconds,
+    this.isGroup = false,
+    this.left = false,
   });
 
   final String peerUserId;
@@ -270,6 +284,13 @@ class ChatSummary {
   int unread;
   int? timerSeconds;
 
+  /// A group chat: [peerUserId] is then the group's id.
+  final bool isGroup;
+
+  /// We left the group, or were removed, or it was archived: history stays,
+  /// writing does not.
+  bool left;
+
   Map<String, Object?> toJson() => {
         'peer': peerUserId,
         'displayName': displayName,
@@ -278,6 +299,8 @@ class ChatSummary {
         'lastAt': lastAt?.millisecondsSinceEpoch,
         'unread': unread,
         'timer': timerSeconds,
+        if (isGroup) 'group': true,
+        if (left) 'left': true,
       };
 
   static ChatSummary fromJson(Map<String, Object?> j) => ChatSummary(
@@ -288,6 +311,8 @@ class ChatSummary {
         lastAt: _time(j['lastAt']),
         unread: (j['unread'] as int?) ?? 0,
         timerSeconds: j['timer'] as int?,
+        isGroup: j['group'] == true,
+        left: j['left'] == true,
       );
 }
 

@@ -73,7 +73,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           .showSnackBar(const SnackBar(content: Text('Files can be up to 2 GB; larger ones were left out.')));
     }
     if (kept.isEmpty || !mounted) return;
-    final r = await showMediaPreview(context, kept, peerName: name);
+    final r = await showMediaPreview(context, kept, peerName: name, allowViewOnce: messenger.group(widget.peer) == null);
     if (r == null) {
       for (final p in kept) {
         await p.discard();
@@ -122,19 +122,31 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
             final chat = snap.data?.$1;
             final messages = snap.data?.$2 ?? const <LocalMessage>[];
             final devices = snap.data?.$3 ?? const <KnownDevice>[];
-            final name = contact?.displayName ?? chat?.displayName ?? '';
-            final canWrite = contact != null;
+            final group = messenger.group(widget.peer);
+            final isGroup = (chat?.isGroup ?? false) || group != null;
+            final name = group?.name ?? contact?.displayName ?? chat?.displayName ?? '';
+            final canWrite =
+                isGroup ? group != null && !group.archived && !(chat?.left ?? false) : contact != null;
             final waiting = messages.where((m) => m.status == MessageStatus.waiting).length;
             return Scaffold(
               body: SafeArea(
                 child: Column(children: [
-                  _Header(
-                    peer: widget.peer,
-                    name: name,
-                    devices: devices,
-                    timer: chat?.timerSeconds,
-                    onTimer: canWrite ? () => _timer(chat, name) : null,
-                  ),
+                  if (isGroup)
+                    _GroupHeader(
+                      peer: widget.peer,
+                      name: name,
+                      members: group?.members.length,
+                      timer: chat?.timerSeconds,
+                      onTimer: canWrite ? () => _timer(chat, name) : null,
+                    )
+                  else
+                    _Header(
+                      peer: widget.peer,
+                      name: name,
+                      devices: devices,
+                      timer: chat?.timerSeconds,
+                      onTimer: canWrite ? () => _timer(chat, name) : null,
+                    ),
                   ConnectionBanner(status: messenger.connection, waiting: waiting),
                   Expanded(
                     child: ListView.builder(
@@ -153,11 +165,14 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                           child: m.isNotice
                               ? _Notice(m: m, name: name, onVerify: () => context.push('/chat/${widget.peer}/verify'))
                               : m.isMedia
-                                  ? MediaBubble(
+                                  ? _FromMember(
                                       m: m,
-                                      messenger: messenger,
-                                      meta: _Meta(m: m),
-                                      onDetails: m.fromMe ? () => _details(m) : null,
+                                      child: MediaBubble(
+                                        m: m,
+                                        messenger: messenger,
+                                        meta: _Meta(m: m),
+                                        onDetails: m.fromMe ? () => _details(m) : null,
+                                      ),
                                     )
                                   : _Bubble(m: m, onTap: m.fromMe ? () => _details(m) : null),
                         );
@@ -178,7 +193,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                     Padding(
                       padding: const EdgeInsets.all(16),
                       child: Text(
-                        'You can no longer message $name. Your administrator decides who you can reach.',
+                        !isGroup
+                            ? 'You can no longer message $name. Your administrator decides who you can reach.'
+                            : group?.archived ?? false
+                                ? 'Your administrator closed this group. What is here stays on this device.'
+                                : 'You are no longer in this group. Only an administrator can add you back.',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 13, color: t.textSecondary),
                       ),
@@ -408,6 +427,15 @@ class _Bubble extends StatelessWidget {
         ),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        if (m.senderName != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Text(m.senderName!,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _nameColor(m.senderUserId!))),
+            ),
+          ),
         Align(
           alignment: Alignment.centerLeft,
           child: SelectableText(m.text, style: TextStyle(fontSize: 14.5, height: 1.45, color: fg)),
@@ -422,13 +450,20 @@ class _Bubble extends StatelessWidget {
           ),
       ]),
     );
+    final shown = Semantics(
+      button: onTap != null,
+      label: m.fromMe ? '$statusWord at $time' : null,
+      child: GestureDetector(onTap: onTap, child: bubble),
+    );
     return Align(
       alignment: m.fromMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Semantics(
-        button: onTap != null,
-        label: m.fromMe ? '$statusWord at $time' : null,
-        child: GestureDetector(onTap: onTap, child: bubble),
-      ),
+      child: m.senderUserId == null || m.fromMe
+          ? shown
+          : Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Avatar(name: m.senderName ?? '', seed: m.senderUserId!, size: 28),
+              const SizedBox(width: 8),
+              Flexible(child: shown),
+            ]),
     );
   }
 }
@@ -572,9 +607,24 @@ class _Notice extends StatelessWidget {
       case NoticeType.renamed:
         return _pill(context, SkyIcons.pen,
             'Your administrator renamed ${m.noticeData['from'] ?? 'this person'} to ${m.noticeData['to'] ?? name}. Their safety numbers did not change.');
+      case NoticeType.groupEvent:
+        final who = m.noticeData['you'] == true ? 'You' : (m.noticeData['name'] as String? ?? 'Someone');
+        final text = switch (m.noticeData['event']) {
+          'group_created' => 'Your administrator created this group',
+          'group_renamed' => 'Your administrator renamed the group from ${m.noticeData['from']} to ${m.noticeData['to']}',
+          'group_member_added' => m.noticeData['you'] == true ? 'You were added to the group' : '$who was added',
+          'group_member_removed' => m.noticeData['you'] == true ? 'You were removed from the group' : '$who was removed',
+          'group_member_left' => m.noticeData['you'] == true ? 'You left the group' : '$who left the group',
+          'group_archived' => 'Your administrator closed this group',
+          'group_reopened' => 'Your administrator reopened this group',
+          _ => 'The group changed',
+        };
+        return _pill(context, SkyIcons.chat, text);
       case NoticeType.timerChanged:
         final seconds = m.noticeData['seconds'] as int?;
-        final who = m.noticeData['byMe'] == true ? 'You' : first;
+        final who = m.noticeData['byMe'] == true
+            ? 'You'
+            : ((m.noticeData['name'] as String?)?.split(' ').first ?? first);
         return _pill(
           context,
           SkyIcons.clock,
@@ -823,6 +873,100 @@ class _ComposerState extends State<_Composer> {
                     size: _recording ? 22 : 19, color: _recording ? Colors.white : t.textSecondary, stroke: 2),
               ),
             ),
+          ),
+      ]),
+    );
+  }
+}
+
+/// A person's colour in a group (the same tint as their avatar).
+Color _nameColor(String userId) => Color.lerp(Avatar.tintFor(userId), Colors.white, 0.35)!;
+
+/// Board 27: in a group, a member's media message carries their name and
+/// picture, like a text bubble.
+class _FromMember extends StatelessWidget {
+  const _FromMember({required this.m, required this.child});
+  final LocalMessage m;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (m.senderUserId == null || m.fromMe) return child;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+        Avatar(name: m.senderName ?? '', seed: m.senderUserId!, size: 28),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 6, bottom: 3),
+              child: Text(m.senderName ?? '',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _nameColor(m.senderUserId!))),
+            ),
+            child,
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+/// Board 27: a group's header. Tapping the name opens group info (board 29).
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader({required this.peer, required this.name, required this.members, required this.timer, this.onTimer});
+  final String peer;
+  final String name;
+  final int? members;
+  final int? timer;
+  final VoidCallback? onTimer;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.sky;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 8, 8, 10),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.border))),
+      child: Row(children: [
+        IconButton(
+          tooltip: 'Back to chats',
+          onPressed: () => context.pop(),
+          icon: SkyIcon(SkyIcons.back, size: 21, color: t.textSecondary, stroke: 2.1),
+        ),
+        Avatar(name: name, seed: peer, size: 38, square: true),
+        const SizedBox(width: 10),
+        Expanded(
+          child: InkWell(
+            onTap: () => context.push('/chat/$peer/info'),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600, color: t.textPrimary)),
+              const SizedBox(height: 2),
+              Row(children: [
+                Text(members == null ? 'Tap for group info' : '$members members · tap for group info',
+                    style: TextStyle(fontSize: 12, color: t.textSecondary)),
+                if (timer != null) ...[
+                  Text(' · ', style: TextStyle(fontSize: 12, color: t.textSecondary)),
+                  SkyIcon(SkyIcons.clock, size: 12, color: t.caution, stroke: 2.3),
+                  const SizedBox(width: 3),
+                  Text(timerLabel(timer), style: TextStyle(fontSize: 12, color: t.caution)),
+                ],
+              ]),
+            ]),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Media',
+          onPressed: () => context.push('/chat/$peer/media'),
+          icon: SkyIcon(SkyIcons.photo, size: 21, color: t.textSecondary),
+        ),
+        if (onTimer != null)
+          IconButton(
+            tooltip: 'Disappearing messages',
+            onPressed: onTimer,
+            icon: SkyIcon(SkyIcons.clock, size: 21, color: timer != null ? t.caution : t.textSecondary),
           ),
       ]),
     );

@@ -141,16 +141,18 @@ class PreviewResult {
 /// Boards 20, 23 and 24: the preview with a caption, for one file or
 /// several. Returns what to send, or null if the person backed out (the
 /// caller then discards the files).
-Future<PreviewResult?> showMediaPreview(BuildContext context, List<PickedMedia> media, {required String peerName}) =>
+Future<PreviewResult?> showMediaPreview(BuildContext context, List<PickedMedia> media,
+        {required String peerName, bool allowViewOnce = true}) =>
     Navigator.of(context).push<PreviewResult>(MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) => _PreviewScreen(media: media, peerName: peerName),
+      builder: (_) => _PreviewScreen(media: media, peerName: peerName, allowViewOnce: allowViewOnce),
     ));
 
 class _PreviewScreen extends StatefulWidget {
-  const _PreviewScreen({required this.media, required this.peerName});
+  const _PreviewScreen({required this.media, required this.peerName, this.allowViewOnce = true});
   final List<PickedMedia> media;
   final String peerName;
+  final bool allowViewOnce; // not in groups (view once is one-to-one)
 
   @override
   State<_PreviewScreen> createState() => _PreviewScreenState();
@@ -389,6 +391,7 @@ class _PreviewScreenState extends State<_PreviewScreen> {
                 ),
               ),
               // Always shown, so it can be found; greyed when it cannot apply.
+              if (widget.allowViewOnce) ...[
               const SizedBox(width: 8),
               Tooltip(
                 message: _canViewOnce ? 'View once' : 'View once: one photo or video at a time',
@@ -403,6 +406,7 @@ class _PreviewScreenState extends State<_PreviewScreen> {
                   ),
                 ),
               ),
+              ],
               const SizedBox(width: 8),
               Badge(
                 isLabelVisible: _items.length > 1,
