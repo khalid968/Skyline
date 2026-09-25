@@ -59,6 +59,14 @@ const PATHS = {
     </>
   ),
   crown: <path d="m3 8 4.5 4L12 5l4.5 7L21 8l-2 10H5Z" />,
+  groups: (
+    <>
+      <rect x="3.5" y="5" width="17" height="14" rx="3" />
+      <path d="M3.5 9.5h17" />
+      <circle cx="8" cy="14" r="1.6" />
+      <path d="M13 14h4" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 17, stroke = 'currentColor', width = 1.9 }) {
@@ -81,7 +89,7 @@ export function Icon({ name, size = 17, stroke = 'currentColor', width = 1.9 }) 
 
 const TINTS = ['#3A63D8', '#7A5AF0', '#C1743A', '#3F7AB8', '#2C7F6B', '#9A5AC4', '#B45A9E', '#5A6782'];
 
-export function Avatar({ name = '', seed = name, size = '' }) {
+export function Avatar({ name = '', seed = name, size = '', square = false }) {
   const initials =
     name
       .split(/\s+/)
@@ -92,7 +100,7 @@ export function Avatar({ name = '', seed = name, size = '' }) {
   let h = 0;
   for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return (
-    <span className={`avatar ${size}`} style={{ background: TINTS[h % TINTS.length] }} aria-hidden="true">
+    <span className={`avatar ${size}${square ? ' square' : ''}`} style={{ background: TINTS[h % TINTS.length] }} aria-hidden="true">
       {initials}
     </span>
   );

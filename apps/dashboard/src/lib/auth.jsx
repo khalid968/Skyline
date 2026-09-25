@@ -75,6 +75,7 @@ export function capabilities(me) {
     codes: admin,
     resetSignIn: admin,
     editContacts: admin || me?.role === 'moderator',
+    manageGroups: admin || me?.role === 'moderator',
     revokeDevices: admin,
     makeAdmins: !!me?.isOwner,
   };

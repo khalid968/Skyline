@@ -2,8 +2,8 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { Avatar, Icon, ROLE_LABEL } from './ui';
 
-// The v1 sidebar: Users, Contact graph, Devices (groups and the audit log are
-// v2, decisions.md). While a temporary password is in force, only the account
+// The sidebar: Users, Contact graph, Groups (brought forward to Phase 8b,
+// decisions.md 2026-09-25), Devices. The audit log is v2. While a temporary password is in force, only the account
 // page is reachable, so the rest of the navigation is shown disabled.
 export default function Shell() {
   const { me } = useAuth();
@@ -26,6 +26,7 @@ export default function Shell() {
         <nav className="nav">
           {link('/users', 'users', 'Users')}
           {link('/contacts', 'graph', 'Contact graph')}
+          {link('/groups', 'groups', 'Groups')}
           {link('/devices', 'device', 'Devices')}
         </nav>
         <div style={{ flex: 1 }} />

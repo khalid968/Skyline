@@ -5,6 +5,7 @@ import SignIn from './pages/SignIn';
 import TwoFactor from './pages/TwoFactor';
 import Users from './pages/Users';
 import UserDetail from './pages/UserDetail';
+import Groups from './pages/Groups';
 import ContactGraph from './pages/ContactGraph';
 import Devices from './pages/Devices';
 import Account from './pages/Account';
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/users" element={<Users />} />
         <Route path="/users/:userId" element={<UserDetail />} />
         <Route path="/contacts" element={<ContactGraph />} />
+        <Route path="/groups" element={<Groups />} />
         <Route path="/devices" element={<Devices />} />
         <Route path="/account" element={<Account />} />
       </Route>

@@ -90,6 +90,14 @@ export const api = {
   contactsOf: (id) => get(`/admin/users/${id}/contacts`),
   setLink: (userId, otherUserId, linked) => post('/admin/contact-links', { userId, otherUserId, linked }),
 
+  // groups (board 31)
+  groups: () => get('/admin/groups'),
+  group: (id) => get(`/admin/groups/${id}`),
+  createGroup: (body) => post('/admin/groups', body),
+  updateGroup: (id, body) => patch(`/admin/groups/${id}`, body),
+  setGroupMember: (id, userId, member) => post(`/admin/groups/${id}/members`, { userId, member }),
+  archiveGroup: (id, archived) => post(`/admin/groups/${id}/archive`, { archived }),
+
   // devices
   devices: (params = {}) => get(`/admin/devices${q(params)}`),
   revokeDevice: (id) => post(`/admin/devices/${id}/revoke`),

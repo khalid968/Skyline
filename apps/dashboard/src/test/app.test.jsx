@@ -216,3 +216,98 @@ describe('user detail', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
+
+describe('groups (board 31)', () => {
+  const alice = person(1, { displayName: 'Alice Smith' });
+  const bob = person(2, { displayName: 'Bob Jones' });
+  const G = '00000000-0000-4000-8000-00000000a001';
+  const detail = (history) => ({
+    groupId: G,
+    name: 'Operations',
+    description: 'North site',
+    createdAt: '2026-09-12T10:00:00Z',
+    archivedAt: null,
+    members: history.filter((m) => !m.removedAt).length,
+    history,
+  });
+  const member = (p, extra = {}) => ({
+    userId: p.userId,
+    displayName: p.displayName,
+    username: p.username,
+    status: 'active',
+    addedAt: '2026-09-12T10:00:00Z',
+    removedAt: null,
+    left: false,
+    ...extra,
+  });
+
+  it('a moderator sees the groups, removes a member and adds someone by name', async () => {
+    let history = [member(alice)];
+    const { calls } = fakeBackend({
+      'GET /admin/auth/me': MODERATOR,
+      'GET /admin/groups': () => [{ ...detail(history), history: undefined }],
+      [`GET /admin/groups/${G}`]: () => detail(history),
+      'GET /admin/users': [alice, bob],
+      [`POST /admin/groups/${G}/members`]: (body) => {
+        history = body.member
+          ? [...history.filter((m) => m.userId !== body.userId), member(body.userId === bob.userId ? bob : alice)]
+          : history.map((m) => (m.userId === body.userId ? { ...m, removedAt: '2026-09-25T10:00:00Z' } : m));
+        return { member: body.member, changed: true };
+      },
+    });
+    renderApp(`/groups?group=${G}`);
+    const user = userEvent.setup();
+    expect(await screen.findByDisplayValue('Operations')).toBeInTheDocument();
+    expect(screen.getByText('MEMBERS · 1')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Remove Alice Smith' }));
+    expect(await screen.findByRole('button', { name: 'Add Alice Smith back' })).toBeInTheDocument();
+    expect(calls.find((c) => c.path === `/admin/groups/${G}/members`).body).toEqual({ userId: alice.userId, member: false });
+
+    await user.type(screen.getByLabelText('Add a member by name or username'), 'bob');
+    await user.click(await screen.findByRole('option', { name: /Bob Jones/ }));
+    expect(await screen.findByRole('button', { name: 'Remove Bob Jones' })).toBeInTheDocument();
+  });
+
+  it('creates a group and opens it', async () => {
+    let created = false;
+    const { calls } = fakeBackend({
+      'GET /admin/auth/me': OWNER,
+      'GET /admin/groups': () => (created ? [{ ...detail([]), history: undefined }] : []),
+      'POST /admin/groups': () => {
+        created = true;
+        return detail([]);
+      },
+      [`GET /admin/groups/${G}`]: detail([]),
+      'GET /admin/users': [alice, bob],
+    });
+    renderApp('/groups');
+    const user = userEvent.setup();
+    expect(await screen.findByText(/No groups yet/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'New group' }));
+    await user.type(screen.getByLabelText('Name'), 'Operations');
+    await user.click(screen.getByRole('button', { name: 'Create group' }));
+    expect(await screen.findByText('Nobody is in this group yet.')).toBeInTheDocument();
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/admin/groups').body).toEqual({ name: 'Operations' });
+  });
+
+  it('an archived group is read-only and can be reopened', async () => {
+    let archived = true;
+    fakeBackend({
+      'GET /admin/auth/me': OWNER,
+      'GET /admin/groups': () => [{ ...detail([member(alice)]), archivedAt: archived ? '2026-09-20T00:00:00Z' : null, history: undefined }],
+      [`GET /admin/groups/${G}`]: () => ({ ...detail([member(alice)]), archivedAt: archived ? '2026-09-20T00:00:00Z' : null }),
+      'GET /admin/users': [alice],
+      [`POST /admin/groups/${G}/archive`]: (body) => {
+        archived = body.archived;
+        return {};
+      },
+    });
+    renderApp(`/groups?group=${G}`);
+    const user = userEvent.setup();
+    expect(await screen.findByText(/This group is archived/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove Alice Smith' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reopen group' }));
+    expect(await screen.findByRole('button', { name: 'Remove Alice Smith' })).toBeInTheDocument();
+  });
+});
