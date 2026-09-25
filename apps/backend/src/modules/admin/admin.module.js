@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { WebsocketModule } from '../websocket/websocket.module';
 import { AdminUsersService } from './admin-users.service';
+import { AdminGroupsService } from './admin-groups.service';
 import {
   AdminUsersController,
   AdminContactLinksController,
   AdminDevicesController,
+  AdminGroupsController,
 } from './admin.controllers';
 
 @Module({
@@ -15,7 +17,8 @@ import {
     AdminUsersController,
     AdminContactLinksController,
     AdminDevicesController,
+    AdminGroupsController,
   ],
-  providers: [AdminUsersService],
+  providers: [AdminUsersService, AdminGroupsService],
 })
 export class AdminModule {}

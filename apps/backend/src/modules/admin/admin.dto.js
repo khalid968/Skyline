@@ -51,3 +51,29 @@ export class SetLinkDto {
   @IsUUID('4') otherUserId;
   @IsBoolean() linked;
 }
+
+// ---------------------------------------------------------------- groups
+
+export class CreateGroupDto {
+  @IsString() @Length(1, 80) name;
+  @IsOptional() @IsString() @Length(0, 500) description;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @IsUUID('all', { each: true })
+  memberIds;
+}
+
+export class UpdateGroupDto {
+  @IsOptional() @IsString() @Length(1, 80) name;
+  @IsOptional() @IsString() @Length(0, 500) description;
+}
+
+export class SetGroupMemberDto {
+  @IsUUID() userId;
+  @IsBoolean() member;
+}
+
+export class ArchiveGroupDto {
+  @IsBoolean() archived;
+}

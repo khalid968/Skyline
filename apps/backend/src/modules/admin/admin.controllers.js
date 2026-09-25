@@ -18,12 +18,17 @@ import {
 } from '../../common/decorators/access.decorators';
 import { Validated } from '../../common/decorators/validated.decorator';
 import { AdminUsersService } from './admin-users.service';
+import { AdminGroupsService } from './admin-groups.service';
 import {
   CreateUserDto,
   UpdateUserDto,
   SetRoleDto,
   ResetSignInDto,
   SetLinkDto,
+  CreateGroupDto,
+  UpdateGroupDto,
+  SetGroupMemberDto,
+  ArchiveGroupDto,
 } from './admin.dto';
 
 // The dashboard's API. Every route here is an OPERATOR route: it requires a
@@ -189,5 +194,66 @@ export class AdminDevicesController {
   @Bind(Req(), Param('deviceId'), Ip())
   async revoke(req, deviceId, ip) {
     await this.users.revokeDevice(req.account, deviceId, ip);
+  }
+}
+
+// Board 31. Admins and moderators (owner decision); the who-may-act-on-whom
+// rules apply to every person added or removed.
+@Controller('admin/groups')
+@Dependencies(AdminGroupsService)
+export class AdminGroupsController {
+  constructor(groups) {
+    this.groups = groups;
+  }
+
+  @Get()
+  @RequirePermission('groups.manage')
+  list() {
+    return this.groups.list();
+  }
+
+  @Post()
+  @RequirePermission('groups.create')
+  @Bind(Req(), Body(), Ip())
+  @Validated(undefined, CreateGroupDto)
+  create(req, dto, ip) {
+    return this.groups.create(req.account, dto, ip);
+  }
+
+  @Get(':groupId')
+  @GraphExempt(OPERATOR)
+  @RequirePermission('groups.manage')
+  @Bind(Param('groupId'))
+  detail(groupId) {
+    return this.groups.detail(groupId);
+  }
+
+  @Patch(':groupId')
+  @GraphExempt(OPERATOR)
+  @RequirePermission('groups.manage')
+  @Bind(Req(), Param('groupId'), Body(), Ip())
+  @Validated(undefined, undefined, UpdateGroupDto)
+  update(req, groupId, dto, ip) {
+    return this.groups.update(req.account, groupId, dto, ip);
+  }
+
+  @Post(':groupId/members')
+  @HttpCode(200)
+  @GraphExempt(OPERATOR)
+  @RequirePermission('groups.manage')
+  @Bind(Req(), Param('groupId'), Body(), Ip())
+  @Validated(undefined, undefined, SetGroupMemberDto)
+  setMember(req, groupId, dto, ip) {
+    return this.groups.setMember(req.account, groupId, dto, ip);
+  }
+
+  @Post(':groupId/archive')
+  @HttpCode(200)
+  @GraphExempt(OPERATOR)
+  @RequirePermission('groups.manage')
+  @Bind(Req(), Param('groupId'), Body(), Ip())
+  @Validated(undefined, undefined, ArchiveGroupDto)
+  archive(req, groupId, dto, ip) {
+    return this.groups.setArchived(req.account, groupId, dto.archived, ip);
   }
 }

@@ -58,11 +58,14 @@ export class GraphService {
     );
   }
 
+  // A live member of a group that is not archived (an archived group is
+  // closed: members keep what is on their devices, and nothing more).
   isGroupMember(me, groupId) {
     return this._ask(
       `SELECT EXISTS (
-         SELECT 1 FROM group_members gm
+         SELECT 1 FROM group_members gm JOIN groups g ON g.id = gm.group_id
           WHERE gm.group_id = $2 AND gm.user_id = $1 AND gm.removed_at IS NULL
+            AND g.archived_at IS NULL
        ) AS ok`,
       [me, groupId],
     );

@@ -28,13 +28,13 @@ import { MediaService } from '../media/media.service';
 // soon as they have arrived.
 
 const PAGE = 100;
-const SEND_LIMIT = { limit: 120, windowSec: 60 };
+export const SEND_LIMIT = { limit: 120, windowSec: 60 };
 const SIGNAL_LIMIT = { limit: 240, windowSec: 60 };
-const MAX_CIPHERTEXT = 48 * 1024;
+export const MAX_CIPHERTEXT = 48 * 1024;
 
 // A device can be sent to once it has an identity and a signed prekey: until
 // then nobody could have started a session with it.
-const REACHABLE_DEVICES = `
+export const REACHABLE_DEVICES = `
   SELECT d.id, d.user_id, d.device_number
     FROM devices d
    WHERE d.user_id = ANY($1::uuid[])
@@ -45,7 +45,13 @@ const REACHABLE_DEVICES = `
                   WHERE s.device_id = d.id AND s.superseded_at IS NULL)`;
 
 @Injectable()
-@Dependencies(DatabaseService, RateLimitService, FanoutService, PushService, MediaService)
+@Dependencies(
+  DatabaseService,
+  RateLimitService,
+  FanoutService,
+  PushService,
+  MediaService,
+)
 export class MessagesService {
   constructor(db, limiter, fanout, push, media) {
     this.media = media;
@@ -266,20 +272,27 @@ export class MessagesService {
   // whose link was revoked stays undelivered.
   async inbox(caller) {
     const envelopes = await this.db.query(
-      `SELECT e.id, e.message_id, e.envelope_kind, e.ciphertext, m.chat_id,
+      `SELECT e.id, e.message_id, e.envelope_kind, e.ciphertext, m.chat_id, c.group_id,
               m.sender_user_id, sd.device_number AS sender_device_number, m.created_at
          FROM message_envelopes e
          JOIN messages m ON m.id = e.message_id
+         JOIN chats c ON c.id = m.chat_id
          JOIN devices sd ON sd.id = m.sender_device_id
         WHERE e.recipient_device_id = $1
           AND e.delivered_at IS NULL
-          AND (m.sender_user_id = $2 OR are_linked($2, m.sender_user_id))
+          AND (m.sender_user_id = $2
+               OR (c.kind = 'direct' AND are_linked($2, m.sender_user_id))
+               OR (c.kind = 'group' AND EXISTS (
+                    SELECT 1 FROM group_members g JOIN groups gr ON gr.id = g.group_id
+                     WHERE g.group_id = c.group_id AND g.user_id = $2
+                       AND g.removed_at IS NULL AND gr.archived_at IS NULL
+                       AND g.added_at <= m.created_at)))
         ORDER BY m.seq
         LIMIT ${PAGE}`,
       [caller.deviceId, caller.userId],
     );
     const system = await this.db.query(
-      `SELECT m.seq, m.chat_id, m.system_event, m.created_at
+      `SELECT m.seq, m.chat_id, c.group_id, m.system_event, m.created_at
          FROM messages m
          JOIN chats c ON c.id = m.chat_id
          JOIN devices d ON d.id = $1
@@ -289,7 +302,8 @@ export class MessagesService {
                 AND are_linked(c.user_a_id, c.user_b_id))
                OR (c.kind = 'group' AND EXISTS (
                     SELECT 1 FROM group_members g
-                     WHERE g.group_id = c.group_id AND g.user_id = $2 AND g.removed_at IS NULL)))
+                     WHERE g.group_id = c.group_id AND g.user_id = $2 AND g.removed_at IS NULL
+                       AND g.added_at <= m.created_at)))
         ORDER BY m.seq
         LIMIT ${PAGE}`,
       [caller.deviceId, caller.userId],
@@ -299,6 +313,7 @@ export class MessagesService {
         envelopeId: e.id,
         messageId: e.message_id,
         chatId: e.chat_id,
+        groupId: e.group_id ?? undefined,
         senderUserId: e.sender_user_id,
         senderDeviceNumber: e.sender_device_number,
         kind: e.envelope_kind,
@@ -308,6 +323,7 @@ export class MessagesService {
       system: system.rows.map((s) => ({
         seq: Number(s.seq),
         chatId: s.chat_id,
+        groupId: s.group_id ?? undefined,
         event: s.system_event,
         at: s.created_at,
       })),
@@ -397,13 +413,13 @@ export class MessagesService {
   }
 }
 
-const key = (e) => `${e.userId}:${e.deviceNumber}`;
-const unkey = (k) => {
+export const key = (e) => `${e.userId}:${e.deviceNumber}`;
+export const unkey = (k) => {
   const [userId, n] = k.split(':');
   return { userId, deviceNumber: Number(n) };
 };
 
-function decodeEnvelopes(list) {
+export function decodeEnvelopes(list) {
   return list.map((e, i) => {
     const bytes =
       typeof e.body === 'string' && /^[A-Za-z0-9+/_-]+={0,2}$/.test(e.body)

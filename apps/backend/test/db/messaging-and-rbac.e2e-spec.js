@@ -341,11 +341,16 @@ describe('messaging and RBAC (database layer)', () => {
         'users.delete',
         'codes.issue',
         'codes.revoke',
-        'groups.create',
         'devices.revoke',
       ]) {
         expect(mod).not.toContain(denied);
       }
+    });
+
+    it('lets a moderator create and manage groups (owner decision, 2026-09-25)', async () => {
+      const mod = await permsOf('moderator');
+      expect(mod).toContain('groups.create');
+      expect(mod).toContain('groups.manage');
     });
 
     it('has NO permission -- for any role -- that could grant access to message plaintext', async () => {
