@@ -56,6 +56,8 @@ class DirectoryDevice {
 ///       album (board 23); once marks view-once (board 24). The server has
 ///       only the blobs.
 ///   {"v":1,"type":"opened","peer","ids":[...]}     a view-once was opened
+///   {"v":1,"type":"call","peer","callId","action",...} call setup (Phase 10),
+///       handed to the CallService; one to one only
 ///   {"v":1,"type":"read","peer","ids":[...]}      read receipt
 ///   {"v":1,"type":"timer","id","peer","seconds","sentAt"}
 ///   {"v":1,"type":"typing","peer","on"}            (live signals only)
@@ -92,6 +94,10 @@ class Messenger extends ChangeNotifier {
   bool signedOut = false;
   ConnectionStatus connection = ConnectionStatus.offline;
   String? openChat;
+
+  /// Phase 10: call setup messages go to the CallService. (sender user,
+  /// sender device, the peer this belongs to, the content)
+  void Function(String sender, int device, String peer, Map<String, Object?> content)? onCall;
 
   String get me => session.userId;
   List<Contact> get contacts => _contacts.values.toList()
@@ -844,6 +850,9 @@ class Messenger extends ChangeNotifier {
       return;
     }
     if (content['type'] == 'skey') return _acceptSenderKey(sender, device, content);
+    // A call offer rings only while it is fresh; the server says how long it
+    // held it (phone clocks can be minutes apart, an emulator's especially).
+    if (content['type'] == 'call' && e['ageMs'] is int) content = {...content, 'ageMs': e['ageMs']};
     // The chat: from a contact it is the sender; from our own other device it
     // is whoever that device addressed.
     final peer = fromMe ? content['peer'] as String? : sender;
@@ -927,6 +936,9 @@ class Messenger extends ChangeNotifier {
           noticeData: {'seconds': seconds, 'byMe': fromMe, if (senderName != null) 'name': senderName},
           status: MessageStatus.delivered,
         ));
+      case 'call':
+        // One to one only: a call is between two linked people.
+        if (!group) onCall?.call(sender, device, peer, content);
       case 'edit' || 'delete' || 'react' || 'pin':
         await _applyControl(peer, sender, content, senderName: senderName);
       case 'opened':
@@ -1244,6 +1256,44 @@ class Messenger extends ChangeNotifier {
       }
     }
     await store.putChat(chat);
+  }
+
+  /// Sends one call-setup message (Phase 10) to [peer]'s devices and our own
+  /// other devices, encrypted like any message. Throws when it cannot go.
+  Future<void> sendCallSignal(String peer, Map<String, Object?> content) =>
+      _post(peer, _uuid.v4(), {'v': 1, 'type': 'call', 'peer': peer, ...content});
+
+  /// Board 35: a call leaves a line in the chat.
+  Future<void> recordCall(
+    String peer, {
+    required bool video,
+    required bool outgoing,
+    required String outcome, // completed | missed | declined | noAnswer | busy
+    int durationSeconds = 0,
+    DateTime? at,
+  }) async {
+    final when = at ?? DateTime.now();
+    final chat = await _ensureChat(peer);
+    await store.putMessage(LocalMessage(
+      id: _uuid.v4(),
+      peerUserId: peer,
+      fromMe: outgoing,
+      sentAt: when,
+      kind: MessageKind.notice,
+      notice: NoticeType.call,
+      noticeData: {'video': video, 'outgoing': outgoing, 'outcome': outcome, 'seconds': durationSeconds},
+      status: MessageStatus.delivered,
+    ));
+    final kind = video ? 'video call' : 'voice call';
+    final line = switch (outcome) {
+      'missed' => 'Missed $kind',
+      'declined' => '${video ? 'Video' : 'Voice'} call · declined',
+      'noAnswer' => '${video ? 'Video' : 'Voice'} call · no answer',
+      'busy' => '${video ? 'Video' : 'Voice'} call · busy',
+      _ => '${video ? 'Video' : 'Voice'} call',
+    };
+    await _touchChat(chat, line, when, unread: outcome == 'missed' && openChat != peer);
+    notifyListeners();
   }
 
   /// A reply's quote, as received: only plain fields, trimmed.

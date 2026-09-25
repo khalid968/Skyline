@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../features/auth/data/activation_service.dart';
+import '../../features/calls/data/call_service.dart';
 import '../../features/media/data/media_service.dart';
 import '../../features/messages/data/local_store.dart';
 import '../../features/messages/data/messenger.dart';
@@ -36,6 +37,7 @@ class AppController extends ChangeNotifier {
   ApiClient? api;
   LocalStore? store;
   Messenger? messenger;
+  CallService? calls;
   ActivationService? activation;
   AppLock? lock;
   PushRegistrar? push;
@@ -87,6 +89,7 @@ class AppController extends ChangeNotifier {
     );
     m.addListener(_watchSignedOut);
     messenger = m;
+    calls = CallService(messenger: m, api: api!);
     phase = AppPhase.ready;
     await m.start();
     push = PushRegistrar(api: api!, messenger: m);
@@ -102,6 +105,8 @@ class AppController extends ChangeNotifier {
     m.removeListener(_watchSignedOut);
     unawaited(push?.stop());
     push = null;
+    calls?.dispose(); // ends any call in progress
+    calls = null;
     unawaited(sessions.clear());
     m.dispose();
     messenger = null;

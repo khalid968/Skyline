@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Skyline uses the camera when you ask it to: to scan a contact's safety-number code, or to take a photo to send. Photos are encrypted on this phone before they leave.</string>
+	<string>Skyline uses the camera when you ask it to: to scan a contact's safety-number code, to take a photo to send, or during a video call. Everything is encrypted on this phone before it leaves.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Skyline opens your photos only when you choose one to send. It is encrypted on this phone before it leaves.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Skyline adds a photo to your library only when you tap Save and confirm. That copy is not encrypted.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Skyline uses the microphone only while you hold the record button for a voice message. It is encrypted on this phone before it leaves.</string>
+	<string>Skyline uses the microphone while you record a voice message or are on a call. It is encrypted on this phone before it leaves.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Skyline uses Face ID to unlock the app, if you turn on app lock. Your face never leaves this phone.</string>
 	<key>CFBundleDevelopmentRegion</key>

@@ -5,6 +5,7 @@ import 'core/app/app_controller.dart';
 import 'core/push/push.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/calls/presentation/call_overlay.dart';
 import 'features/settings/presentation/lock_screen.dart';
 import 'src/rust/frb_generated.dart';
 
@@ -31,9 +32,20 @@ class SkylineApp extends ConsumerWidget {
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
       routerConfig: router,
-      builder: (context, child) => _LockGate(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => _Calls(child: _LockGate(child: child ?? const SizedBox.shrink())),
     );
   }
+}
+
+/// A call rings over everything, the lock screen included (like a phone): it
+/// shows only who is calling, and answering opens only the call.
+class _Calls extends ConsumerWidget {
+  const _Calls({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) =>
+      CallOverlay(calls: ref.watch(appControllerProvider).calls, child: child);
 }
 
 /// While the app lock is engaged, the lock screen REPLACES the app: nothing of

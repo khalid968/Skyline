@@ -67,11 +67,17 @@ if ($LASTEXITCODE -ne 0) {
 }
 docker compose -f (Join-Path $root 'infra\docker\docker-compose.yml') up -d
 if ($LASTEXITCODE -ne 0) { Fail 'The data stack did not start (docker compose up failed).' }
-WaitFor 'Postgres, Redis and MinIO' 120 {
-  $states = docker compose -f (Join-Path $root 'infra\docker\docker-compose.yml') ps --format '{{.Health}}'
-  ($states | Where-Object { $_ -ne 'healthy' }).Count -eq 0
+WaitFor 'Postgres, Redis, MinIO and the call relay' 120 {
+  # "healthy|running" per container. The call relay (coturn) has no health
+  # check, so a container without one counts once it is running.
+  $states = docker compose -f (Join-Path $root 'infra\docker\docker-compose.yml') ps --format '{{.Health}}|{{.State}}'
+  $notReady = $states | Where-Object {
+    $health, $state = $_ -split '\|'
+    if ($health) { $health -ne 'healthy' } else { $state -ne 'running' }
+  } | Measure-Object
+  $notReady.Count -eq 0
 }
-Write-Host 'Postgres, Redis and MinIO are up.'
+Write-Host 'Postgres, Redis, MinIO and the call relay are up.'
 
 # ---------------------------------------------------------------- 2. Server
 Say 'Server (:3000)'

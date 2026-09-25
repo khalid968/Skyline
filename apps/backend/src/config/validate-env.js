@@ -95,6 +95,11 @@ export function validateEnv(env) {
         );
       }
     }
+    // Devices must reach the relay at a real address; the development
+    // fallback (this machine's LAN address) is wrong for a server.
+    if (!env.TURN_URLS) {
+      problems.push('TURN_URLS must list the call relay address in production');
+    }
   }
 
   if (nodeEnv === 'production' && dbUrl) {

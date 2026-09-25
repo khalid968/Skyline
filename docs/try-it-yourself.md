@@ -337,6 +337,33 @@ give her a code, but **do not** link her to Amina. She can sign in on a second W
    - Removed members stop receiving at once, and the others' next messages use new keys the removed
      person does not have.
 
+## Phase 10: voice and video calls
+
+Start everything with **Start Skyline.cmd**. It now also starts the call relay (coturn). Sign in as two
+linked people, for example one on Windows and one on the Android emulator.
+
+1. **Call:** open the chat. The phone and camera buttons are at the top right. The other device rings
+   full screen with **Decline**, **Message** and **Accept**.
+2. **During the call:**
+   - The screen shows the timer and "End-to-end encrypted · through Skyline's relay". Every call goes
+     through the relay, so neither of you learns the other's IP address.
+   - **Mute**, **Speaker** (phones), and **Video** turn the camera on in the middle of a voice call.
+   - The arrow at the top left **minimises** the call. A green "On a call" bar then takes you back to it.
+3. **Video:** in a video call your camera appears in the small corner tile. **Flip** switches cameras on
+   a phone.
+4. **Share your screen** (Windows and Android):
+   - On Android, Skyline asks the system first and keeps a "Skyline is sharing your screen" notification
+     up the whole time.
+   - A red bar on your screen says you are sharing; **Stop** ends it.
+5. **In the chat afterwards:** every call leaves a line: "Voice call · 1 min 7 s", "No answer",
+   "Declined", or a red **Missed voice call** with **Call back**.
+6. **Two devices of your own:** both ring. Answering on one stops the other.
+
+Limits for now:
+- **App running:** a phone rings only while Skyline is running (in the foreground or recently used).
+  Ringing a closed app is a later piece of work.
+- **iOS:** calls there are untested.
+
 ## Starting over
 
 Your development accounts live in the Docker volume. To wipe everything and start clean:

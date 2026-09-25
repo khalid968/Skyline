@@ -48,6 +48,7 @@ describe('validateEnv', () => {
       AUTH_TOKEN_PEPPER: 'Qk3v9-a-genuinely-random-pepper-value-8Hn2',
       AUTH_TOTP_KEY: 'Zp7w1-a-genuinely-random-totp-key-value-4Rt6',
       TURN_SECRET: 'Qm3v8-a-genuinely-random-relay-secret-9Kd2',
+      TURN_URLS: 'turn:relay.example.org:3478?transport=udp',
     };
 
     it('accepts properly configured production settings', () => {
@@ -79,6 +80,7 @@ describe('validateEnv', () => {
       ['a missing 2FA key', { AUTH_TOTP_KEY: undefined }],
       ['a missing relay secret', { TURN_SECRET: undefined }],
       ['the development relay secret', { TURN_SECRET: 'dev-only-turn-secret' }],
+      ['no relay address', { TURN_URLS: undefined }],
       ['a scaled-up rate limit', { RATE_LIMIT_SCALE: '100' }],
     ])('rejects %s', (_label, override) => {
       expect(() => validateEnv({ ...good, ...override })).toThrow(/production/);

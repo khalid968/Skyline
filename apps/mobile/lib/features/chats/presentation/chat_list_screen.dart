@@ -90,19 +90,22 @@ class _ChatListState extends State<_ChatList> {
       context: context,
       backgroundColor: t.surface,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(
-            leading: SkyIcon(SkyIcons.bellOff, size: 20, color: t.textPrimary),
-            title: Text(r.muted ? 'Unmute' : 'Mute'),
-            onTap: () => Navigator.pop(ctx, 'mute'),
-          ),
-          ListTile(
-            leading: SkyIcon(SkyIcons.archive, size: 20, color: t.textPrimary),
-            title: Text(r.archived ? 'Unarchive' : 'Archive'),
-            onTap: () => Navigator.pop(ctx, 'archive'),
-          ),
-        ]),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              leading: SkyIcon(SkyIcons.bellOff, size: 20, color: t.textPrimary),
+              title: Text(r.muted ? 'Unmute' : 'Mute'),
+              onTap: () => Navigator.pop(ctx, 'mute'),
+            ),
+            ListTile(
+              leading: SkyIcon(SkyIcons.archive, size: 20, color: t.textPrimary),
+              title: Text(r.archived ? 'Unarchive' : 'Archive'),
+              onTap: () => Navigator.pop(ctx, 'archive'),
+            ),
+          ]),
+        ),
       ),
     );
     if (choice == 'mute') await messenger.setMuted(r.peer, !r.muted);
@@ -294,7 +297,8 @@ class _Chip extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
           ),
           child: Text(label,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : t.textSecondary)),
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : t.textSecondary)),
         ),
       ),
     );
@@ -316,7 +320,8 @@ class _ChatRow extends StatelessWidget {
     final draft = row.draft;
     final preview = typing
         ? 'typing…'
-        : draft ?? (chat == null || chat.lastText.isEmpty ? 'Say hello — messages are end-to-end encrypted' : chat.lastText);
+        : draft ??
+            (chat == null || chat.lastText.isEmpty ? 'Say hello — messages are end-to-end encrypted' : chat.lastText);
     // One clear sentence for screen readers, instead of every text in the row.
     return Semantics(
       button: true,
@@ -371,8 +376,7 @@ class _ChatRow extends StatelessWidget {
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               if (chat?.lastAt != null)
                 Text(_when(chat!.lastAt!),
-                    style: TextStyle(
-                        fontSize: 11.5, color: unread > 0 && !row.muted ? t.accentText : t.textSecondary)),
+                    style: TextStyle(fontSize: 11.5, color: unread > 0 && !row.muted ? t.accentText : t.textSecondary)),
               if (unread > 0 || mentioned) ...[
                 const SizedBox(height: 6),
                 Container(
@@ -406,7 +410,9 @@ String _when(DateTime at) {
     return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
   if (diff == 1) return 'Yesterday';
-  if (diff < 7) return const ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][local.weekday - 1];
+  if (diff < 7) {
+    return const ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][local.weekday - 1];
+  }
   return '${local.day}/${local.month}/${local.year}';
 }
 

@@ -43,6 +43,14 @@ enum SkyIcons {
   trash('<path d="M4.5 6.5h15"/><path d="M9.5 6.5V4.5h5v2"/><path d="m6.5 6.5 1 13h9l1-13"/>'),
   search('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>'),
   archive('<rect x="3.5" y="4.5" width="17" height="4.5" rx="1.2"/><path d="M5 9v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V9"/><path d="M10 13h4"/>'),
+  // Calls (boards 32-35).
+  phoneCall('<path d="M7.5 4.5 9.8 9l-2.1 1.6a11 11 0 0 0 5.7 5.7L15 14.2l4.5 2.3v3a1.5 1.5 0 0 1-1.6 1.5C10.4 20.5 4 14.1 3.5 6.6A1.5 1.5 0 0 1 5 4.5Z"/>'),
+  phoneDown('<path transform="rotate(135 12 12)" d="M7.5 4.5 9.8 9l-2.1 1.6a11 11 0 0 0 5.7 5.7L15 14.2l4.5 2.3v3a1.5 1.5 0 0 1-1.6 1.5C10.4 20.5 4 14.1 3.5 6.6A1.5 1.5 0 0 1 5 4.5Z"/>'),
+  micOff('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/><path d="m4 4 16 16"/>'),
+  speaker('<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4Z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a7.5 7.5 0 0 1 0 11"/>'),
+  videoOff('<rect x="2.8" y="6.5" width="12.5" height="11" rx="2.6"/><path d="m15.3 11.3 5.9-3.3v8l-5.9-3.3Z"/><path d="m3 3 18 18"/>'),
+  more('<circle cx="12" cy="5.5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="18.5" r="1.3"/>'),
+  chevronDown('<path d="m5 9 7 6.5L19 9"/>'),
   bellOff('<path d="M18 8.5a6 6 0 0 0-11.2-3"/><path d="M6 8.5c0 7-3 9-3 9h13"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><path d="m3 3 18 18"/>');
 
   const SkyIcons(this.paths);

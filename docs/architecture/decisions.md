@@ -6,6 +6,56 @@ working around it.
 
 ---
 
+## 2026-09-26 — Phase 11 (Admin dashboard v2) planned: owner decisions
+
+The owner's answers:
+- **"Reporting" means usage reports only.** The dashboard shows totals: people, active today, devices,
+  waiting messages, messages and calls per day, and storage.
+  - Nothing is ever shown per person: not how much someone writes, not who they talk to.
+  - There is no "report a person" and no "report with messages"; the latter would bend "admins never read
+    messages".
+- **Abuse detection: alerts plus automatic limits.** Signals are metadata only (counts and timing).
+  Automatic actions slow things down and never suspend anyone:
+  - a device sending far too fast: 1 message per 5 s for 30 minutes;
+  - an address guessing activation codes: blocked for 1 hour;
+  - wrong dashboard passwords: that account's sign-in paused for 15 minutes;
+  - uploads far above normal: one upload at a time for 30 minutes;
+  - a burst of new devices: alert only.
+
+  Every automatic action appears in the alert and in the audit log, and an admin can lift it early.
+  Suspending remains a human decision.
+- **Audit log: the owner and admins can read it; moderators cannot.** It stays append-only (a
+  database trigger already refuses UPDATE, DELETE and TRUNCATE). It gets a CSV download.
+- **Monitoring: a built-in Overview page.** It shows the health of the server, Postgres, Redis, MinIO
+  and coturn, storage used, connected devices, waiting messages, and the error rate. No
+  Prometheus or Grafana.
+- **Sessions page:** it lists dashboard sessions. Operators can end their own, and the owner can end
+  anyone's, or everyone's but their own. Member devices stay on the Devices page (revoking one signs it
+  out).
+
+Prototypes 36-39 were drawn for approval. Nothing is built until they are approved.
+
+## 2026-09-25 (night) — Phase 10 (Calls) as built: implementation choices
+
+- **Setup is two Signal-encrypted messages** (offer and answer, with all candidates gathered first, no
+  trickle), plus small control messages: taken, decline, busy, hangup. The DTLS fingerprints ride inside
+  them, so the media is bound to the verified Signal identities. The server sees only ordinary
+  ciphertext envelopes.
+- **Relay only** (owner decision): `iceTransportPolicy: relay`, one ICE server entry per URL (the Windows
+  plugin keeps only the last URL of a list), and coturn credentials that last 10 minutes.
+- **One video channel from the start.** The caller creates it and the answerer adopts the one in the
+  offer, so switching the camera or a screen share on is a `replaceTrack` and never a renegotiation.
+- **Freshness uses the server's clock.** The inbox reports how long the server held each envelope
+  (`ageMs`), and an offer older than 50 s is recorded as missed instead of ringing. The caller's clock
+  is never trusted: an emulator 345 s behind turned every call into a missed call.
+- **Only the device on the other end can end a call.** A hangup from any other device is ignored.
+  Answering on one of your devices stops the others ringing.
+- **Android screen sharing** follows Android 14's order: consent first
+  (`Helper.requestCapturePermission`), then a foreground service of type mediaProjection with a visible
+  notification, then the capture.
+- **The call screens sit above the navigator**, so they cannot use Tooltips (there is no Overlay there)
+  and they use fixed light text colours whatever the theme.
+
 ## 2026-09-25 — Phase 10 (Calls) started: owner decisions and plan
 
 **The owner decided:**

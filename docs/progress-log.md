@@ -951,3 +951,79 @@ has no SDK-generated platform runner folders; run the `flutter create --platform
 3. On approval, begin **Phase 3 (Database & contact graph)**: schema, migrations, indexes, constraints.
    Start from `architecture/contact-graph.md` — the `CHECK (user_a_id < user_b_id)` symmetry constraint
    and default-deny posture are the parts that must not be softened for convenience.
+
+## 2026-09-25 (paused mid-work): Phase 10 Calls, parts 2-3 in progress (uncommitted)
+
+The owner paused the session. **Nothing below is committed yet.**
+
+**Done (uncommitted):**
+- Call setup messages in `messenger.dart` (`onCall`, `sendCallSignal`, `recordCall`) and `NoticeType.call`.
+- `features/calls/data/call_service.dart`: the WebRTC engine (relay-only, no trickle, `skyline-call` data channel).
+- `features/calls/presentation/call_overlay.dart`: boards 32-35. It includes incoming, voice and video screens, and the minimise bar.
+- The overlay is mounted in `main.dart` (`_Calls`, above the lock gate).
+- The call service is created and disposed in `app_controller.dart`.
+- The one-to-one chat header has voice and video buttons.
+- The chat shows call cards with "Call back".
+- New icons in `sky_icon.dart`. Android camera and audio permissions; iOS usage texts updated.
+- Backend: in development, `TURN_URLS` now defaults to this PC's LAN address, skipping virtual adapters, because WebRTC never uses localhost. Production must set `TURN_URLS`; validate-env enforces it, with a spec case.
+- Windows fix: the plugin keeps only the last URL of an ICE server's `urls` list, so there is now one entry per URL.
+- `integration_test/calls_test.dart` (two call services, `captureMedia: false`):
+  - The first call CONNECTS through coturn, with the data channel working both ways.
+  - The run then failed at step 2 (line 97): after the decline test, Alice's last call line was `completed`, not `declined`.
+  - Likely cause: the first call's hangup and the second offer race, or the line order is wrong because `messages()` isn't sorted as the test assumes. Investigate next.
+
+**Cleanup before committing:**
+- Remove the temporary `DBG` debugPrints in `call_service.dart`.
+- Delete the scratch `integration_test/zz_ice_probe_test.dart`.
+
+**Remaining:**
+- Fix the test and finish the Windows run.
+- UI screenshot test.
+- Screen sharing: Android mediaProjection foreground service; Windows desktopCapturer is already wired.
+- Android emulator run.
+- Docs: try-it-yourself Calls, CLAUDE.md, known risks (no ringing when the app is killed; iOS untested).
+- Commit, then ask before pushing.
+
+### 2026-09-25 (later): owner's first real calls, and the fixes (still uncommitted)
+The owner tried calls between the Windows app and the Android emulator. Fixes:
+- **Video from the answerer never arrived.** The answerer added its own video transceiver before
+  `setRemoteDescription`. Unified plan reuses only `addTrack` transceivers for an offer's m-lines, so that
+  transceiver stayed unnegotiated.
+  - Now only the caller adds one. The answerer adopts the offer's transceiver: `_adoptVideo` sets it to
+    sendrecv and calls `setStreams([local])`, so the caller's `onTrack` gets one stream.
+  - `calls_test` asserts both sides negotiate `sendrecv`.
+- **"No Overlay widget found"** on every call screen: the overlay sits above the Navigator, so it must not
+  use Tooltips. The minimise button carries a Semantics label instead.
+- **Overflows:**
+  - the chat header on phones: media and timer fold into a "⋮" menu under 520 px, and the subtitle
+    ellipsizes;
+  - the voice call on short windows: a compact layout under 720 px, scrolling as a fallback;
+  - Message details and the other bottom sheets now scroll.
+- **Relay address:** the dev relay defaults to the LAN IP, because WebRTC ignores loopback, and virtual
+  adapters are skipped. `TURN_URLS` is required in production.
+- **Start Skyline:** `dev-up.ps1` now accepts containers without a health check, such as coturn.
+- **New test:** `integration_test/call_ui_test.dart` renders every call screen at 4 sizes, fails on any
+  overflow, and writes PNGs to SHOTS.
+
+
+## 2026-09-26 — Calls fixes from the owner's testing; Phase 11 planned (nothing committed yet)
+
+**Calls, found by the owner calling from the Android emulator to Windows:**
+- **Instant "missed call" on Windows.** Freshness used the caller's clock, and the emulator was 345 s
+  behind. The inbox now returns `ageMs` (server clock), and the app judges an offer only by that. Tested:
+  `messaging.e2e-spec` checks `ageMs`, and `calls_test` step 5 sends an offer stamped 5 minutes in the
+  past and it rings.
+- **The name on the Android call screen was near-invisible** (light theme text on the dark call screen).
+  The call screens now use fixed light colours.
+- **Android screen sharing** now has `ScreenShareService` (a foreground service of type mediaProjection),
+  called after `Helper.requestCapturePermission()`. The APK builds.
+- **Not yet run on Android:** the emulator's system_server died (`Service package: not found`) and needs
+  a restart. Rerun `DEVICE=emulator-5554 API_HOST=10.0.2.2 run_e2e.sh calls_test.dart` after it restarts.
+  Screen sharing on Android needs a manual try, because the system prompt can't be automated.
+
+**Docs:** try-it-yourself has a Phase 10 section. known-risks gains "a closed app does not ring" and the
+relay's limits (production must deny private ranges). CLAUDE.md and decisions.md are updated.
+
+**Phase 11 (dashboard v2) planned.** The owner's decisions are in decisions.md: usage totals only,
+alerts with automatic limits, an audit log for the owner and admins, a built-in Overview page, and a
+Sessions page. Prototypes 36-39 are on the canvas, awaiting approval.

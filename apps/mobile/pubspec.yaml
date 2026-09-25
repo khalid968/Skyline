@@ -53,6 +53,7 @@ dependencies:
   gal: ^2.3.3
   video_compress: ^3.1.4
   emoji_picker_flutter: ^4.4.0
+  flutter_webrtc: ^1.6.2+hotfix.3
 
 dev_dependencies:
   flutter_test:

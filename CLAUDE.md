@@ -51,7 +51,18 @@ the current state of play.
   - Also built: several files at once (albums), view once (screenshots blocked on Android and Windows) and
     the media gallery (boards 23-25). Photos are re-encoded with EXIF stripped; `Start Skyline.cmd` starts everything.
 - **Phase 8b (groups and message tools) — ✅ built and pushed 2026-09-25.**
-- **Phase 10 (Calls) — planned 2026-09-25:** owner decisions in `decisions.md`; prototypes 32-35 await approval.
+- **Phase 10 (Calls) — ✅ built 2026-09-25**, awaiting the owner's review.
+  - What it covers: one-to-one voice and video with `flutter_webrtc`, and screen sharing on Windows
+    (desktopCapturer) and Android (a mediaProjection foreground service).
+  - Setup: offer and answer travel as Signal-encrypted `{"type":"call"}` messages. There is no trickle,
+    and the answerer adopts the offer's video transceiver.
+  - Relay only: `iceTransportPolicy: relay` through coturn (compose), with short-lived HMAC credentials
+    from `GET /calls/turn`. In development, `TURN_URLS` defaults to the PC's LAN IP; production requires it.
+  - An offer's freshness is judged by the server-held age (`ageMs` in the inbox), never by the caller's clock.
+  - Code: `lib/features/calls`, `modules/calls`. Tests: `integration_test/calls_test.dart` and
+    `call_ui_test.dart` (four sizes, fails on overflow).
+  - Limit: a closed app does not ring (`known-risks.md`).
+  - Details for Phase 8b (groups, message tools, search):
   - Groups: managed in the dashboard (Groups page), libsignal Sender Keys rotated when anyone leaves.
   - Message tools: reply, edit (15 minutes), delete (24 hours), reactions, pins, mentions.
   - Chat list and search: local search, drafts, archive and mute.

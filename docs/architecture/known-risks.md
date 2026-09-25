@@ -153,3 +153,22 @@ decrypts.
 
 - **Fix for later:** after the wake-up, fetch and decrypt in the background, then decide whether to show
   anything. Android allows a short background run; iOS needs a notification service extension.
+
+## A closed app does not ring (Phase 10, 2026-09-25) — OPEN
+- **What:** a call rings only while Skyline is running. A killed app gets the content-free push wake-up
+  and shows the missed call afterwards, but it does not ring.
+- **Why:** ringing a closed app needs Android's ConnectionService / full-screen-intent notification and
+  iOS CallKit + PushKit (VoIP push). Each is its own piece of platform work.
+- **Fix for later:** a dedicated "incoming call" push that starts the ringing UI, still content-free (no
+  caller name leaves the server).
+
+## Calls trust the relay for availability, not for secrecy (Phase 10, 2026-09-25)
+- **What:** every call goes through our coturn relay. The relay sees encrypted packets, both devices' IP
+  addresses, and the call's timing and volume. It never sees content: media is DTLS-SRTP end to end, and
+  the DTLS fingerprints travel inside Signal-encrypted messages, so a relay cannot sit in the middle.
+- **Mitigation:** short-lived relay credentials (10 minutes, HMAC of a random name that names no one).
+  Coturn refuses to relay to 0.0.0.0/8 and link-local addresses. In development it must still reach its
+  own Docker network, so private ranges are allowed there. **Production (Phase 13) must also deny
+  private ranges** (10/8, 172.16/12, 192.168/16, 127/8), so the relay cannot be used to reach the
+  server's internal network. Run it on the same host we already trust with metadata.
+

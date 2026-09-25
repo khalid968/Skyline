@@ -1,5 +1,23 @@
 // Central source of truth for environment-driven runtime configuration.
 // Validation lives in validate-env.js and runs at boot, before this is read.
+import os from 'os';
+
+// Development only: the relay runs on this machine, and WebRTC never uses
+// loopback, so "localhost" cannot reach it. Its first LAN address can (from
+// this PC, a phone on the same network, or the Android emulator).
+// Virtual adapters (VMware, Hyper-V/WSL, VirtualBox, Docker) are skipped:
+// nothing outside this PC can reach them. TURN_URLS overrides all of this.
+const VIRTUAL = /vmware|vmnet|vethernet|virtualbox|vbox|hyper-v|wsl|docker|br-|veth/i;
+
+function devTurnUrls() {
+  const lan = Object.entries(os.networkInterfaces())
+    .filter(([name]) => !VIRTUAL.test(name))
+    .flatMap(([, addrs]) => addrs)
+    .find((a) => a && a.family === 'IPv4' && !a.internal);
+  const host = lan ? lan.address : 'localhost';
+  return `turn:${host}:3478?transport=udp,turn:${host}:3478?transport=tcp`;
+}
+
 export default () => {
   const db = {
     host: process.env.DATABASE_HOST || 'localhost',
@@ -65,8 +83,7 @@ export default () => {
     turn: {
       secret: process.env.TURN_SECRET || 'dev-only-turn-secret',
       urls: (
-        process.env.TURN_URLS ||
-        'turn:localhost:3478?transport=udp,turn:localhost:3478?transport=tcp'
+        process.env.TURN_URLS || devTurnUrls()
       )
         .split(',')
         .map((u) => u.trim())

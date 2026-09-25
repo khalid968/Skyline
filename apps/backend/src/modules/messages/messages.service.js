@@ -273,7 +273,8 @@ export class MessagesService {
   async inbox(caller) {
     const envelopes = await this.db.query(
       `SELECT e.id, e.message_id, e.envelope_kind, e.ciphertext, m.chat_id, c.group_id,
-              m.sender_user_id, sd.device_number AS sender_device_number, m.created_at
+              m.sender_user_id, sd.device_number AS sender_device_number, m.created_at,
+              (EXTRACT(EPOCH FROM (now() - m.created_at)) * 1000)::bigint AS age_ms
          FROM message_envelopes e
          JOIN messages m ON m.id = e.message_id
          JOIN chats c ON c.id = m.chat_id
@@ -319,6 +320,10 @@ export class MessagesService {
         kind: e.envelope_kind,
         body: e.ciphertext.toString('base64'),
         sentAt: e.created_at,
+        // How long the server has held it, by the server's own clock: a
+        // device can judge "is this call still ringing?" without trusting
+        // either phone's clock.
+        ageMs: Number(e.age_ms),
       })),
       system: system.rows.map((s) => ({
         seq: Number(s.seq),

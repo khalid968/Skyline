@@ -313,6 +313,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                       devices: devices,
                       timer: chat?.timerSeconds,
                       onTimer: canWrite ? () => _timer(chat, name) : null,
+                      onCall: canWrite
+                          ? (video) => ref.read(appControllerProvider).calls?.start(widget.peer, video: video)
+                          : null,
                     ),
                   if (pins.isNotEmpty)
                     _PinnedBar(
@@ -337,8 +340,14 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                         if (m.isNotice) {
                           return Padding(
                             padding: const EdgeInsets.only(top: 10),
-                            child:
-                                _Notice(m: m, name: name, onVerify: () => context.push('/chat/${widget.peer}/verify')),
+                            child: _Notice(
+                              m: m,
+                              name: name,
+                              onVerify: () => context.push('/chat/${widget.peer}/verify'),
+                              onCallBack: canWrite
+                                  ? (video) => ref.read(appControllerProvider).calls?.start(widget.peer, video: video)
+                                  : null,
+                            ),
                           );
                         }
                         void act() => _actions(m, canWrite: canWrite, chat: chat, name: name);
@@ -456,9 +465,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: t.surface,
+      isScrollControlled: true, // as tall as it needs, up to the screen
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       builder: (ctx) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text('Message details',
@@ -509,7 +519,15 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.peer, required this.name, required this.devices, required this.timer, this.onTimer});
+  const _Header({
+    required this.peer,
+    required this.name,
+    required this.devices,
+    required this.timer,
+    this.onTimer,
+    this.onCall,
+  });
+  final void Function(bool video)? onCall; // board 35
   final String peer;
   final String name;
   final List<KnownDevice> devices;
@@ -545,34 +563,74 @@ class _Header extends StatelessWidget {
                 if (allVerified) ...[
                   SkyIcon(SkyIcons.check, size: 12, color: t.verified, stroke: 2.6),
                   const SizedBox(width: 4),
-                  Text('Verified', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: t.verified)),
+                  Flexible(child: Text('Verified', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: t.verified), maxLines: 1, overflow: TextOverflow.ellipsis)),
                 ] else if (devices.any((d) => d.verifiedAt != null)) ...[
                   SkyIcon(SkyIcons.warn, size: 12, color: t.caution, stroke: 2.4),
                   const SizedBox(width: 4),
-                  Text('$unverified device${unverified == 1 ? '' : 's'} not verified',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: t.caution)),
+                  Flexible(child: Text('$unverified device${unverified == 1 ? '' : 's'} not verified',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: t.caution), maxLines: 1, overflow: TextOverflow.ellipsis)),
                 ] else
-                  Text('Tap to verify safety numbers', style: TextStyle(fontSize: 12, color: t.textSecondary)),
+                  Flexible(child: Text('Tap to verify safety numbers', style: TextStyle(fontSize: 12, color: t.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
                 if (timer != null) ...[
                   Text(' · ', style: TextStyle(fontSize: 12, color: t.textSecondary)),
                   SkyIcon(SkyIcons.clock, size: 12, color: t.caution, stroke: 2.3),
                   const SizedBox(width: 3),
-                  Text(timerLabel(timer), style: TextStyle(fontSize: 12, color: t.caution)),
+                  Flexible(child: Text(timerLabel(timer), style: TextStyle(fontSize: 12, color: t.caution), maxLines: 1, overflow: TextOverflow.ellipsis)),
                 ],
               ]),
             ]),
           ),
         ),
-        IconButton(
-          tooltip: 'Media',
-          onPressed: () => context.push('/chat/$peer/media'),
-          icon: SkyIcon(SkyIcons.photo, size: 21, color: t.textSecondary),
-        ),
-        if (onTimer != null)
+        if (onCall != null) ...[
           IconButton(
-            tooltip: 'Disappearing messages',
-            onPressed: onTimer,
-            icon: SkyIcon(SkyIcons.clock, size: 21, color: timer != null ? t.caution : t.textSecondary),
+            tooltip: 'Voice call',
+            onPressed: () => onCall!(false),
+            icon: SkyIcon(SkyIcons.phoneCall, size: 21, color: t.textSecondary),
+          ),
+          IconButton(
+            tooltip: 'Video call',
+            onPressed: () => onCall!(true),
+            icon: SkyIcon(SkyIcons.video, size: 22, color: t.textSecondary),
+          ),
+        ],
+        // A phone has room for the call buttons and one more: media and the
+        // timer fold into a menu there. A wide window shows them all.
+        if (MediaQuery.sizeOf(context).width >= 520) ...[
+          IconButton(
+            tooltip: 'Media',
+            onPressed: () => context.push('/chat/$peer/media'),
+            icon: SkyIcon(SkyIcons.photo, size: 21, color: t.textSecondary),
+          ),
+          if (onTimer != null)
+            IconButton(
+              tooltip: 'Disappearing messages',
+              onPressed: onTimer,
+              icon: SkyIcon(SkyIcons.clock, size: 21, color: timer != null ? t.caution : t.textSecondary),
+            ),
+        ] else
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            icon: SkyIcon(SkyIcons.more, size: 21, color: timer != null ? t.caution : t.textSecondary),
+            onSelected: (v) => v == 'media' ? context.push('/chat/$peer/media') : onTimer?.call(),
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'media',
+                child: Row(children: [
+                  SkyIcon(SkyIcons.photo, size: 19, color: t.textSecondary),
+                  const SizedBox(width: 12),
+                  const Text('Media'),
+                ]),
+              ),
+              if (onTimer != null)
+                PopupMenuItem(
+                  value: 'timer',
+                  child: Row(children: [
+                    SkyIcon(SkyIcons.clock, size: 19, color: timer != null ? t.caution : t.textSecondary),
+                    const SizedBox(width: 12),
+                    const Text('Disappearing messages'),
+                  ]),
+                ),
+            ],
           ),
       ]),
     );
@@ -780,10 +838,11 @@ class _Tick extends StatelessWidget {
 
 /// Board 17 (and 15's timer notice).
 class _Notice extends StatelessWidget {
-  const _Notice({required this.m, required this.name, required this.onVerify});
+  const _Notice({required this.m, required this.name, required this.onVerify, this.onCallBack});
   final LocalMessage m;
   final String name;
   final VoidCallback onVerify;
+  final void Function(bool video)? onCallBack;
 
   @override
   Widget build(BuildContext context) {
@@ -867,6 +926,8 @@ class _Notice extends StatelessWidget {
       case NoticeType.renamed:
         return _pill(context, SkyIcons.pen,
             'Your administrator renamed ${m.noticeData['from'] ?? 'this person'} to ${m.noticeData['to'] ?? name}. Their safety numbers did not change.');
+      case NoticeType.call:
+        return _CallNotice(m: m, onCallBack: onCallBack);
       case NoticeType.pinned:
         final who =
             m.noticeData['byMe'] == true ? 'You' : ((m.noticeData['name'] as String?)?.split(' ').first ?? first);
@@ -1510,6 +1571,85 @@ class _MentionPicker extends StatelessWidget {
               style: TextStyle(fontSize: 11.5, color: t.textSecondary)),
         ),
       ]),
+    );
+  }
+}
+
+/// Board 35: a call's line in the chat.
+class _CallNotice extends StatelessWidget {
+  const _CallNotice({required this.m, this.onCallBack});
+  final LocalMessage m;
+  final void Function(bool video)? onCallBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.sky;
+    final d = m.noticeData;
+    final video = d['video'] == true;
+    final outgoing = d['outgoing'] == true;
+    final outcome = d['outcome'] as String? ?? 'completed';
+    final missed = outcome == 'missed';
+    final secs = (d['seconds'] as int?) ?? 0;
+    final kind = video ? 'Video call' : 'Voice call';
+    final title = missed ? 'Missed ${kind.toLowerCase()}' : kind;
+    final time =
+        '${m.sentAt.toLocal().hour.toString().padLeft(2, '0')}:${m.sentAt.toLocal().minute.toString().padLeft(2, '0')}';
+    final sub = switch (outcome) {
+      'completed' => '${secs < 60 ? '$secs s' : '${secs ~/ 60} min ${secs % 60} s'} · $time',
+      'noAnswer' => 'No answer · $time',
+      'declined' => 'Declined · $time',
+      'busy' => 'Busy · $time',
+      _ => time,
+    };
+    final mine = outgoing;
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: mine ? t.bubbleOutgoing : t.bubbleIncoming,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: missed ? const Color(0x2ED04545) : (mine ? const Color(0x33FFFFFF) : const Color(0xFF2A3550)),
+              shape: BoxShape.circle,
+            ),
+            child: SkyIcon(video ? SkyIcons.video : SkyIcons.phoneCall,
+                size: 16, color: missed ? const Color(0xFFFF9AA0) : (mine ? Colors.white : const Color(0xFF9DB8FF)), stroke: 2),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Text(title,
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: missed ? const Color(0xFFFFB4B7) : (mine ? Colors.white : t.textPrimary))),
+              const SizedBox(height: 2),
+              Text(sub, style: TextStyle(fontSize: 12, color: mine ? const Color(0xFFDDE5FC) : t.textSecondary)),
+            ]),
+          ),
+          if (missed && onCallBack != null) ...[
+            const SizedBox(width: 10),
+            TextButton(
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0x266E96FF),
+                foregroundColor: const Color(0xFF9DB8FF),
+                minimumSize: const Size(0, 30),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+              ),
+              onPressed: () => onCallBack!(video),
+              child: const Text('Call back', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ]),
+      ),
     );
   }
 }

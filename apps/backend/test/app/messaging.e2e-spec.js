@@ -182,6 +182,12 @@ describe('messaging (real tokens, real database, real sockets)', () => {
           senderDeviceNumber: 1,
           kind: 'whisper',
         });
+        // How long the server has held it, by its own clock (calls ring
+        // only while fresh, whatever the phones' clocks say).
+        const { ageMs } = box.body.envelopes[0];
+        expect(Number.isInteger(ageMs)).toBe(true);
+        expect(ageMs).toBeGreaterThanOrEqual(0);
+        expect(ageMs).toBeLessThan(60000);
       }
       expect((await inbox(alice.d)).body.envelopes).toHaveLength(0);
     });

@@ -45,11 +45,15 @@ Private to the owner. Current boards:
 | 28 · Message actions (mobile) | Approved 2026-09-25: reactions, reply, edit (15 min), copy, pin, info, delete (24 h for everyone) |
 | 29 · Group info, leaving, mentions (mobile) | Approved 2026-09-25 |
 | 30 · Search messages (mobile) | Approved 2026-09-25: local only, never people |
-| 32 · Incoming call (mobile) | Awaiting approval (Phase 10) |
-| 33 · Voice call (mobile) | Awaiting approval: mute, speaker, video, weak-connection warning |
-| 34 · Video call and screen sharing (mobile) | Awaiting approval: self view, flip, share screen (Windows and Android) |
-| 35 · Calls in a chat (mobile) | Awaiting approval: call buttons, call notices, missed call with Call back |
+| 32 · Incoming call (mobile) | Approved 2026-09-25 (Phase 10) |
+| 33 · Voice call (mobile) | Approved 2026-09-25: mute, speaker, video, weak-connection warning |
+| 34 · Video call and screen sharing (mobile) | Approved 2026-09-25: self view, flip, share screen (Windows and Android) |
+| 35 · Calls in a chat (mobile) | Approved 2026-09-25: call buttons, call notices, missed call with Call back |
 | 31 · Admin · Groups (dashboard) | Approved 2026-09-25: create, rename, add or remove members, archive |
+| 36 · Admin · Overview | Proposed 2026-09-26: service health, usage totals (never per person), storage |
+| 37 · Admin · Alerts | Proposed 2026-09-26: metadata-only alerts, automatic limits, lift early, suspend stays human |
+| 38 · Admin · Audit log | Proposed 2026-09-26: owner and admins only, filters, details, CSV |
+| 39 · Admin · Sessions | Proposed 2026-09-26: dashboard sessions, sign out one or everyone but me |
 
 Boards 2–7 are clickable in Play mode. Board 7 has working toggles.
 

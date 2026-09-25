@@ -7,7 +7,7 @@ enum MessageStatus { sending, waiting, sent, delivered, read, failed }
 enum MessageKind { text, notice, media }
 
 /// The kinds of notice shown inline in a chat (boards 15-17).
-enum NoticeType { newDevice, renamed, blocked, undecryptable, timerChanged, groupEvent, pinned }
+enum NoticeType { newDevice, renamed, blocked, undecryptable, timerChanged, groupEvent, pinned, call }
 
 class LocalMessage {
   LocalMessage({
