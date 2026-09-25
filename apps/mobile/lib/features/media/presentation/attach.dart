@@ -164,9 +164,38 @@ class _PreviewScreenState extends State<_PreviewScreen> {
 
   PickedMedia get _shown => _items[_current.clamp(0, _items.length - 1)];
 
-  /// View once is for a single photo or video (board 24).
-  bool get _canViewOnce =>
-      _items.length == 1 && (_items.first.kind == MediaKind.photo || _items.first.kind == MediaKind.video);
+  /// View once is for a single photo or video (board 24), including a
+  /// picture or video picked through File.
+  bool get _canViewOnce => _items.length == 1 && _visualKind(_items.first) != null;
+
+  static MediaKind? _visualKind(PickedMedia p) {
+    if (p.kind == MediaKind.photo || p.kind == MediaKind.video) return p.kind;
+    final ext = p.name.contains('.') ? p.name.split('.').last.toLowerCase() : '';
+    if (const {'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'bmp'}.contains(ext)) return MediaKind.photo;
+    if (const {'mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv'}.contains(ext)) return MediaKind.video;
+    return null;
+  }
+
+  void _toggleViewOnce() {
+    if (!_canViewOnce) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(_items.length > 1
+            ? 'View once works with one photo or video at a time. Remove the others to use it.'
+            : 'View once works with photos and videos.'),
+      ));
+      return;
+    }
+    setState(() => _viewOnce = !_viewOnce);
+  }
+
+  /// What is sent: with view once, a picture picked through File goes as a
+  /// photo (a view-once message is always a photo or a video).
+  List<PickedMedia> get _toSend => [
+        for (final p in _items)
+          _viewOnce && p.kind == MediaKind.file && _visualKind(p) != null
+              ? PickedMedia(p.file, _visualKind(p)!, p.name, temporary: p.temporary)
+              : p,
+      ];
 
   @override
   void dispose() {
@@ -359,19 +388,21 @@ class _PreviewScreenState extends State<_PreviewScreen> {
                   style: TextStyle(fontSize: 14.5, color: t.textPrimary),
                 ),
               ),
-              if (_canViewOnce) ...[
-                const SizedBox(width: 8),
-                Semantics(
+              // Always shown, so it can be found; greyed when it cannot apply.
+              const SizedBox(width: 8),
+              Tooltip(
+                message: _canViewOnce ? 'View once' : 'View once: one photo or video at a time',
+                child: Semantics(
                   button: true,
                   toggled: _viewOnce,
                   label: 'View once',
                   child: InkWell(
                     customBorder: const CircleBorder(),
-                    onTap: () => setState(() => _viewOnce = !_viewOnce),
-                    child: _OnceBadge(on: _viewOnce, size: 40),
+                    onTap: _toggleViewOnce,
+                    child: Opacity(opacity: _canViewOnce ? 1 : 0.45, child: _OnceBadge(on: _viewOnce, size: 40)),
                   ),
                 ),
-              ],
+              ),
               const SizedBox(width: 8),
               Badge(
                 isLabelVisible: _items.length > 1,
@@ -389,7 +420,7 @@ class _PreviewScreenState extends State<_PreviewScreen> {
                   style: IconButton.styleFrom(fixedSize: const Size(44, 44)),
                   onPressed: () => Navigator.pop(
                     context,
-                    PreviewResult(_items, _caption.text.trim(), viewOnce: _viewOnce && _canViewOnce),
+                    PreviewResult(_toSend, _caption.text.trim(), viewOnce: _viewOnce && _canViewOnce),
                   ),
                   icon: const SkyIcon(SkyIcons.send, size: 19, color: Colors.white, stroke: 2),
                 ),

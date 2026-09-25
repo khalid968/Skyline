@@ -8,6 +8,25 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-25 (late night) — Album viewer; view once easier to find
+
+Two points from the owner's testing:
+
+- **The extra photos in an album could not be reached** (the "+4" tile). Tapping any album tile now opens
+  `AlbumViewerScreen` at that photo. You can swipe through every photo and video in the album; on a PC
+  there are Previous and Next arrows and the arrow keys work. It shows "4 of 8", fetches photos that are
+  not downloaded yet, and offers play or download for videos.
+- **"View once doesn't exist when sending from Windows."** It did exist, but only for exactly one photo or
+  video picked through Photos or Video. It was hidden when several files were picked or the file came
+  through File, and a Windows app built before it would not have it either.
+  - The "1" button now always shows. It is greyed when view once cannot apply, and tapping it says why.
+  - A single picture or video picked through File can now be sent view-once too (it goes as a photo or
+    video).
+- **Verified:** Windows `media_ui_test`. Tapping "+1" opens "4 of 5" and Next reaches "5 of 5"; the
+  screenshots were checked. The unit tests pass.
+
+---
+
 ## 2026-09-25 (night) — Several files at once, view once and the media gallery BUILT (boards 23-25)
 
 The owner approved boards 23-25 ("looks great"). Design notes are in `decisions.md`, 2026-09-25 (night).

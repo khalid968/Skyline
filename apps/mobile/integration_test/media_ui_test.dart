@@ -186,6 +186,17 @@ void main() {
     await _show(tester, bob, aliceId);
     await _shot(tester, '21-bob-receives');
 
+    // Board 23: the "+1" tile opens the album viewer at photo 4 of 5, and
+    // Next reaches the fifth.
+    await tester.tap(find.text('+1'), warnIfMissed: false); // the tile under the label takes it
+    await _settle(tester);
+    expect(find.text('4 of 5'), findsOneWidget);
+    await _shot(tester, '23-album-viewer-4');
+    await tester.tap(find.byTooltip('Next'));
+    await _settle(tester);
+    expect(find.text('5 of 5'), findsOneWidget);
+    await _shot(tester, '23-album-viewer-5');
+
     await _show(tester, alice, bobId);
     await _shot(tester, '20-alice-sent');
 

@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gal/gal.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:video_player/video_player.dart';
@@ -129,12 +129,20 @@ class MediaBubble extends StatelessWidget {
 /// the chat and by the media gallery (board 25).
 Future<void> openMediaItem(BuildContext context, Messenger messenger, LocalMessage m, int index) async {
   final info = m.items[index];
+  final from = m.fromMe ? 'You' : (messenger.contact(m.peerUserId)?.displayName ?? '');
+  // An album opens in a viewer you can swipe through, at the tile tapped
+  // (the "+N" tile included), whether or not that one is downloaded yet.
+  if (m.isAlbum && !m.viewOnce && (info.kind == MediaKind.photo || info.kind == MediaKind.video)) {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => AlbumViewerScreen(m: m, initial: index, messenger: messenger, from: from),
+    ));
+    return;
+  }
   final ready = info.state == MediaState.ready && messenger.media.hasLocal(info);
   if (!ready) {
     if (info.state == MediaState.remote) unawaited(messenger.fetchMedia(m.id, index));
     return;
   }
-  final from = m.fromMe ? 'You' : (messenger.contact(m.peerUserId)?.displayName ?? '');
   switch (info.kind) {
     case MediaKind.photo:
       await Navigator.of(context).push(MaterialPageRoute<void>(
@@ -341,6 +349,8 @@ class _Album extends StatelessWidget {
               if (more > 0)
                 Positioned.fill(
                   child: IgnorePointer(
+                    // Taps reach the tile under it, which opens the album
+                    // viewer at this photo; swipe on to the rest.
                     child: ColoredBox(
                       color: const Color(0x80080C16),
                       child: Center(
@@ -890,46 +900,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     return '${d.day}/${d.month}/${d.year}, ';
   }
 
-  Future<void> _save(BuildContext context) async {
-    final t = context.sky;
-    final snack = ScaffoldMessenger.of(context);
-    final info = widget.m.items[widget.index];
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.surface,
-        title: const Text('Save an unencrypted copy?'),
-        content: Text(
-          '${Platform.isWindows ? 'The copy is a normal file on this PC.' : 'The copy goes into your photo gallery.'} '
-          'Other apps, backups and anyone who can open this device can see it. Skyline cannot delete it '
-          'later, even if the message disappears.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save copy')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    try {
-      final bytes = await widget.media.bytes(info);
-      if (Platform.isAndroid || Platform.isIOS) {
-        // Into the gallery (board 22). The OS asks for permission the first time.
-        if (!await Gal.hasAccess() && !await Gal.requestAccess()) {
-          snack.showSnackBar(const SnackBar(content: Text('Skyline was not allowed to add to your photos.')));
-          return;
-        }
-        await Gal.putImageBytes(bytes, name: MediaService.safeName(info.name));
-        snack.showSnackBar(const SnackBar(content: Text('Saved to your photos.')));
-        return;
-      }
-      final path = await FilePicker.saveFile(fileName: MediaService.safeName(info.name), bytes: bytes);
-      if (path != null && Platform.isWindows) await File(path).writeAsBytes(bytes);
-      if (path != null) snack.showSnackBar(const SnackBar(content: Text('Saved.')));
-    } on Object {
-      snack.showSnackBar(const SnackBar(content: Text('The copy could not be saved.')));
-    }
-  }
+  Future<void> _save(BuildContext context) => saveUnencryptedCopy(context, widget.media, widget.m.items[widget.index]);
 }
 
 /// Plays a video from a short-lived decrypted copy, deleted on close. In
@@ -1053,6 +1024,308 @@ class _VideoScreenState extends State<VideoScreen> {
                 style: TextStyle(fontSize: 12, height: 1.5, color: t.textSecondary),
               ),
             ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// "Save to this device" (board 22): asks first, then puts a normal,
+/// unencrypted copy in the phone's gallery, or wherever the PC's save dialog
+/// says.
+Future<void> saveUnencryptedCopy(BuildContext context, MediaService media, MediaInfo info) async {
+    final t = context.sky;
+    final snack = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: t.surface,
+        title: const Text('Save an unencrypted copy?'),
+        content: Text(
+          '${Platform.isWindows ? 'The copy is a normal file on this PC.' : 'The copy goes into your photo gallery.'} '
+          'Other apps, backups and anyone who can open this device can see it. Skyline cannot delete it '
+          'later, even if the message disappears.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save copy')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final bytes = await media.bytes(info);
+      if (Platform.isAndroid || Platform.isIOS) {
+        // Into the gallery (board 22). The OS asks for permission the first time.
+        if (!await Gal.hasAccess() && !await Gal.requestAccess()) {
+          snack.showSnackBar(const SnackBar(content: Text('Skyline was not allowed to add to your photos.')));
+          return;
+        }
+        await Gal.putImageBytes(bytes, name: MediaService.safeName(info.name));
+        snack.showSnackBar(const SnackBar(content: Text('Saved to your photos.')));
+        return;
+      }
+      final path = await FilePicker.saveFile(fileName: MediaService.safeName(info.name), bytes: bytes);
+      if (path != null && Platform.isWindows) await File(path).writeAsBytes(bytes);
+      if (path != null) snack.showSnackBar(const SnackBar(content: Text('Saved.')));
+    } on Object {
+      snack.showSnackBar(const SnackBar(content: Text('The copy could not be saved.')));
+    }
+  }
+
+
+/// An album, one photo or video per page (board 23): swipe, or use the
+/// arrows (and arrow keys) on a PC. Photos not on this device yet fetch
+/// themselves; videos show a play button (or a download button).
+class AlbumViewerScreen extends StatefulWidget {
+  const AlbumViewerScreen({
+    super.key,
+    required this.m,
+    required this.initial,
+    required this.messenger,
+    required this.from,
+  });
+  final LocalMessage m;
+  final int initial;
+  final Messenger messenger;
+  final String from;
+
+  @override
+  State<AlbumViewerScreen> createState() => _AlbumViewerScreenState();
+}
+
+class _AlbumViewerScreenState extends State<AlbumViewerScreen> {
+  late LocalMessage _m = widget.m;
+  late final PageController _pages = PageController(initialPage: widget.initial);
+  late int _page = widget.initial;
+  final _focus = FocusNode();
+
+  Messenger get messenger => widget.messenger;
+
+  @override
+  void initState() {
+    super.initState();
+    messenger.addListener(_reload);
+    _fetch(_page);
+  }
+
+  @override
+  void dispose() {
+    messenger.removeListener(_reload);
+    _pages.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  // Downloads finish in the background: pick up the new state.
+  Future<void> _reload() async {
+    final fresh = await messenger.store.message(_m.id);
+    if (fresh != null && mounted) setState(() => _m = fresh);
+  }
+
+  void _fetch(int i) {
+    final info = _m.items[i];
+    if (info.kind == MediaKind.photo && info.state == MediaState.remote) {
+      unawaited(messenger.fetchMedia(_m.id, i));
+    }
+  }
+
+  void _go(int delta) {
+    final to = (_page + delta).clamp(0, _m.items.length - 1);
+    if (to != _page) {
+      _pages.animateToPage(to, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+    }
+  }
+
+  bool _ready(MediaInfo i) => i.state == MediaState.ready && messenger.media.hasLocal(i);
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.sky;
+    final n = _m.items.length;
+    final current = _m.items[_page];
+    final when = _m.sentAt.toLocal();
+    final desktop = Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+    return Focus(
+      focusNode: _focus,
+      autofocus: true,
+      onKeyEvent: (node, e) {
+        if (e is! KeyDownEvent) return KeyEventResult.ignored;
+        if (e.logicalKey == LogicalKeyboardKey.arrowRight) {
+          _go(1);
+          return KeyEventResult.handled;
+        }
+        if (e.logicalKey == LogicalKeyboardKey.arrowLeft) {
+          _go(-1);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF05070C),
+        body: SafeArea(
+          child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+              child: Row(children: [
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const SkyIcon(SkyIcons.close, size: 20, color: Color(0xFFE3E8F2), stroke: 2.2),
+                ),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(widget.from,
+                        style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: t.textPrimary)),
+                    Text(_clock(when), style: TextStyle(fontSize: 12, color: t.textSecondary)),
+                  ]),
+                ),
+                Semantics(
+                  liveRegion: true,
+                  child: Text('${_page + 1} of $n',
+                      style: TextStyle(fontFamily: SkyFonts.mono, fontSize: 13, color: t.textSecondary)),
+                ),
+                IconButton(
+                  tooltip: 'Save to this device',
+                  onPressed: current.kind == MediaKind.photo && _ready(current)
+                      ? () => saveUnencryptedCopy(context, messenger.media, current)
+                      : null,
+                  icon: SkyIcon(SkyIcons.download,
+                      size: 20,
+                      color: current.kind == MediaKind.photo && _ready(current)
+                          ? const Color(0xFFE3E8F2)
+                          : const Color(0xFF45526E),
+                      stroke: 2),
+                ),
+              ]),
+            ),
+            Expanded(
+              child: Stack(children: [
+                ListenableBuilder(
+                  listenable: messenger.media,
+                  builder: (context, _) => PageView.builder(
+                    controller: _pages,
+                    itemCount: n,
+                    onPageChanged: (i) {
+                      setState(() => _page = i);
+                      _fetch(i);
+                    },
+                    itemBuilder: (context, i) => _buildPage(context, i),
+                  ),
+                ),
+                if (desktop && _page > 0)
+                  Positioned(
+                    left: 8,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(child: _arrow('Previous', SkyIcons.back, () => _go(-1))),
+                  ),
+                if (desktop && _page < n - 1)
+                  Positioned(
+                    right: 8,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(child: _arrow('Next', SkyIcons.chevron, () => _go(1))),
+                  ),
+              ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                if (_m.text.isNotEmpty) ...[
+                  Text(_m.text, style: TextStyle(fontSize: 14.5, color: t.textPrimary)),
+                  const SizedBox(height: 10),
+                ],
+                Text(
+                  'Decrypted only while you look at it. “Save to this device” puts a normal, unencrypted copy '
+                  'on this device; Skyline asks first.',
+                  style: TextStyle(fontSize: 12, height: 1.5, color: t.textSecondary),
+                ),
+              ]),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _arrow(String label, SkyIcons icon, VoidCallback onTap) => IconButton(
+        tooltip: label,
+        onPressed: onTap,
+        style: IconButton.styleFrom(backgroundColor: const Color(0x99141B2A), fixedSize: const Size(44, 44)),
+        icon: SkyIcon(icon, size: 20, color: const Color(0xFFE3E8F2), stroke: 2.2),
+      );
+
+  // One photo or video.
+  Widget _buildPage(BuildContext context, int i) {
+    final t = context.sky;
+    final info = _m.items[i];
+    final tr = messenger.media.transfer(Messenger.transferKey(_m.id, i));
+    if (info.state == MediaState.expired) {
+      return Center(
+        child: Text('${info.label} no longer available. Files are kept on the server for 30 days.',
+            textAlign: TextAlign.center, style: TextStyle(color: t.textSecondary)),
+      );
+    }
+    if (info.kind == MediaKind.photo && _ready(info)) {
+      final cached = messenger.media.cached(info);
+      return InteractiveViewer(
+        maxScale: 6,
+        child: Center(
+          child: cached != null
+              ? Image.memory(cached, gaplessPlayback: true)
+              : FutureBuilder<Uint8List>(
+                  future: messenger.media.bytes(info),
+                  builder: (context, snap) => snap.hasData
+                      ? Image.memory(snap.data!, gaplessPlayback: true)
+                      : const CircularProgressIndicator(),
+                ),
+        ),
+      );
+    }
+    // Not decrypted yet (or a video): its preview, with what to do next.
+    final Widget action;
+    if (tr != null) {
+      action = SizedBox(
+        width: 48,
+        height: 48,
+        child: CircularProgressIndicator(value: tr.fraction, color: Colors.white, backgroundColor: Colors.white24),
+      );
+    } else if (info.kind == MediaKind.video && _ready(info)) {
+      action = Semantics(
+        button: true,
+        label: 'Play video',
+        child: GestureDetector(
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => VideoScreen(info: info, media: messenger.media, from: widget.from),
+          )),
+          child: Container(
+            width: 64,
+            height: 64,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(color: Color(0xB3080C16), shape: BoxShape.circle),
+            child: const SkyIcon(SkyIcons.play, size: 26, color: Colors.white, filled: true),
+          ),
+        ),
+      );
+    } else if (info.state == MediaState.remote) {
+      action = FilledButton.icon(
+        onPressed: () => messenger.fetchMedia(_m.id, i),
+        icon: const SkyIcon(SkyIcons.download, size: 16, color: Colors.white, stroke: 2.2),
+        label: Text('${info.kind == MediaKind.video ? 'Video' : 'Photo'} · ${formatBytes(info.size)}'),
+      );
+    } else {
+      action = const SizedBox.shrink();
+    }
+    final ratio = (info.width != null && info.height != null && info.height! > 0)
+        ? (info.width! / info.height!).clamp(0.5, 2.0).toDouble()
+        : 4 / 3;
+    return Center(
+      child: AspectRatio(
+        aspectRatio: ratio,
+        child: Stack(fit: StackFit.expand, children: [
+          _thumbOrGradient(info),
+          Center(child: action),
         ]),
       ),
     );
