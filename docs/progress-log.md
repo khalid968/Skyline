@@ -8,6 +8,24 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-25 (resumed) — 8b follow-ups: typing in groups, Android runs, try-it-yourself
+
+- **Typing in groups** (commit c252af8):
+  - `POST /groups/:id/signals` relays pairwise-encrypted typing signals to live members only, and never
+    stores them. Members only; 404 for anyone else.
+  - The app sends them over existing sessions and shows "Bob" beside the dots.
+  - The group app tests pass (25 across the group and route-inventory suites).
+- **Android emulator:** `groups_test` (now including typing) and `actions_test` both pass.
+  - An earlier load failure came from the emulator restarting mid-run, not from the code.
+- **`try-it-yourself.md`** now has a "Phase 8b" section.
+- **Still:**
+  - nothing from 8b is pushed; ask before pushing;
+  - view once in groups is not built;
+  - a closed phone cannot mute its wake-up;
+  - iOS is untested.
+
+---
+
 ## 2026-09-25 (night, paused) — Phase 8b BUILT, not yet reviewed; paused at the owner's request
 
 Boards 26-31 were approved ("looks good"). Everything below is committed on the branch.
