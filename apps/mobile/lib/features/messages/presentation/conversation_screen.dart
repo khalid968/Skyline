@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -16,9 +17,10 @@ import '../../media/presentation/media_bubble.dart';
 import '../../media/presentation/voice_recorder.dart';
 import '../data/messenger.dart';
 import '../domain/models.dart';
+import 'message_actions_sheet.dart';
 import 'timer_sheet.dart';
 
-/// Boards 3, 16, 17, 19 and 20-22: one conversation.
+/// Boards 3, 16, 17, 19, 20-22 and 27-29: one conversation.
 class ConversationScreen extends ConsumerStatefulWidget {
   const ConversationScreen({super.key, required this.peer});
   final String peer;
@@ -30,6 +32,14 @@ class ConversationScreen extends ConsumerStatefulWidget {
 class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   final _input = TextEditingController();
   late final Messenger messenger = ref.read(appControllerProvider).messenger!;
+
+  // Board 28: the composer is answering a message, or editing one of ours.
+  LocalMessage? _replyTo;
+  LocalMessage? _editing;
+  // Board 29: people mentioned so far (userId -> "@First") and the "@..." being typed.
+  final Map<String, String> _mentioned = {};
+  String? _mentionQuery;
+  int _pin = 0;
 
   @override
   void initState() {
@@ -48,9 +58,103 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   Future<void> _send() async {
     final text = _input.text.trim();
     if (text.isEmpty) return;
+    final editing = _editing;
+    final reply = _replyTo == null ? null : messenger.quoteOf(_replyTo!);
+    final mentions = [for (final e in _mentioned.entries) if (text.contains(e.value)) e.key];
     _input.clear();
-    setState(() {});
-    await messenger.sendText(widget.peer, text);
+    setState(() {
+      _editing = null;
+      _replyTo = null;
+      _mentioned.clear();
+      _mentionQuery = null;
+    });
+    if (editing != null) {
+      await messenger.editMessage(editing.id, text);
+    } else {
+      await messenger.sendText(widget.peer, text, replyTo: reply, mentions: mentions);
+    }
+  }
+
+  /// Watches for "@name" being typed in a group (board 29).
+  void _onInput() {
+    messenger.typing(widget.peer);
+    if (messenger.group(widget.peer) == null) return;
+    final text = _input.text;
+    var at = _input.selection.baseOffset;
+    if (at < 0 || at > text.length) at = text.length;
+    final before = text.substring(0, at);
+    final i = before.lastIndexOf('@');
+    String? q;
+    if (i >= 0 && (i == 0 || before[i - 1].trim().isEmpty)) {
+      final typed = before.substring(i + 1);
+      if (!typed.contains(RegExp(r'\s')) && typed.length <= 30) q = typed;
+    }
+    if (q != _mentionQuery) setState(() => _mentionQuery = q);
+  }
+
+  void _mention(GroupMember m) {
+    final text = _input.text;
+    var at = _input.selection.baseOffset;
+    if (at < 0 || at > text.length) at = text.length;
+    final i = text.substring(0, at).lastIndexOf('@');
+    if (i < 0) return;
+    final tag = '@${m.displayName.split(' ').first}';
+    final next = '${text.substring(0, i)}$tag ${text.substring(at)}';
+    _input.value = TextEditingValue(text: next, selection: TextSelection.collapsed(offset: i + tag.length + 1));
+    setState(() {
+      _mentioned[m.userId] = tag;
+      _mentionQuery = null;
+    });
+  }
+
+  /// Board 28: long-press (right-click on a PC) a message.
+  Future<void> _actions(LocalMessage m, {required bool canWrite, required ChatSummary? chat, required String name}) async {
+    final pinned = chat?.pins.contains(m.id) ?? false;
+    final actions = [
+      if (canWrite && !m.deleted) MessageAction.reply,
+      if (canWrite && messenger.canEdit(m)) MessageAction.edit,
+      if (m.text.isNotEmpty && !m.deleted) MessageAction.copy,
+      if (canWrite && !m.deleted) pinned ? MessageAction.unpin : MessageAction.pin,
+      if (m.fromMe && !m.deleted) MessageAction.info,
+      MessageAction.delete,
+    ];
+    final choice = await showMessageActions(
+      context,
+      actions: actions,
+      myReaction: m.reactions[messenger.me],
+      canReact: canWrite && !m.deleted,
+    );
+    if (choice == null || !mounted) return;
+    if (choice.emoji != null) return messenger.react(m.id, choice.emoji!);
+    switch (choice.action!) {
+      case MessageAction.reply:
+        setState(() {
+          _replyTo = m;
+          _editing = null;
+        });
+      case MessageAction.edit:
+        setState(() {
+          _editing = m;
+          _replyTo = null;
+          _input.text = m.text;
+        });
+      case MessageAction.copy:
+        await Clipboard.setData(ClipboardData(text: m.text));
+      case MessageAction.pin:
+        await messenger.pin(m.id, true);
+      case MessageAction.unpin:
+        await messenger.pin(m.id, false);
+      case MessageAction.info:
+        await _details(m);
+      case MessageAction.delete:
+        final everyone = await showDeleteChoice(
+          context,
+          forEveryone: canWrite && messenger.canDeleteForEveryone(m),
+          who: name.split(' ').first,
+        );
+        if (everyone == true) await messenger.deleteForEveryone(m.id);
+        if (everyone == false) await messenger.deleteForMe(m.id);
+    }
   }
 
   /// Boards 20, 23 and 24: attach one or several files, preview with a
@@ -98,6 +202,15 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         deleteSource: true,
       );
 
+  List<String> _tagsFor(LocalMessage m) {
+    if (m.mentions.isEmpty) return const [];
+    final g = messenger.group(widget.peer);
+    return [
+      for (final id in m.mentions)
+        if (g?.member(id) case final gm?) '@${gm.displayName.split(' ').first}',
+    ];
+  }
+
   Future<void> _timer(ChatSummary? chat, String name) async {
     final r = await showTimerSheet(context, current: chat?.timerSeconds, peerName: name);
     if (r.seconds == -1 || r.seconds == chat?.timerSeconds) return;
@@ -111,17 +224,23 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       listenable: messenger,
       builder: (context, _) {
         final contact = messenger.contact(widget.peer);
-        return FutureBuilder<(ChatSummary?, List<LocalMessage>, List<KnownDevice>)>(
+        return FutureBuilder<(ChatSummary?, List<LocalMessage>, List<KnownDevice>, List<LocalMessage>)>(
           future: () async {
             final chat = await messenger.store.chat(widget.peer);
             final msgs = await messenger.store.messages(widget.peer, limit: 200);
             final devices = await messenger.store.devicesOf(widget.peer);
-            return (chat, msgs, devices);
+            final pins = <LocalMessage>[];
+            for (final id in chat?.pins ?? const <String>[]) {
+              final p = await messenger.store.message(id);
+              if (p != null) pins.add(p);
+            }
+            return (chat, msgs, devices, pins);
           }(),
           builder: (context, snap) {
             final chat = snap.data?.$1;
             final messages = snap.data?.$2 ?? const <LocalMessage>[];
             final devices = snap.data?.$3 ?? const <KnownDevice>[];
+            final pins = snap.data?.$4 ?? const <LocalMessage>[];
             final group = messenger.group(widget.peer);
             final isGroup = (chat?.isGroup ?? false) || group != null;
             final name = group?.name ?? contact?.displayName ?? chat?.displayName ?? '';
@@ -147,6 +266,12 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                       timer: chat?.timerSeconds,
                       onTimer: canWrite ? () => _timer(chat, name) : null,
                     ),
+                  if (pins.isNotEmpty)
+                    _PinnedBar(
+                      pins: pins,
+                      index: _pin % pins.length,
+                      onTap: () => setState(() => _pin = (_pin + 1) % pins.length),
+                    ),
                   ConnectionBanner(status: messenger.connection, waiting: waiting),
                   Expanded(
                     child: ListView.builder(
@@ -160,11 +285,21 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                         }
                         if (i == messages.length) return const _EncryptionNote();
                         final m = messages[i];
+                        if (m.isNotice) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: _Notice(m: m, name: name, onVerify: () => context.push('/chat/${widget.peer}/verify')),
+                          );
+                        }
+                        void act() => _actions(m, canWrite: canWrite, chat: chat, name: name);
                         return Padding(
                           padding: const EdgeInsets.only(top: 10),
-                          child: m.isNotice
-                              ? _Notice(m: m, name: name, onVerify: () => context.push('/chat/${widget.peer}/verify'))
-                              : m.isMedia
+                          child: _Actionable(
+                            m: m,
+                            me: messenger.me,
+                            onActions: act,
+                            onReact: canWrite && !m.deleted ? (e) => messenger.react(m.id, e) : null,
+                            child: m.isMedia
                                   ? _FromMember(
                                       m: m,
                                       child: MediaBubble(
@@ -174,17 +309,43 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                                         onDetails: m.fromMe ? () => _details(m) : null,
                                       ),
                                     )
-                                  : _Bubble(m: m, onTap: m.fromMe ? () => _details(m) : null),
+                                  : _Bubble(
+                                      m: m,
+                                      me: messenger.me,
+                                      mentionTags: _tagsFor(m),
+                                      onTap: m.fromMe && !m.deleted ? () => _details(m) : null,
+                                    ),
+                          ),
                         );
                       },
                     ),
                   ),
+                  if (canWrite && (_replyTo != null || _editing != null))
+                    _ComposerBanner(
+                      replyTo: _replyTo,
+                      editing: _editing,
+                      myId: messenger.me,
+                      onCancel: () => setState(() {
+                        if (_editing != null) _input.clear();
+                        _replyTo = null;
+                        _editing = null;
+                      }),
+                    ),
+                  if (canWrite && _mentionQuery != null && group != null)
+                    _MentionPicker(
+                      members: [
+                        for (final gm in group.members)
+                          if (!gm.you && gm.displayName.toLowerCase().contains(_mentionQuery!.toLowerCase())) gm,
+                      ].take(5).toList(),
+                      onPick: _mention,
+                    ),
                   if (canWrite)
                     _Composer(
                       controller: _input,
                       name: name,
                       onSend: _send,
-                      onTyping: () => messenger.typing(widget.peer),
+                      onTyping: _onInput,
+                      hint: isGroup ? 'Message $name' : 'Message',
                       onAttach: () => _attach(name),
                       onVoice: _sendVoice,
                       recordingDir: messenger.media.viewDir,
@@ -387,8 +548,10 @@ class _EncryptionNote extends StatelessWidget {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.m, this.onTap});
+  const _Bubble({required this.m, required this.me, this.mentionTags = const [], this.onTap});
   final LocalMessage m;
+  final String me;
+  final List<String> mentionTags;
   final VoidCallback? onTap;
 
   @override
@@ -405,6 +568,24 @@ class _Bubble extends StatelessWidget {
     final fg = m.fromMe ? Colors.white : t.textPrimary;
     final time =
         '${m.sentAt.toLocal().hour.toString().padLeft(2, '0')}:${m.sentAt.toLocal().minute.toString().padLeft(2, '0')}';
+    if (m.deleted) {
+      // Board 27/28: what a deletion for everyone leaves behind.
+      final gone = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFF33405C)),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          if (m.senderName != null)
+            Text(m.senderName!,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _nameColor(m.senderUserId!))),
+          Text(m.fromMe ? 'You deleted this message' : 'This message was deleted',
+              style: TextStyle(fontSize: 13.5, fontStyle: FontStyle.italic, color: t.textSecondary)),
+        ]),
+      );
+      return Align(alignment: m.fromMe ? Alignment.centerRight : Alignment.centerLeft, child: gone);
+    }
     final statusWord = switch (m.status) {
       MessageStatus.sending => 'Sending',
       MessageStatus.waiting => 'Waiting to send',
@@ -436,9 +617,12 @@ class _Bubble extends StatelessWidget {
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _nameColor(m.senderUserId!))),
             ),
           ),
+        if (m.replyTo != null) _Quote(quote: m.replyTo!, onBlue: m.fromMe, me: me),
         Align(
           alignment: Alignment.centerLeft,
-          child: SelectableText(m.text, style: TextStyle(fontSize: 14.5, height: 1.45, color: fg)),
+          // Plain text: long-press opens the actions, which include Copy.
+          child: Text.rich(_withMentions(m.text, mentionTags, fg, m.fromMe),
+              style: TextStyle(fontSize: 14.5, height: 1.45, color: fg)),
         ),
         const SizedBox(height: 5),
         _Meta(m: m),
@@ -489,7 +673,9 @@ class _Meta extends StatelessWidget {
         const SizedBox(width: 4),
       ],
       Text(
-        m.status == MessageStatus.waiting ? 'Waiting to send' : (remote ? '$time · tap to download' : time),
+        m.status == MessageStatus.waiting
+            ? 'Waiting to send'
+            : '${m.editedAt != null ? 'edited · ' : ''}${remote ? '$time · tap to download' : time}',
         style: TextStyle(fontSize: 11, color: meta),
       ),
       if (m.fromMe) ...[const SizedBox(width: 5), _Tick(status: m.status)],
@@ -607,6 +793,11 @@ class _Notice extends StatelessWidget {
       case NoticeType.renamed:
         return _pill(context, SkyIcons.pen,
             'Your administrator renamed ${m.noticeData['from'] ?? 'this person'} to ${m.noticeData['to'] ?? name}. Their safety numbers did not change.');
+      case NoticeType.pinned:
+        final who = m.noticeData['byMe'] == true
+            ? 'You'
+            : ((m.noticeData['name'] as String?)?.split(' ').first ?? first);
+        return _pill(context, SkyIcons.pin, '$who ${m.noticeData['pinned'] == true ? 'pinned' : 'unpinned'} a message');
       case NoticeType.groupEvent:
         final who = m.noticeData['you'] == true ? 'You' : (m.noticeData['name'] as String? ?? 'Someone');
         final text = switch (m.noticeData['event']) {
@@ -703,7 +894,9 @@ class _Composer extends StatefulWidget {
     required this.onAttach,
     required this.onVoice,
     required this.recordingDir,
+    this.hint = 'Message',
   });
+  final String hint;
   final TextEditingController controller;
   final String name;
   final VoidCallback onSend;
@@ -821,7 +1014,7 @@ class _ComposerState extends State<_Composer> {
               textInputAction: TextInputAction.newline,
               onChanged: (_) => widget.onTyping(),
               decoration: InputDecoration(
-                hintText: 'Message',
+                hintText: widget.hint,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
                 border: OutlineInputBorder(
@@ -968,6 +1161,255 @@ class _GroupHeader extends StatelessWidget {
             onPressed: onTimer,
             icon: SkyIcon(SkyIcons.clock, size: 21, color: timer != null ? t.caution : t.textSecondary),
           ),
+      ]),
+    );
+  }
+}
+
+/// Highlights "@Name" for the people a message mentions (board 27).
+TextSpan _withMentions(String text, List<String> tags, Color fg, bool onBlue) {
+  if (tags.isEmpty) return TextSpan(text: text);
+  final spans = <InlineSpan>[];
+  var rest = text;
+  while (rest.isNotEmpty) {
+    var at = -1;
+    String? tag;
+    for (final t in tags) {
+      final i = rest.indexOf(t);
+      if (i >= 0 && (at < 0 || i < at)) {
+        at = i;
+        tag = t;
+      }
+    }
+    if (at < 0) {
+      spans.add(TextSpan(text: rest));
+      break;
+    }
+    if (at > 0) spans.add(TextSpan(text: rest.substring(0, at)));
+    spans.add(TextSpan(
+      text: tag,
+      style: TextStyle(
+        fontWeight: FontWeight.w600,
+        color: onBlue ? Colors.white : const Color(0xFF9DB8FF),
+        backgroundColor: onBlue ? const Color(0x33FFFFFF) : const Color(0x2E6E96FF),
+      ),
+    ));
+    rest = rest.substring(at + tag!.length);
+  }
+  return TextSpan(children: spans);
+}
+
+/// A reply's quote at the top of a bubble (board 27).
+class _Quote extends StatelessWidget {
+  const _Quote({required this.quote, required this.onBlue, required this.me});
+  final Map<String, Object?> quote;
+  final bool onBlue;
+  final String me;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.sky;
+    final who = quote['author'] == me ? 'You' : ((quote['name'] as String?) ?? 'Message');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+      decoration: BoxDecoration(
+        color: onBlue ? const Color(0x47080C16) : t.ground.withValues(alpha: 0.6),
+        border: Border(left: BorderSide(color: onBlue ? const Color(0xFFDDE5FC) : t.accentText, width: 3)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text(who,
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w700, color: onBlue ? const Color(0xFFDDE5FC) : t.accentText)),
+        Text((quote['preview'] as String?) ?? '',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12.5, color: onBlue ? const Color(0xFFDDE5FC) : t.textSecondary)),
+      ]),
+    );
+  }
+}
+
+/// Long-press (or right-click) for actions, and the reactions under a bubble.
+class _Actionable extends StatelessWidget {
+  const _Actionable({required this.m, required this.me, required this.onActions, required this.child, this.onReact});
+  final LocalMessage m;
+  final String me;
+  final VoidCallback onActions;
+  final ValueChanged<String>? onReact;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.sky;
+    final counts = <String, int>{};
+    for (final e in m.reactions.values) {
+      counts[e] = (counts[e] ?? 0) + 1;
+    }
+    final mine = m.reactions[me];
+    return Column(
+      crossAxisAlignment: m.fromMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        GestureDetector(onLongPress: onActions, onSecondaryTap: onActions, child: child),
+        if (counts.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.only(top: 4, left: m.fromMe ? 0 : 44, right: m.fromMe ? 8 : 0),
+            child: Wrap(spacing: 4, runSpacing: 4, children: [
+              for (final e in counts.entries)
+                Semantics(
+                  button: onReact != null,
+                  label: '${e.key} ${e.value}${e.key == mine ? ', yours' : ''}',
+                  child: GestureDetector(
+                    onTap: onReact == null ? null : () => onReact!(e.key),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: t.bubbleIncoming,
+                        border: Border.all(color: e.key == mine ? t.accentFill : t.border),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text('${e.key} ${e.value}', style: TextStyle(fontSize: 12.5, color: t.textPrimary)),
+                    ),
+                  ),
+                ),
+            ]),
+          ),
+      ],
+    );
+  }
+}
+
+/// Board 27: the pinned messages, one at a time; tap to see the next.
+class _PinnedBar extends StatelessWidget {
+  const _PinnedBar({required this.pins, required this.index, required this.onTap});
+  final List<LocalMessage> pins;
+  final int index;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.sky;
+    final m = pins[index];
+    final text = m.deleted ? 'Deleted message' : (m.isMedia ? (m.text.isEmpty ? m.mediaLabel : m.text) : m.text);
+    return Semantics(
+      button: true,
+      label: 'Pinned message ${index + 1} of ${pins.length}: $text',
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 9, 14, 9),
+          decoration: BoxDecoration(color: const Color(0xFF121A2A), border: Border(bottom: BorderSide(color: t.border))),
+          child: Row(children: [
+            SizedBox(
+              width: 3,
+              height: 30,
+              child: Column(children: [
+                for (var i = 0; i < pins.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 2),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: i == index ? t.accentText : const Color(0xFF33405C),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ],
+              ]),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Pinned message ${index + 1} of ${pins.length}',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: t.accentText)),
+                Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: t.textPrimary)),
+              ]),
+            ),
+            SkyIcon(SkyIcons.pin, size: 16, color: t.textSecondary, stroke: 2),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// Board 28: replying to, or editing, a message.
+class _ComposerBanner extends StatelessWidget {
+  const _ComposerBanner({required this.replyTo, required this.editing, required this.myId, required this.onCancel});
+  final LocalMessage? replyTo;
+  final LocalMessage? editing;
+  final String myId;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.sky;
+    final editingNow = editing != null;
+    final m = editing ?? replyTo!;
+    final left = MessageActions.editWindow - DateTime.now().difference(m.sentAt);
+    final title = editingNow
+        ? 'Editing · ${left.inMinutes < 1 ? 'under a minute' : '${left.inMinutes} minute${left.inMinutes == 1 ? '' : 's'}'} left'
+        : 'Replying to ${m.fromMe ? 'yourself' : (m.senderName ?? 'them')}';
+    final sub = editingNow
+        ? 'Everyone in the chat will see that it was edited.'
+        : (m.isMedia ? (m.text.isEmpty ? m.mediaLabel : m.text) : m.text);
+    final color = editingNow ? t.caution : t.accentText;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: editingNow ? const Color(0xFF2A2210) : t.surface,
+        border: Border(left: BorderSide(color: color, width: 3)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+            Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: t.textSecondary)),
+          ]),
+        ),
+        IconButton(
+          tooltip: editingNow ? 'Cancel edit' : 'Cancel reply',
+          onPressed: onCancel,
+          icon: SkyIcon(SkyIcons.close, size: 16, color: t.textSecondary, stroke: 2.4),
+        ),
+      ]),
+    );
+  }
+}
+
+/// Board 29: who can be mentioned (only people in this group).
+class _MentionPicker extends StatelessWidget {
+  const _MentionPicker({required this.members, required this.onPick});
+  final List<GroupMember> members;
+  final ValueChanged<GroupMember> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.sky;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      decoration: BoxDecoration(color: t.surface, border: Border.all(color: t.border), borderRadius: BorderRadius.circular(14)),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        for (final m in members)
+          InkWell(
+            onTap: () => onPick(m),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              child: Row(children: [
+                Avatar(name: m.displayName, seed: m.userId, size: 30),
+                const SizedBox(width: 12),
+                Text(m.displayName, style: TextStyle(fontSize: 14, color: t.textPrimary)),
+              ]),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+          child: Text(members.isEmpty ? 'Nobody in this group by that name.' : 'Only people in this group can be mentioned.',
+              style: TextStyle(fontSize: 11.5, color: t.textSecondary)),
+        ),
       ]),
     );
   }

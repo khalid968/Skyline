@@ -52,6 +52,7 @@ dependencies:
   fc_native_video_thumbnail: ^2.2.0
   gal: ^2.3.3
   video_compress: ^3.1.4
+  emoji_picker_flutter: ^4.4.0
 
 dev_dependencies:
   flutter_test:

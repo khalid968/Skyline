@@ -35,6 +35,12 @@ enum SkyIcons {
   play('<path d="M7 4.5v15l12-7.5Z"/>'),
   pause('<path d="M8 5v14"/><path d="M16 5v14"/>'),
   close('<path d="M6 6l12 12M18 6 6 18"/>'),
+  // Message actions (board 28).
+  reply('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
+  copy('<path d="M9 9h10.5v10.5H9Z"/><path d="M15 9V4.5H4.5V15H9"/>'),
+  pin('<path d="M9 4h6l-1 6 3 3H7l3-3Z"/><path d="M12 16v4.5"/>'),
+  info('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.8h.01"/>'),
+  trash('<path d="M4.5 6.5h15"/><path d="M9.5 6.5V4.5h5v2"/><path d="m6.5 6.5 1 13h9l1-13"/>'),
   bellOff('<path d="M18 8.5a6 6 0 0 0-11.2-3"/><path d="M6 8.5c0 7-3 9-3 9h13"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><path d="m3 3 18 18"/>');
 
   const SkyIcons(this.paths);

@@ -15,6 +15,7 @@ import '../domain/models.dart';
 import 'local_store.dart';
 
 part 'messenger_groups.dart';
+part 'messenger_actions.dart';
 
 /// A contact as the directory reports them, with their reachable devices.
 class Contact {
@@ -226,7 +227,8 @@ class Messenger extends ChangeNotifier {
     return _ensureChat(peer);
   }
 
-  Future<LocalMessage> sendText(String peer, String text) async {
+  Future<LocalMessage> sendText(String peer, String text,
+      {Map<String, Object?>? replyTo, List<String> mentions = const []}) async {
     final chat = await _chatForSending(peer);
     final now = DateTime.now();
     final m = LocalMessage(
@@ -239,19 +241,13 @@ class Messenger extends ChangeNotifier {
       senderDevice: session.deviceNumber,
       timerSeconds: chat.timerSeconds,
       expiresAt: chat.timerSeconds == null ? null : now.add(Duration(seconds: chat.timerSeconds!)),
+      replyTo: replyTo,
+      mentions: mentions,
     );
     await store.putMessage(m);
-    await _touchChat(chat, text, now, unread: false);
+    await _touchChat(chat, chat.isGroup ? 'You: $text' : text, now, unread: false);
     notifyListeners();
-    await _deliver(m, {
-      'v': 1,
-      'type': 'text',
-      'id': m.id,
-      'peer': peer,
-      'body': text,
-      'sentAt': now.millisecondsSinceEpoch,
-      'timer': chat.timerSeconds,
-    });
+    await _deliver(m, _contentFor(m));
     return m;
   }
 
@@ -614,6 +610,8 @@ class Messenger extends ChangeNotifier {
           'body': m.text,
           'sentAt': m.sentAt.millisecondsSinceEpoch,
           'timer': m.timerSeconds,
+          if (m.replyTo != null) 'reply': m.replyTo,
+          if (m.mentions.isNotEmpty) 'mentions': m.mentions,
         };
 
   /// Encrypts [content] for every device and posts it. Offline: the message
@@ -745,6 +743,7 @@ class Messenger extends ChangeNotifier {
 
   Future<void> _flushOutbox() async {
     await _flushOpened();
+    await _flushControl();
     for (final chat in await store.chats()) {
       for (final m in await store.messages(chat.peerUserId, limit: 200)) {
         if (m.fromMe && m.status == MessageStatus.waiting) {
@@ -881,6 +880,8 @@ class Messenger extends ChangeNotifier {
           viewOnce: viewOnce && !group, // view once is one-to-one only
           senderUserId: group ? sender : null,
           senderName: senderName,
+          replyTo: _quoteFrom(content['reply']),
+          mentions: group ? [for (final x in (content['mentions'] as List<Object?>? ?? const [])) if (x is String) x] : const [],
         );
         // Our own view-once, sent from another of our devices: we cannot
         // open it here either.
@@ -892,6 +893,7 @@ class Messenger extends ChangeNotifier {
         await store.putMessage(m);
         final chat = await _ensureChat(peer);
         final line = !group ? _preview(m) : '${fromMe ? 'You' : senderName!.split(' ').first}: ${_preview(m)}';
+        if (!fromMe && openChat != peer && m.mentions.contains(me)) chat.mentioned = true;
         await _touchChat(chat, line, sentAt, unread: !fromMe && openChat != peer);
         if (!fromMe) _typingUntil.remove(peer);
         if (!fromMe && openChat == peer) unawaited(markRead(peer));
@@ -916,6 +918,8 @@ class Messenger extends ChangeNotifier {
           noticeData: {'seconds': seconds, 'byMe': fromMe, if (senderName != null) 'name': senderName},
           status: MessageStatus.delivered,
         ));
+      case 'edit' || 'delete' || 'react' || 'pin':
+        await _applyControl(peer, sender, content, senderName: senderName);
       case 'opened':
         // A view-once was opened: by them (we sent it), or on one of our
         // other devices (it was sent to us). Either way it is gone here.
@@ -1030,8 +1034,10 @@ class Messenger extends ChangeNotifier {
   /// and (if receipts are on) tell the sender and our own other devices.
   Future<void> markRead(String peer) async {
     final chat = await store.chat(peer);
-    if (chat != null && chat.unread > 0) {
-      chat.unread = 0;
+    if (chat != null && (chat.unread > 0 || chat.mentioned)) {
+      chat
+        ..unread = 0
+        ..mentioned = false;
       await store.putChat(chat);
     }
     final newlyRead = <String>[];
@@ -1180,6 +1186,18 @@ class Messenger extends ChangeNotifier {
       ..lastAt = at;
     if (unread) chat.unread++;
     await store.putChat(chat);
+  }
+
+  /// A reply's quote, as received: only plain fields, trimmed.
+  Map<String, Object?>? _quoteFrom(Object? raw) {
+    if (raw is! Map<String, Object?> || raw['id'] is! String) return null;
+    final preview = (raw['preview'] as String?) ?? '';
+    return {
+      'id': raw['id'],
+      if (raw['author'] is String) 'author': raw['author'],
+      if (raw['name'] is String) 'name': raw['name'],
+      'preview': preview.length > 200 ? '${preview.substring(0, 200)}…' : preview,
+    };
   }
 
   Future<bool> _isGroup(String peer) async =>

@@ -192,7 +192,7 @@ class _ChatRow extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 6),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(color: t.accentFill, borderRadius: BorderRadius.circular(999)),
-                  child: Text('$unread',
+                  child: Text(chat?.mentioned ?? false ? '@' : '$unread',
                       style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
               ],

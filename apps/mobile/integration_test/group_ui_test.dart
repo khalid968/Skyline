@@ -86,11 +86,35 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 300));
       await carol.sendText(groupId, 'Thanks Bob, I will tell the night shift.');
       await Future<void>.delayed(const Duration(milliseconds: 300));
-      await alice.sendText(groupId, 'Got it. See you all at 10.');
+      final mine = await alice.sendText(groupId, 'Got it. See you all at 10.');
       await eventually(() async => (await alice.store.messages(groupId)).where((m) => !m.isNotice).length >= 3 ? true : null);
+      // Board 27's details: a pin, reactions, a reply with its quote, an edit
+      // and a deleted message.
+      final bobs = (await alice.store.messages(groupId)).firstWhere((m) => m.text.startsWith('Morning'));
+      await alice.pin(bobs.id, true);
+      await eventually(() => bob.store.message(mine.id));
+      await bob.react(mine.id, '👍');
+      await carol.react(mine.id, '👍');
+      final quote = await eventually(() => carol.store.message(bobs.id));
+      await carol.sendText(groupId, 'Which gate, @Bob?', replyTo: carol.quoteOf(quote), mentions: [bobs.senderUserId!]);
+      final oops = await bob.sendText(groupId, 'Wrong chat, sorry');
+      await bob.deleteForEveryone(oops.id);
+      await alice.editMessage(mine.id, 'Got it. See you all at 10:30.');
+      await eventually(() async {
+        final m = await alice.store.message(mine.id);
+        return m != null && m.reactions.length == 2 ? true : null;
+      });
+      await eventually(() async => (await alice.store.message(oops.id))?.deleted == true ? true : null);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
     });
     await _show(tester, alice, const ConversationScreen(peer: groupId));
     await _shot(tester, '27-group-conversation');
+    // Board 28: the actions on one of Alice's own messages.
+    await tester.longPress(find.textContaining('See you all at 10:30'));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await _shot(tester, '28-message-actions');
     await _show(tester, alice, const GroupInfoScreen(groupId: groupId));
     await _shot(tester, '29-group-info');
     await tester.runAsync(() async {

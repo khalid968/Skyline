@@ -7,7 +7,7 @@ enum MessageStatus { sending, waiting, sent, delivered, read, failed }
 enum MessageKind { text, notice, media }
 
 /// The kinds of notice shown inline in a chat (boards 15-17).
-enum NoticeType { newDevice, renamed, blocked, undecryptable, timerChanged, groupEvent }
+enum NoticeType { newDevice, renamed, blocked, undecryptable, timerChanged, groupEvent, pinned }
 
 class LocalMessage {
   LocalMessage({
@@ -30,14 +30,20 @@ class LocalMessage {
     this.openedAt,
     this.senderUserId,
     this.senderName,
-  }) : items = items ?? [if (media != null) media];
+    this.replyTo,
+    this.editedAt,
+    this.deleted = false,
+    Map<String, String>? reactions,
+    this.mentions = const [],
+  }) : reactions = reactions ?? {},
+       items = items ?? [if (media != null) media];
 
   final String id;
   final String peerUserId;
   final bool fromMe;
   final DateTime sentAt;
   final MessageKind kind;
-  final String text;
+  String text; // changes when the author edits it (board 28)
   MessageStatus status;
   final int? senderDevice;
   final NoticeType? notice;
@@ -60,6 +66,25 @@ class LocalMessage {
   /// leaving the group.
   final String? senderUserId;
   final String? senderName;
+
+  /// Board 28: the message this one answers ({id, name, preview}), a quote.
+  final Map<String, Object?>? replyTo;
+
+  /// Set when its author edited it (within 15 minutes of sending).
+  DateTime? editedAt;
+
+  /// Deleted for everyone by its author (within 24 hours): what remains is
+  /// "This message was deleted".
+  bool deleted;
+
+  /// One reaction per person: userId -> emoji.
+  final Map<String, String> reactions;
+
+  /// People mentioned in a group message (their user ids).
+  final List<String> mentions;
+
+  /// Who wrote it, for authorship checks: us, the group member, or the peer.
+  String get author => fromMe ? '' : (senderUserId ?? peerUserId);
 
   MediaInfo? get media => items.isEmpty ? null : items.first;
   bool get isNotice => kind == MessageKind.notice;
@@ -96,6 +121,11 @@ class LocalMessage {
         'openedAt': openedAt?.millisecondsSinceEpoch,
         if (senderUserId != null) 'sender': senderUserId,
         if (senderName != null) 'senderName': senderName,
+        if (replyTo != null) 'replyTo': replyTo,
+        'editedAt': editedAt?.millisecondsSinceEpoch,
+        if (deleted) 'deleted': true,
+        if (reactions.isNotEmpty) 'reactions': reactions,
+        if (mentions.isNotEmpty) 'mentions': mentions,
       };
 
   static LocalMessage fromJson(Map<String, Object?> j) => LocalMessage(
@@ -120,6 +150,14 @@ class LocalMessage {
         openedAt: _time(j['openedAt']),
         senderUserId: j['sender'] as String?,
         senderName: j['senderName'] as String?,
+        replyTo: j['replyTo'] as Map<String, Object?>?,
+        editedAt: _time(j['editedAt']),
+        deleted: j['deleted'] == true,
+        reactions: {
+          for (final e in ((j['reactions'] as Map<String, Object?>?) ?? const {}).entries)
+            if (e.value is String) e.key: e.value! as String,
+        },
+        mentions: [for (final x in (j['mentions'] as List<Object?>? ?? const [])) if (x is String) x],
       );
 }
 
@@ -274,7 +312,9 @@ class ChatSummary {
     this.timerSeconds,
     this.isGroup = false,
     this.left = false,
-  });
+    List<String>? pins,
+    this.mentioned = false,
+  }) : pins = pins ?? [];
 
   final String peerUserId;
   String displayName;
@@ -291,6 +331,12 @@ class ChatSummary {
   /// writing does not.
   bool left;
 
+  /// Pinned message ids, oldest first, at most 3 (board 27).
+  final List<String> pins;
+
+  /// Someone mentioned us in a message we have not read yet ("@" in the list).
+  bool mentioned;
+
   Map<String, Object?> toJson() => {
         'peer': peerUserId,
         'displayName': displayName,
@@ -301,6 +347,8 @@ class ChatSummary {
         'timer': timerSeconds,
         if (isGroup) 'group': true,
         if (left) 'left': true,
+        if (pins.isNotEmpty) 'pins': pins,
+        if (mentioned) 'mentioned': true,
       };
 
   static ChatSummary fromJson(Map<String, Object?> j) => ChatSummary(
@@ -313,6 +361,8 @@ class ChatSummary {
         timerSeconds: j['timer'] as int?,
         isGroup: j['group'] == true,
         left: j['left'] == true,
+        pins: [for (final x in (j['pins'] as List<Object?>? ?? const [])) if (x is String) x],
+        mentioned: j['mentioned'] == true,
       );
 }
 
