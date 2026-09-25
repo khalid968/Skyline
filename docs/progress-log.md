@@ -8,6 +8,34 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-25 (late night) — Media pushed; Phase 8b started: decisions and prototypes
+
+- **Pushed** everything through commit 591b996 to GitHub. Before pushing, the new commits were checked
+  for secrets.
+- **The owner started Phase 8b** and decided four things (see `decisions.md`, "Phase 8b started"):
+  - groups are managed by admins and moderators in the dashboard now, and members can leave;
+  - any member can set a group's timer, and the change is announced;
+  - edit within 15 minutes, delete for everyone within 24 hours;
+  - anyone can pin (3 per chat), and any emoji works as a reaction.
+- **Plan:**
+  - groups use libsignal Sender Keys, rotated whenever someone leaves or is removed;
+  - replies, edits, deletions, reactions, pins and mentions are ordinary encrypted messages that point at
+    an earlier message;
+  - search runs only on the device;
+  - drafts, archive and mute are kept on each device.
+- **Prototypes 26-31 published** to the design canvas for approval: the chat list with groups, archive and
+  mute; a group conversation; message actions; group info with leave and mentions; search; and the
+  dashboard's Groups page.
+- **Next agent should:** wait for the owner's approval of 26-31, then build in this order:
+  1. dashboard groups and the server's group routes (membership checked on every send and delivery,
+     404 outside);
+  2. Sender Keys in the crypto core;
+  3. group messaging in the app;
+  4. message actions;
+  5. search, drafts, archive and mute.
+
+---
+
 ## 2026-09-25 (late night) — Album viewer; view once easier to find
 
 Two points from the owner's testing:

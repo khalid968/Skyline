@@ -50,7 +50,7 @@ the current state of play.
   - The server deletes every file at 30 days (`modules/media`, migration 013; app: `lib/features/media`).
   - Also built: several files at once (albums), view once (screenshots blocked on Android and Windows) and
     the media gallery (boards 23-25). Photos are re-encoded with EXIF stripped; `Start Skyline.cmd` starts everything.
-  - **Next: Phase 8b, prototypes first.**
+  - **Phase 8b started 2026-09-25:** owner decisions recorded (`decisions.md`); prototypes 26-31 await approval.
   - Firebase secrets stay OUT of git: `google-services.json` is gitignored, and the service account lives in
     `C:\Users\kkhal\Skyline-secrets\`.
 - **Owner decisions 2026-09-21** (`decisions.md`): admins never see message content in v1 (a *disclosed*

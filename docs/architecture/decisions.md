@@ -6,6 +6,43 @@ working around it.
 
 ---
 
+## 2026-09-25 — Phase 8b started: owner decisions and plan
+
+**The owner decided** (asked at the start of 8b):
+
+- **Groups are managed in the dashboard now**, not in Phase 11. Admins and moderators can create, rename,
+  archive, and add or remove members, as for contacts. **A member may leave a group from the app**; only an
+  admin can add them back. Users still cannot create groups or add anyone (the locked rule stands).
+- **Any member can set a group's disappearing timer.** The change is announced in the group, as in
+  one-to-one chats.
+- **Edit within 15 minutes; delete for everyone within 24 hours.** An edit shows "edited"; a deletion leaves
+  "This message was deleted". Deleting only for yourself is always allowed.
+- **Anyone can pin**, up to 3 messages per chat, and each pin is announced. **Reactions: six quick ones plus
+  the full emoji picker.**
+
+**How it will be built** (implementation choices):
+
+- **Group encryption uses libsignal's Sender Keys** (Signal's own group mechanism), not new cryptography.
+  - Each member's device encrypts a group message once, with its sender key.
+  - That sender key is shared with the other members' devices over the existing pairwise sessions.
+  - When anyone leaves or is removed, every remaining member's sender key is replaced, so a former member
+    cannot read what comes after.
+  - The server checks group membership on every send and every delivery, exactly as it checks contact
+    links: 404 outside the group.
+- **Replies, edits, deletions, reactions, pins and mentions are all encrypted messages** that point at an
+  earlier message id. The server sees them as ordinary ciphertext.
+  - The time limits are enforced by every receiving app: an edit over 15 minutes, or a delete over
+    24 hours, is ignored.
+  - A modified app could still send one, but it would not be shown.
+- **Search is local only.** It looks through the messages on this device. The server holds nothing
+  readable, so there is nothing to search there. It never finds people: the contact graph rule is untouched.
+- **Drafts, archive and mute are kept on each device, in the encrypted vault.** They are never sent to the
+  server. A muted chat still gets its wake-up, but shows no notification.
+- **Prototypes first** (boards 26-31): the chat list with groups, archive and mute; a group conversation;
+  message actions; the group info screen and mentions; search; and the dashboard's Groups page.
+
+---
+
 ## 2026-09-25 (night) — Several files, view once, media gallery (boards 23-25 approved)
 
 **The owner approved** boards 23-25 ("looks great"). How they are built:
