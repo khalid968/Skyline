@@ -341,10 +341,13 @@ export class GroupsService {
   // -------------------------------------------------------------- helpers
 
   // userId:deviceNumber -> device id, for every reachable device of a live
-  // member, minus the caller's own device.
+  // member, minus the caller's own device. A suspended member is left out
+  // (board 40): the group carries on without them, and what is sent while
+  // they are suspended is not theirs.
   async memberDevices(client, caller, groupId) {
     const { rows: members } = await client.query(
-      'SELECT user_id FROM group_members WHERE group_id = $1 AND removed_at IS NULL',
+      `SELECT gm.user_id FROM group_members gm JOIN users u ON u.id = gm.user_id
+        WHERE gm.group_id = $1 AND gm.removed_at IS NULL AND u.status = 'active'`,
       [groupId],
     );
     const { rows } = await client.query(REACHABLE_DEVICES, [

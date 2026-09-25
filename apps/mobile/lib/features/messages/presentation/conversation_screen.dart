@@ -293,7 +293,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
             final group = messenger.group(widget.peer);
             final isGroup = (chat?.isGroup ?? false) || group != null;
             final name = group?.name ?? contact?.displayName ?? chat?.displayName ?? '';
-            final canWrite = isGroup ? group != null && !group.archived && !(chat?.left ?? false) : contact != null;
+            // Board 40: a suspended contact is unavailable. History stays;
+            // writing and calling do not, and nothing says why.
+            final unavailable = !isGroup && (contact?.suspended ?? false);
+            final canWrite =
+                isGroup ? group != null && !group.archived && !(chat?.left ?? false) : contact != null && !unavailable;
             final waiting = messages.where((m) => m.status == MessageStatus.waiting).length;
             return Scaffold(
               body: SafeArea(
@@ -310,6 +314,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                     _Header(
                       peer: widget.peer,
                       name: name,
+                      unavailable: unavailable,
                       devices: devices,
                       timer: chat?.timerSeconds,
                       onTimer: canWrite ? () => _timer(chat, name) : null,
@@ -377,6 +382,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                                 : _Bubble(
                                     m: m,
                                     me: messenger.me,
+                                    unavailable: unavailable,
                                     mentionTags: _tagsFor(m),
                                     nameOf: messenger.nameOf,
                                     onQuote: m.replyTo == null ? null : () => _jumpTo(m.replyTo!['id']! as String),
@@ -417,6 +423,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                       onVoice: _sendVoice,
                       recordingDir: messenger.media.viewDir,
                     )
+                  else if (unavailable)
+                    _Unavailable(name: name)
                   else
                     Padding(
                       padding: const EdgeInsets.all(16),
@@ -526,8 +534,10 @@ class _Header extends StatelessWidget {
     required this.timer,
     this.onTimer,
     this.onCall,
+    this.unavailable = false,
   });
   final void Function(bool video)? onCall; // board 35
+  final bool unavailable; // board 40
   final String peer;
   final String name;
   final List<KnownDevice> devices;
@@ -548,7 +558,7 @@ class _Header extends StatelessWidget {
           onPressed: () => context.pop(),
           icon: SkyIcon(SkyIcons.back, size: 21, color: t.textSecondary, stroke: 2.1),
         ),
-        Avatar(name: name, seed: peer, size: 38),
+        Opacity(opacity: unavailable ? 0.45 : 1, child: Avatar(name: name, seed: peer, size: 38)),
         const SizedBox(width: 10),
         Expanded(
           child: InkWell(
@@ -559,25 +569,43 @@ class _Header extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600, color: t.textPrimary)),
               const SizedBox(height: 2),
-              Row(children: [
-                if (allVerified) ...[
-                  SkyIcon(SkyIcons.check, size: 12, color: t.verified, stroke: 2.6),
-                  const SizedBox(width: 4),
-                  Flexible(child: Text('Verified', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: t.verified), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                ] else if (devices.any((d) => d.verifiedAt != null)) ...[
-                  SkyIcon(SkyIcons.warn, size: 12, color: t.caution, stroke: 2.4),
-                  const SizedBox(width: 4),
-                  Flexible(child: Text('$unverified device${unverified == 1 ? '' : 's'} not verified',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: t.caution), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                ] else
-                  Flexible(child: Text('Tap to verify safety numbers', style: TextStyle(fontSize: 12, color: t.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                if (timer != null) ...[
-                  Text(' · ', style: TextStyle(fontSize: 12, color: t.textSecondary)),
-                  SkyIcon(SkyIcons.clock, size: 12, color: t.caution, stroke: 2.3),
-                  const SizedBox(width: 3),
-                  Flexible(child: Text(timerLabel(timer), style: TextStyle(fontSize: 12, color: t.caution), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                ],
-              ]),
+              if (unavailable)
+                Text('Unavailable', style: TextStyle(fontSize: 12, color: t.textSecondary))
+              else
+                Row(children: [
+                  if (allVerified) ...[
+                    SkyIcon(SkyIcons.check, size: 12, color: t.verified, stroke: 2.6),
+                    const SizedBox(width: 4),
+                    Flexible(
+                        child: Text('Verified',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: t.verified),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis)),
+                  ] else if (devices.any((d) => d.verifiedAt != null)) ...[
+                    SkyIcon(SkyIcons.warn, size: 12, color: t.caution, stroke: 2.4),
+                    const SizedBox(width: 4),
+                    Flexible(
+                        child: Text('$unverified device${unverified == 1 ? '' : 's'} not verified',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: t.caution),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis)),
+                  ] else
+                    Flexible(
+                        child: Text('Tap to verify safety numbers',
+                            style: TextStyle(fontSize: 12, color: t.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis)),
+                  if (timer != null) ...[
+                    Text(' · ', style: TextStyle(fontSize: 12, color: t.textSecondary)),
+                    SkyIcon(SkyIcons.clock, size: 12, color: t.caution, stroke: 2.3),
+                    const SizedBox(width: 3),
+                    Flexible(
+                        child: Text(timerLabel(timer),
+                            style: TextStyle(fontSize: 12, color: t.caution),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis)),
+                  ],
+                ]),
             ]),
           ),
         ),
@@ -674,9 +702,11 @@ class _Bubble extends StatelessWidget {
     this.onTap,
     this.onQuote,
     this.nameOf,
+    this.unavailable = false,
   });
   final LocalMessage m;
   final String me;
+  final bool unavailable; // board 40: why a message was not sent
   final List<String> mentionTags;
   final VoidCallback? onTap;
   final VoidCallback? onQuote;
@@ -756,10 +786,10 @@ class _Bubble extends StatelessWidget {
         const SizedBox(height: 5),
         _Meta(m: m),
         if (failed)
-          const Padding(
-            padding: EdgeInsets.only(top: 6),
-            child: Text('Not sent · tap to try again',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFFFD0D2))),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(unavailable ? 'Not sent · this account is unavailable' : 'Not sent · tap to try again',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFFFD0D2))),
           ),
       ])),
     );
@@ -1621,7 +1651,9 @@ class _CallNotice extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: SkyIcon(video ? SkyIcons.video : SkyIcons.phoneCall,
-                size: 16, color: missed ? const Color(0xFFFF9AA0) : (mine ? Colors.white : const Color(0xFF9DB8FF)), stroke: 2),
+                size: 16,
+                color: missed ? const Color(0xFFFF9AA0) : (mine ? Colors.white : const Color(0xFF9DB8FF)),
+                stroke: 2),
           ),
           const SizedBox(width: 12),
           Flexible(
@@ -1650,6 +1682,44 @@ class _CallNotice extends StatelessWidget {
           ],
         ]),
       ),
+    );
+  }
+}
+
+/// Board 40: in place of the composer when a contact is unavailable. A plain
+/// statement; nothing about why.
+class _Unavailable extends StatelessWidget {
+  const _Unavailable({required this.name});
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.sky;
+    final first = name.split(' ').first;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: t.border))),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          constraints: const BoxConstraints(maxWidth: 320),
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: t.surface,
+            border: Border.all(color: t.border),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text("$first's account is unavailable for now. Your conversation stays here.",
+              textAlign: TextAlign.center, style: TextStyle(fontSize: 12, height: 1.5, color: t.textSecondary)),
+        ),
+        Text("You can't message or call $first right now",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: t.textPrimary)),
+        const SizedBox(height: 4),
+        Text('If the account becomes available again, you can pick up where you left off.',
+            textAlign: TextAlign.center, style: TextStyle(fontSize: 12, height: 1.5, color: t.textSecondary)),
+      ]),
     );
   }
 }

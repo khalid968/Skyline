@@ -51,6 +51,18 @@ the current state of play.
   - Also built: several files at once (albums), view once (screenshots blocked on Android and Windows) and
     the media gallery (boards 23-25). Photos are re-encoded with EXIF stripped; `Start Skyline.cmd` starts everything.
 - **Phase 8b (groups and message tools) — ✅ built and pushed 2026-09-25.**
+- **Phase 12 (Testing and hardening) — ✅ built 2026-09-26**, awaiting the owner's review.
+  - Threat model: `docs/security/threat-model.md`. How to run every suite: `docs/testing.md`.
+  - **CI** (`.github/workflows/ci.yml`, actions pinned to commits) runs backend, dashboard, Rust, Flutter,
+    Windows and iOS (simulator) tests, an Android build, gitleaks and dependency audits.
+  - Security tests: the authorization matrix (every route × every caller), statistical timing tests,
+    security headers, and crypto-core property tests (`untrusted_input.rs`).
+  - Load: 500 people at 50 msg/s gives p95 send 30 ms and delivery 43 ms
+    (`npx babel-node scripts/load-test.js`).
+  - Dashboard fonts are self-hosted, and its build carries a CSP.
+  - **MinIO is built from source** (`infra/docker/minio`): images can no longer be pulled anonymously.
+  - Board 40: a suspended contact is unavailable. Sends answer 409 `{unavailable}`, groups leave them out,
+    and a `contacts` event tells their contacts' apps.
 - **Phase 11 (Admin dashboard v2) — ✅ built 2026-09-26**, awaiting the owner's review. Boards 36-39.
   - **Overview:** service health (server, Postgres, Redis, MinIO, coturn via STUN) and usage totals.
     `usage_daily` has no per-person column, by design.
@@ -208,7 +220,7 @@ npm run format             # prettier --write "**/*.js"
 # Migrations (apps/backend) — plain SQL via node-pg-migrate; needs DATABASE_URL in .env
 npm run migrate:up                       # apply; migrate:down rolls back one; migrate:redo redoes the last
 npm run test:db                          # 105 schema-invariant tests against a throwaway database
-npm run test:app                         # 264 tests: guards, auth, admin API, dashboard v2, keys, messaging, media (real MinIO), calls, push, crypto e2e, WebSocket, rate limits, CLI, route inventory
+npm run test:app                         # 275 tests (incl. the authorization matrix and timing tests): guards, auth, admin API, dashboard v2, keys, messaging, media (real MinIO), calls, push, crypto e2e, WebSocket, rate limits, CLI, route inventory
                                          #   (needs the dev Postgres AND Redis up; each suite drops its own DB)
 npm run migrate:create -- add-something  # scaffold a new .sql migration
 

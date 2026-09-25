@@ -12,6 +12,7 @@ import '../../../core/realtime/realtime_client.dart';
 import '../../auth/data/prekeys.dart';
 import '../../media/data/media_service.dart';
 import '../domain/models.dart';
+import '../domain/message_rules.dart';
 import 'local_store.dart';
 
 part 'messenger_groups.dart';
@@ -152,6 +153,10 @@ class Messenger extends ChangeNotifier {
       case 'signed_out':
         signedOut = true;
         notifyListeners();
+      case 'contacts':
+        // Someone we can reach was suspended or reinstated (board 40).
+        unawaited(refreshContacts().catchError((Object _) {}));
+        unawaited(refreshGroups().catchError((Object _) {}));
     }
   }
 
@@ -681,6 +686,11 @@ class Messenger extends ChangeNotifier {
       } on ApiException catch (e) {
         if (e.status != 409 || e.body is! Map) rethrow;
         final body = e.body! as Map<String, Object?>;
+        // Board 40: they are unavailable; retrying with other devices cannot help.
+        if (body['unavailable'] == true) {
+          unawaited(refreshContacts().catchError((Object _) {}));
+          rethrow;
+        }
         final missing = [
           for (final x in (body['missing'] as List<Object?>? ?? const []))
             ((x! as Map<String, Object?>)['userId']! as String, x['deviceNumber']! as int),

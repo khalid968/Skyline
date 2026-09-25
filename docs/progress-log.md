@@ -1070,3 +1070,49 @@ server).
 **Still open from Phase 10:**
 - The Android emulator's system_server had crashed. Rerun `calls_test` on Android after restarting it,
   and try screen sharing by hand.
+
+
+## 2026-09-26 — Pushed Phases 10 and 11; Phase 12 planned
+
+Pushed ab39328, 5c26ab3 and 9a2433c (the owner said "push the commits").
+
+Phase 12 decisions are in decisions.md: GitHub Actions CI, iOS on GitHub's Macs, a 500-person load
+target, and suspended accounts shown as unavailable. Board 40 (an unavailable contact) is on the canvas,
+awaiting approval. The build order is in decisions.md. **Nothing in Phase 12 is started until the owner
+approves.**
+
+
+## 2026-09-26 (night) — Phase 12 (Testing and hardening) built; not committed yet
+
+Board 40 was approved ("great keep going").
+
+- **Threat model:** `docs/security/threat-model.md` (actors A1-A9; threat, protection and proof; residual
+  risks). **Testing guide:** `docs/testing.md`.
+- **CI:** `.github/workflows/ci.yml`, with every action pinned to a commit. `.gitleaks.toml`.
+  **Unverified until pushed:** the first run on GitHub may need fixes (runner images, the iOS simulator
+  name, the Android NDK).
+- **Security tests:**
+  - `authorization-matrix.e2e-spec.js` (5 tests, mutation-checked);
+  - `timing.e2e-spec.js` (3 tests, mutation-checked, stable over 4 runs);
+  - security headers (`http-behaviour`);
+  - `crypto-core/core/tests/untrusted_input.rs` (6 property tests).
+- **Fixes:**
+  - security headers on the API;
+  - the dashboard build's CSP, and self-hosted fonts;
+  - npm advisories (multer, qs, @babel/core); npm audit is now clean;
+  - MinIO built from source (the compose file now builds it; CI too).
+- **Load:** `scripts/load-test.js`. 500 people at 50 msg/s: p95 send 30 ms and delivery 43 ms. 100 msg/s is
+  also within budget. Details in `docs/testing.md`.
+- **App:** `MessageRules` extracted; 11 new unit tests (`test/messaging_logic_test.dart`).
+- **Board 40:** server (refused sends, groups leave the person out, `contacts` events), app (conversation,
+  chat list, group info), `unavailable_ui_test.dart` with screenshots. The actions and groups end-to-end
+  tests still pass.
+- **Counts:**
+  - backend 115 unit + 105 db + 275 app;
+  - dashboard 31;
+  - Rust 41;
+  - app 23 unit, plus the end-to-end tests.
+- **Still open:**
+  - Android: `calls_test` and a manual screen share once the emulator is restarted.
+  - Production decisions (Phase 13): the TLS proxy (`trust proxy`), the relay's private-range denial,
+    separate database roles, the object store.

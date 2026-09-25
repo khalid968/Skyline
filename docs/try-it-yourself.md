@@ -392,6 +392,19 @@ starts the server, and so does `npm run migrate:up`. Then sign in to the dashboa
 
 Moderators see Overview and Sessions (their own), but not Alerts or the Audit log.
 
+## Phase 12: an unavailable contact
+
+1. In the dashboard, **Suspend** someone who is linked to you.
+2. On your phone or PC, their chat at once says **Unavailable**:
+   - The message box and the call buttons are replaced by a note.
+   - Your history stays.
+   - In the chat list their row is greyed out.
+3. A message written just before the suspension is marked **Not sent · this account is unavailable**.
+4. **Reinstate** them, and everything is back.
+
+The first **Start Skyline** after this update builds MinIO from source (a few minutes, once). Your stored
+files are kept.
+
 ## Starting over
 
 Your development accounts live in the Docker volume. To wipe everything and start clean:

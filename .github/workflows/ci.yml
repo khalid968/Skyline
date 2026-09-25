@@ -1,0 +1,250 @@
+# Every push and pull request runs every suite (Phase 12, owner decision
+# 2026-09-26). No repository secrets are used or needed: the tests create and
+# drop their own throwaway databases in service containers, and the Android
+# build uses a placeholder Firebase file with dummy values.
+#
+# Third-party actions are pinned to a commit (threat model A9), with the
+# release they correspond to in a comment.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.35.7
+  NODE_VERSION: 24
+
+jobs:
+  backend:
+    name: Backend (unit, database, app)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: skyline
+          POSTGRES_PASSWORD: skyline
+          POSTGRES_DB: skyline
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U skyline" --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://skyline:skyline@localhost:5432/skyline
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      STORAGE_ENDPOINT: localhost
+      STORAGE_PORT: 9000
+      STORAGE_ACCESS_KEY: skyline
+      STORAGE_SECRET_KEY: skyline-secret
+      STORAGE_USE_SSL: 'false'
+    defaults:
+      run:
+        working-directory: apps/backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # MinIO cannot be pulled anonymously any more; build the pinned release
+      # from source (infra/docker/minio/Dockerfile checks the commit).
+      - name: Object store (MinIO, built from source)
+        working-directory: infra/docker/minio
+        run: |
+          docker build -t skyline-minio .
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=skyline -e MINIO_ROOT_PASSWORD=skyline-secret skyline-minio
+          for i in $(seq 1 60); do curl -sf http://localhost:9000/minio/health/live && break; sleep 2; done
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/backend/package-lock.json
+      - run: npm ci
+      - run: npx jest
+      - run: npm run test:db
+      - run: npm run test:app
+
+  dashboard:
+    name: Dashboard (tests, build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/dashboard
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/dashboard/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      # The production page must carry its content security policy and load
+      # nothing from a third party (threat model A2, A9).
+      - name: Built page is self-contained
+        run: |
+          grep -q 'http-equiv="Content-Security-Policy"' dist/index.html
+          ! grep -rqE 'https?://(fonts\.googleapis|fonts\.gstatic|cdn)' dist/
+
+  crypto-core:
+    name: Crypto core (Rust tests, clippy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: crypto-core
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
+        with:
+          version: '36.2'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      # rust-toolchain.toml pins 1.98.1; rustup installs it on first use.
+      - run: rustup component add clippy
+      - run: cargo test
+      - run: cargo clippy --all-targets -- -D warnings
+
+  flutter:
+    name: App (analyze, unit tests)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  windows:
+    name: App on Windows (native crypto in the app)
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
+        with:
+          version: '36.2'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter test integration_test/crypto_test.dart -d windows
+
+  ios:
+    name: App on iOS (simulator, no signing)
+    runs-on: macos-15
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
+        with:
+          version: '36.2'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build ios --simulator --debug --no-codesign
+      - name: Native crypto on an iPhone simulator
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
+          xcrun simctl boot "$DEVICE"
+          flutter test integration_test/crypto_test.dart -d "$DEVICE"
+
+  android:
+    name: App for Android (build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
+        with:
+          version: '36.2'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      # The real google-services.json is never in git. The build only needs a
+      # file of the right shape; these values are fake and reach nothing.
+      - name: Placeholder Firebase file
+        run: |
+          cat > android/app/google-services.json <<'JSON'
+          {"project_info":{"project_number":"000000000000","project_id":"skyline-ci-placeholder","storage_bucket":"skyline-ci-placeholder.appspot.com"},
+           "client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000","android_client_info":{"package_name":"com.skyline.skyline"}},
+           "oauth_client":[],"api_key":[{"current_key":"placeholder-not-a-key"}],
+           "services":{"appinvite_service":{"other_platform_oauth_client":[]}}}],"configuration_version":"1"}
+          JSON
+      - run: flutter pub get
+      - run: flutter build apk --debug
+
+  security:
+    name: Secrets and dependency audits
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the whole history: a secret removed later is still leaked
+      - name: Secret scan (gitleaks 8.30.1, checksum verified)
+        run: |
+          V=8.30.1
+          curl -sSLO https://github.com/gitleaks/gitleaks/releases/download/v$V/gitleaks_${V}_linux_x64.tar.gz
+          curl -sSLO https://github.com/gitleaks/gitleaks/releases/download/v$V/gitleaks_${V}_checksums.txt
+          grep " gitleaks_${V}_linux_x64.tar.gz$" gitleaks_${V}_checksums.txt | sha256sum -c -
+          tar -xzf gitleaks_${V}_linux_x64.tar.gz gitleaks
+          ./gitleaks git --redact --no-banner --config .gitleaks.toml .
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      # Anything moderate or worse fails the build.
+      - name: npm audit (backend)
+        working-directory: apps/backend
+        run: npm audit --audit-level=moderate
+      - name: npm audit (dashboard)
+        working-directory: apps/dashboard
+        run: npm audit --audit-level=moderate
+      - name: cargo audit (crypto core)
+        working-directory: crypto-core
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit

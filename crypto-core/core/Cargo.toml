@@ -34,3 +34,8 @@ thiserror = "2"
 zeroize = "1.8"
 # App-lock PIN hashing (Argon2id, RustCrypto; same version libsignal uses).
 argon2 = "0.5"
+
+[dev-dependencies]
+# Property tests (Phase 12): every input a server could send is fed random and
+# corrupted bytes, and must be refused with an error, never a panic.
+proptest = "1.11"

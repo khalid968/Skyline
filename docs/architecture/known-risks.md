@@ -63,7 +63,13 @@ Phase 6 starts, so nobody builds admin surface into the client binary by followi
 
 ---
 
-## MinIO: the compose image was gone, and the replacement is a year stale — OPEN (before Phase 9)
+## MinIO: the compose image was gone, and the replacement is a year stale — PARTLY CLOSED 2026-09-26
+
+**Update 2026-09-26 (Phase 12):** MinIO is now built from source at the same release
+(`infra/docker/minio/Dockerfile`), with the commit hash checked. Development and CI both use it, so a fresh
+machine can set up the stack again, and the media tests pass against it. **Still open:** the release is from
+2025-09, and which store production uses is decided at Deployment.
+
 
 **Update 2026-09-25 (media built; the owner chose MinIO for now, production store at Deployment):** the dev
 compose file is pinned by digest to the image already on the owner's machine. quay.io now refuses
@@ -171,4 +177,26 @@ decrypts.
   own Docker network, so private ranges are allowed there. **Production (Phase 13) must also deny
   private ranges** (10/8, 172.16/12, 192.168/16, 127/8), so the relay cannot be used to reach the
   server's internal network. Run it on the same host we already trust with metadata.
+
+## A compromised server can add a "ghost device" (Phase 12 threat model) — ACCEPTED
+- **What:** the key directory is the server's. A server under an attacker's control could list an extra
+  device for Bob. Alice's app would then encrypt to it, until someone looks.
+- **Mitigation:** every new device is announced in the chat with a Verify button (board 17). The header
+  shows how many of a contact's devices are not verified. Safety numbers are per device. Signal and
+  WhatsApp accept the same limit.
+- **Would close it:** key transparency (an auditable log of every key), a large piece of work, and not
+  planned.
+
+## The server knows who talks to whom, and when (Phase 12 threat model) — ACCEPTED
+- **What:** routing needs it. Content, names in messages, media and call audio are never visible, but
+  the sender, recipient and time of every envelope are.
+- **Mitigation:** delivered ciphertext is erased, media is deleted at 30 days, and the dashboard shows
+  only totals (`usage_daily` has no per-person column).
+- **Would close it:** "sealed sender", in which the server cannot see the sender. Not planned for v1.
+
+## Timing tests run on shared CI machines — WATCH
+- **What:** `timing.e2e-spec.js` compares medians with a tolerance. A noisy runner could fail it without a
+  real leak.
+- **If it flakes:** rerun it. If it keeps failing, look for a real new code path before widening the
+  tolerance.
 

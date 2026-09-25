@@ -13,17 +13,13 @@ part of 'messenger.dart';
 /// (owner decision, decisions.md 2026-09-25): an edit or deletion that breaks
 /// them is ignored. A modified app could still send one; it would not show.
 extension MessageActions on Messenger {
-  static const editWindow = Duration(minutes: 15);
-  static const deleteWindow = Duration(hours: 24);
-  static const maxPins = 3;
-  // Clocks differ a little between devices.
-  static const _slack = Duration(minutes: 2);
+  static const editWindow = MessageRules.editWindow;
+  static const deleteWindow = MessageRules.deleteWindow;
+  static const maxPins = MessageRules.maxPins;
 
-  bool canEdit(LocalMessage m) =>
-      m.fromMe && m.kind == MessageKind.text && !m.deleted && DateTime.now().difference(m.sentAt) < editWindow;
+  bool canEdit(LocalMessage m) => MessageRules.canEdit(m, DateTime.now());
 
-  bool canDeleteForEveryone(LocalMessage m) =>
-      m.fromMe && !m.isNotice && !m.deleted && DateTime.now().difference(m.sentAt) < deleteWindow;
+  bool canDeleteForEveryone(LocalMessage m) => MessageRules.canDeleteForEveryone(m, DateTime.now());
 
   // ------------------------------------------------------------- sending
 
@@ -146,21 +142,19 @@ extension MessageActions on Messenger {
     switch (content['type']) {
       case 'edit':
         final body = content['body'];
-        if (!byAuthor || m.deleted || body is! String || m.kind != MessageKind.text) return;
-        if (sentAt.difference(m.sentAt) > editWindow + _slack) return; // too late: ignored
+        if (!MessageRules.acceptEdit(target: m, byAuthor: byAuthor, body: body, sentAt: sentAt)) return;
         m
-          ..text = body
+          ..text = body! as String
           ..editedAt = sentAt;
         await store.putMessage(m);
         await _refreshPreview(peer);
       case 'delete':
-        if (!byAuthor || m.deleted) return;
-        if (sentAt.difference(m.sentAt) > deleteWindow + _slack) return;
+        if (!MessageRules.acceptDelete(target: m, byAuthor: byAuthor, sentAt: sentAt)) return;
         await _markDeleted(m);
       case 'react':
-        final emoji = content['emoji'];
+        final emoji = MessageRules.reaction(content['emoji']);
         if (m.deleted) return;
-        if (emoji is String && emoji.isNotEmpty && emoji.runes.length <= 8) {
+        if (emoji != null) {
           m.reactions[sender] = emoji;
         } else {
           m.reactions.remove(sender);

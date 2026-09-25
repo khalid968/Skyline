@@ -10,6 +10,7 @@ import { createTestDatabase, mkUser, link } from '../db/harness';
 import { createTestApp } from './app-harness';
 import configuration from '../../src/config/configuration';
 import { AuditService } from '../../src/modules/audit/audit.service';
+import { AdminUsersService } from '../../src/modules/admin/admin-users.service';
 import { issueActivationCode } from '../../src/modules/auth/activation-codes';
 import { newDeviceKey, activationFields } from './device-key';
 
@@ -214,6 +215,35 @@ describe('messaging (real tokens, real database, real sockets)', () => {
         [alice.id],
       );
       expect(rows[0].n).toBe(0);
+    });
+
+    it('board 40: refuses a message to a suspended contact, queues nothing, and tells contacts at once', async () => {
+      const alice = await person('aunavail');
+      const bob = await person('bunavail');
+      await link(db.client, alice.id, bob.id, issuer.id);
+      const sock = await openSocket(alice.d);
+
+      // An operator suspends Bob: Alice's app hears "contacts changed".
+      const admins = t.app.get(AdminUsersService);
+      await admins.suspend({ userId: issuer.id, role: 'admin', isOwner: false }, bob.id, null);
+      expect(await waitFor(sock, 'contacts')).not.toBeNull();
+      const listed = (await api().get('/me/contacts').set(alice.d.h)).body;
+      expect(listed.find((x) => x.userId === bob.id).suspended).toBe(true);
+
+      const refused = await send(alice.d, bob.id, coverAll(alice.d, bob, alice));
+      expect(refused.status).toBe(409);
+      expect(refused.body).toMatchObject({ unavailable: true });
+      const queued = await db.client.query(
+        `SELECT count(*)::int AS n FROM message_envelopes e JOIN devices d ON d.id = e.recipient_device_id WHERE d.user_id = $1`,
+        [bob.id],
+      );
+      expect(queued.rows[0].n).toBe(0);
+
+      // Reinstated: available again, and messages go.
+      sock.frames.length = 0;
+      await admins.reinstate({ userId: issuer.id, role: 'admin', isOwner: false }, bob.id, null);
+      expect(await waitFor(sock, 'contacts')).not.toBeNull();
+      expect((await send(alice.d, bob.id, coverAll(alice.d, bob, alice))).status).toBe(201);
     });
 
     it('a retry with the same message id delivers once', async () => {

@@ -147,7 +147,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                         Expanded(
                           child: Text(m.you ? 'You' : m.displayName, style: TextStyle(fontSize: 14, color: t.textPrimary)),
                         ),
-                        if (!m.you && !m.linked)
+                        if (!m.you && m.suspended)
+                          Text('unavailable', style: TextStyle(fontSize: 12, color: t.textSecondary))
+                        else if (!m.you && !m.linked)
                           Text('not linked to you', style: TextStyle(fontSize: 12, color: t.textSecondary))
                         else if (!m.you)
                           IconButton(

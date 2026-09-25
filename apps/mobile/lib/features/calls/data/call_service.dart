@@ -68,6 +68,22 @@ class CallService extends ChangeNotifier {
   /// How long a call rings before it counts as unanswered.
   final Duration ringFor;
   static const _staleOffer = Duration(seconds: 50);
+
+  /// Whether an offer the server has held for [age] may still ring. Judged by
+  /// the server's clock (inbox ageMs), never the caller's.
+  static bool ringsAfter(Duration age) => age <= _staleOffer;
+
+  /// How the end of a call is written in the chat (board 35), from how it
+  /// ended here and which side we were on.
+  static String recordedOutcome(String outcome, {required bool outgoing, required bool connected}) =>
+      switch (outcome) {
+        'completed' => 'completed',
+        'noAnswer' || 'cancelled' => outgoing ? 'noAnswer' : 'missed',
+        'declined' => 'declined',
+        'busy' => 'busy',
+        'missed' => 'missed',
+        _ => connected ? 'completed' : (outgoing ? 'noAnswer' : 'missed'),
+      };
   static const _gatherFor = Duration(seconds: 5);
   static const _uuid = Uuid();
   static const _shareService = MethodChannel('skyline/screen_share');
@@ -490,15 +506,7 @@ class CallService extends ChangeNotifier {
       _pendingOffer = null;
       _offerDevice = null;
       _answerDevice = null;
-      final record = switch (outcome) {
-        'completed' => 'completed',
-        'noAnswer' => call.outgoing ? 'noAnswer' : 'missed',
-        'declined' => call.outgoing ? 'declined' : 'declined',
-        'busy' => 'busy',
-        'cancelled' => call.outgoing ? 'noAnswer' : 'missed',
-        'missed' => 'missed',
-        _ => call.connectedAt != null ? 'completed' : (call.outgoing ? 'noAnswer' : 'missed'),
-      };
+      final record = recordedOutcome(outcome, outgoing: call.outgoing, connected: call.connectedAt != null);
       if (outcome != 'elsewhere') {
         await messenger.recordCall(call.peer,
             video: call.video, outgoing: call.outgoing, outcome: record, durationSeconds: seconds);
@@ -531,7 +539,7 @@ class CallService extends ChangeNotifier {
         // drift, and a behind clock made every call look missed).
         final age = content['ageMs'] is int ? Duration(milliseconds: content['ageMs']! as int) : Duration.zero;
         final at = DateTime.now().subtract(age); // when it was sent, by our clock
-        if (age > _staleOffer) {
+        if (!ringsAfter(age)) {
           // It rang while this device was away: a missed call.
           await messenger.recordCall(peer, video: video, outgoing: false, outcome: 'missed', at: at);
           return;

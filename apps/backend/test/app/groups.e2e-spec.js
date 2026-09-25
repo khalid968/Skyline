@@ -236,6 +236,30 @@ describe('groups (real sign-ins, real database)', () => {
     expect((await inbox(s)).envelopes).toHaveLength(0);
   });
 
+  it('board 40: a suspended member is left out and the group carries on; reinstated, they are back', async () => {
+    const status = (st) =>
+      db.client.query(
+        `UPDATE users SET status = $2::user_status,
+                suspended_at = CASE WHEN $2 = 'suspended' THEN now() END WHERE id = $1`,
+        [c.userId, st],
+      );
+    await status('suspended');
+    try {
+      const mine = (await api().get('/me/groups').set(a.h)).body.find((g) => g.groupId === groupId);
+      expect(mine.members.find((m) => m.userId === c.userId).suspended).toBe(true);
+      // Their devices are no longer part of the list, so nothing waits for them.
+      const withThem = await groupSend(a, groupId, [dev(b), dev(c)]);
+      expect(withThem.status).toBe(409);
+      expect(withThem.body.extra).toEqual([dev(c)]);
+      expect((await groupSend(a, groupId, [dev(b)])).status).toBe(201);
+    } finally {
+      await status('active');
+    }
+    const stale = await groupSend(a, groupId, [dev(b)]);
+    expect(stale.status).toBe(409);
+    expect(stale.body.missing).toEqual([dev(c)]);
+  });
+
   it('key shares go pairwise to any member device, never outside the group', async () => {
     const env = (d) => ({
       ...dev(d),

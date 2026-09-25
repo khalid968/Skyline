@@ -282,6 +282,18 @@ who-may-act-on-whom rules apply exactly as they do on the Users page.
 
 Abuse limits are rate limiting (Redis), not authorization. Nothing about who may do what is cached.
 
+## The authorization matrix (Phase 12)
+
+`test/app/authorization-matrix.e2e-spec.js` calls **every** route of the running application as:
+- signed out;
+- a member's device;
+- an operator (on member routes);
+- a moderator (on permissions moderators lack);
+- a member naming another person's user, group, device, upload or file, and an id that does not exist.
+
+It asserts 401, 401, 403, and the same 404 respectively. A route added later is covered without anyone
+adding it.
+
 ## Tests
 
 | Command | Suite | Needs |
@@ -308,14 +320,18 @@ eight were caught.
   first attempt actually succeeded, the retry presents an already-rotated token and the session is revoked;
   the device must re-activate. Standard behaviour for rotating tokens, but the Phase 7+ client must avoid
   blind retries of `/auth/refresh`.
-- **Timing across the whole activation path is not measured.** A malformed request returns before the
-  database; a well-formed wrong code does one query. Neither reveals anything about valid codes, but the
-  uniformity of timing is asserted by design, not by test.
-- **Timing is not measured.** An unlinked id and a nonexistent id take slightly different SQL paths. The
-  difference is sub-millisecond and untested; a determined attacker with many samples is not ruled out.
+- **Timing is measured (Phase 12).** `test/app/timing.e2e-spec.js` compares a spent code with one that never
+  existed, a known operator with an unknown one, and an unlinked id with a nonexistent one. A malformed
+  request still returns before the database, but it reveals nothing about any code.
+- **Timing between an unlinked and a nonexistent id** is now tested (median within 3 ms, or 20%). A far
+  more patient attacker with millions of samples is still not ruled out; the difference is well under a
+  millisecond.
 - **`trust proxy` is not set**, so `req.ip` is the proxy's address until Phase 13 puts Nginx in front.
-- **Archived groups** are still reachable by their members (`archived_at` is not checked). Undecided.
-- **A suspended user is still visible** to their contacts; only *deleted* accounts vanish. Undecided.
+- **Archived groups: closed.** The graph checks `archived_at` (`graph.service.js`), so an archived group is a
+  404 to act on, and its history stays on the phones.
+- **A suspended user: decided (board 40, 2026-09-26).** Contacts see them as unavailable. A direct send
+  answers 409 `{unavailable: true}`, and nothing is queued. Groups leave them out. Contacts' apps are told at
+  once (a `contacts` event).
 - **Redaction is by field name.** A secret inside a free-text value is not detected.
 - **Two extra queries per request** (account, then graph) is the accepted cost of "no caching". Measure
   before optimising, and never optimise by caching authorization.

@@ -46,12 +46,12 @@ See `design.md` for the standing design-review rule.
    built. Image/video/audio/document sharing, voice messages, media gallery, client-side
    encryption before upload, MinIO storage, compression and lazy loading.
 
-10. **Calls** — WebRTC voice/video calls and screen sharing, E2EE call signaling and media.
+10. **Calls** — ✅ built 2026-09-25. One-to-one voice and video calls through our own relay, and screen sharing on Windows and Android.
 
-11. **Admin dashboard (v2)** — audit logs, server/storage monitoring, active session management,
+11. **Admin dashboard (v2)** — ✅ built 2026-09-26 (boards 36-39). Audit logs, server/storage monitoring, active session management,
     remote device revocation, rate limiting, abuse detection, reporting.
 
-12. **Testing & hardening** — unit, widget, integration, backend, API, security, and performance suites
+12. **Testing & hardening** — planned 2026-09-26 (decisions.md): CI on GitHub Actions including iOS, 500-person load target, threat model. Unit, widget, integration, backend, API, security, and performance suites
     across client, server and dashboard. Threat model review.
 
 13. **Deployment** — production Docker Compose, Nginx TLS, CI/CD, secrets management, automated

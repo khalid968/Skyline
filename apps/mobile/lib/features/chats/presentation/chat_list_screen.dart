@@ -318,10 +318,16 @@ class _ChatRow extends StatelessWidget {
     final mentioned = chat?.mentioned ?? false;
     final typing = messenger.isTyping(row.peer);
     final draft = row.draft;
-    final preview = typing
-        ? 'typing…'
-        : draft ??
-            (chat == null || chat.lastText.isEmpty ? 'Say hello — messages are end-to-end encrypted' : chat.lastText);
+    // Board 40: a suspended contact's row is greyed and says so.
+    final unavailable = !row.isGroup && (messenger.contact(row.peer)?.suspended ?? false);
+    final preview = unavailable
+        ? 'Unavailable'
+        : typing
+            ? 'typing…'
+            : draft ??
+                (chat == null || chat.lastText.isEmpty
+                    ? 'Say hello — messages are end-to-end encrypted'
+                    : chat.lastText);
     // One clear sentence for screen readers, instead of every text in the row.
     return Semantics(
       button: true,
@@ -335,7 +341,8 @@ class _ChatRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           child: Row(children: [
-            Avatar(name: row.name, seed: row.peer, square: row.isGroup),
+            Opacity(
+                opacity: unavailable ? 0.45 : 1, child: Avatar(name: row.name, seed: row.peer, square: row.isGroup)),
             const SizedBox(width: 13),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

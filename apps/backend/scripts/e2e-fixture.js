@@ -15,6 +15,8 @@ import dotenv from 'dotenv';
 import configuration from '../src/config/configuration';
 import { AuditService } from '../src/modules/audit/audit.service';
 import { issueActivationCode } from '../src/modules/auth/activation-codes';
+import { hashPassword } from '../src/modules/auth/admin-auth.service';
+import crypto from 'crypto';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
@@ -61,6 +63,13 @@ async function create() {
         )
       ).rows[0].id;
     const issuer = await mk('fixture.admin', 'Fixture Admin', 'admin', 'active');
+    // A dashboard password for tests that act as an operator (suspending
+    // someone, for board 40). Random, and only ever in this throwaway database.
+    const operatorPassword = crypto.randomBytes(12).toString('base64url');
+    await db.query('INSERT INTO admin_credentials (user_id, password_hash, must_change_password) VALUES ($1, $2, false)', [
+      issuer,
+      await hashPassword(operatorPassword),
+    ]);
     const alice = await mk('alice.e2e', 'Alice Example');
     const bob = await mk('bob.e2e', 'Bob Example');
     const carol = await mk('carol.e2e', 'Carol Example');
@@ -87,6 +96,7 @@ async function create() {
         bob: { userId: bob, code: await code(bob) },
         carol: { userId: carol, code: await code(carol) },
         groupId: group,
+        operator: { username: 'fixture.admin', password: operatorPassword },
       }),
     );
   } finally {

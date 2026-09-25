@@ -1,3 +1,15 @@
+/* Fonts are served from this dashboard, never fetched from Google: a font
+   request would tell a third party every operator's address (threat model A9).
+   The same files the app bundles, under the SIL Open Font License. */
+@font-face { font-family: 'Space Grotesk'; font-weight: 500; font-style: normal; font-display: swap; src: url('/fonts/space-grotesk-500.ttf') format('truetype'); }
+@font-face { font-family: 'Space Grotesk'; font-weight: 700; font-style: normal; font-display: swap; src: url('/fonts/space-grotesk-700.ttf') format('truetype'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 400; font-style: normal; font-display: swap; src: url('/fonts/plus-jakarta-sans-400.ttf') format('truetype'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 500; font-style: normal; font-display: swap; src: url('/fonts/plus-jakarta-sans-500.ttf') format('truetype'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 600; font-style: normal; font-display: swap; src: url('/fonts/plus-jakarta-sans-600.ttf') format('truetype'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-style: normal; font-display: swap; src: url('/fonts/plus-jakarta-sans-700.ttf') format('truetype'); }
+@font-face { font-family: 'JetBrains Mono'; font-weight: 400; font-style: normal; font-display: swap; src: url('/fonts/jetbrains-mono-400.ttf') format('truetype'); }
+@font-face { font-family: 'JetBrains Mono'; font-weight: 500; font-style: normal; font-display: swap; src: url('/fonts/jetbrains-mono-500.ttf') format('truetype'); }
+
 /* Skyline dashboard. Tokens from docs/architecture/design.md (light theme,
    dark sidebar ink), matching the approved prototype boards 6-12. */
 

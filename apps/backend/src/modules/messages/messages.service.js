@@ -132,6 +132,18 @@ export class MessagesService {
       this.logger,
     );
     await this.abuse.beforeSend(caller, res);
+    // Board 40: a suspended person is "unavailable" to their contacts, who
+    // already see that, so saying so here reveals nothing new. Nothing is
+    // queued for them.
+    const recipient = await this.db.query('SELECT status FROM users WHERE id = $1', [recipientUserId]);
+    if (recipient.rows[0]?.status === 'suspended') {
+      throw new PublicBodyException(409, {
+        statusCode: 409,
+        error: 'Conflict',
+        message: 'this account is unavailable',
+        unavailable: true,
+      });
+    }
     const envelopes = decodeEnvelopes(dto.envelopes);
 
     const result = await this.db.transaction(async (client) => {

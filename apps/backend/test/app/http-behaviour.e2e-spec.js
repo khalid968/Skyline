@@ -25,6 +25,26 @@ describe('HTTP behaviour (real database and Redis)', () => {
     await db.drop();
   });
 
+  describe('security headers (threat model A1, A2)', () => {
+    it('sends them on every response: success, refusal and not found', async () => {
+      for (const res of [
+        await api().get('/health'),
+        await api().get('/me/inbox'),
+        await api().get('/no-such-route'),
+      ]) {
+        expect(res.headers['x-content-type-options']).toBe('nosniff');
+        expect(res.headers['x-frame-options']).toBe('DENY');
+        expect(res.headers['content-security-policy']).toContain("default-src 'none'");
+        expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'");
+        expect(res.headers['referrer-policy']).toBe('no-referrer');
+        expect(res.headers['cache-control']).toBe('no-store');
+        expect(res.headers['x-powered-by']).toBeUndefined();
+        // HSTS is production's, behind TLS.
+        expect(res.headers['strict-transport-security']).toBeUndefined();
+      }
+    });
+  });
+
   describe('health', () => {
     it('reports liveness without needing any credentials', async () => {
       const res = await api().get('/health');

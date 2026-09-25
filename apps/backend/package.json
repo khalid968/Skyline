@@ -43,7 +43,7 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@babel/core": "7.29.0",
+    "@babel/core": "7.29.7",
     "@babel/node": "7.29.0",
     "@babel/plugin-proposal-decorators": "7.29.0",
     "@babel/plugin-transform-runtime": "7.29.0",

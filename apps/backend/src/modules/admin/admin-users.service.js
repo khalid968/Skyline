@@ -315,6 +315,8 @@ export class AdminUsersService {
     // Other instances stop delivering at once (FanoutService re-checks) and
     // their sweep closes the socket; this closes it here immediately.
     this.registry.disconnectUser(t.id, 1008, 'suspended');
+    // Their contacts' apps show them as unavailable at once (board 40).
+    await this.notifyContacts(t.id, 'contacts', {});
     return this.detail(t.id);
   }
 
@@ -342,6 +344,8 @@ export class AdminUsersService {
         client,
       );
     });
+    // Available again to their contacts, at once (board 40).
+    await this.notifyContacts(t.id, 'contacts', {});
     return this.detail(t.id);
   }
 

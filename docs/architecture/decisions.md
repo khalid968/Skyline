@@ -6,6 +6,64 @@ working around it.
 
 ---
 
+## 2026-09-26 (night) — Phase 12 as built: implementation choices
+
+- **Unavailable (board 40), server side:**
+  - A direct send to a suspended person answers 409 `{unavailable: true}` and nothing is queued. The
+    sender already sees "unavailable", so the answer reveals nothing new.
+  - Group sends leave suspended members' devices out. The group carries on, and what is sent meanwhile
+    is not theirs.
+  - Suspending or reinstating publishes a `contacts` event to everyone who can see the person, and their
+    apps refresh at once.
+  - (The plan had said such sends were "already refused". They were in fact queued; fixed here.)
+- **Security headers on every API response:** nosniff, `DENY` framing, `default-src 'none'`, no referrer,
+  and `no-store`. HSTS is sent in production only.
+- **The dashboard build carries a CSP** in a meta tag: self only, and inline styles only for React
+  `style` attributes. Development keeps Vite's inline scripts working. Its fonts are served by the
+  dashboard itself, because a request to Google would reveal every operator's address.
+- **The authorization matrix and the timing tests** read the routes from the running app, so they never
+  go stale.
+- **Crypto-core property tests** assert the real integrity property: a changed message is refused or
+  decrypts to exactly what was sent. A session-starting message carries key-agreement material that an
+  established session ignores, so changing it is harmless.
+- **The app's message rules moved into `MessageRules`** (pure, unit-tested), and the call service's
+  outcome and freshness rules into static methods. Behaviour is unchanged: the actions and groups
+  end-to-end tests still pass.
+- **MinIO is built from source at RELEASE.2025-09-07 with the commit checked**, for development and CI
+  alike. The production store is still Phase 13's decision.
+- **Dependencies:** multer, qs and @babel/core were updated to fix advisories; npm audit is clean.
+- **The load test is a committed script** that creates and drops its own database, so it can be rerun
+  after any change.
+
+## 2026-09-26 (evening) — Phase 12 (Testing and hardening) planned: owner decisions
+
+The owner's answers:
+- **CI on GitHub Actions.** Every push and pull request runs all suites: backend unit, db and app;
+  dashboard; Rust test and clippy; Flutter analyze and test. There are also secret and dependency scans.
+  No repository secrets are needed: tests use throwaway databases in service containers.
+- **Scale target: up to 500 people on one server.** Load tests use 500 connected devices and bursts of
+  50 messages a second. Budgets (p95 send under 300 ms, delivery to open sockets under 1 s) are checked,
+  and fixes are made where they fail.
+- **A suspended person is shown to their contacts as unavailable** (board 40):
+  - The chat and its history stay.
+  - The header says Unavailable, the call buttons go, and the composer becomes a plain note.
+  - Nothing says why.
+  - Sends to them are refused, as they already are server-side.
+  - Reinstating the account restores everything.
+- **iOS is built and tested on GitHub's macOS machines** (the simulator, with no signing). App Store
+  signing stays with Phase 13.
+
+The plan, in order:
+1. Threat model (`docs/security/threat-model.md`).
+2. CI.
+3. Security tests: an authorization matrix generated from the route inventory, timing tests,
+   dashboard headers and CSP, property tests for crypto-core inputs, dependency audits and refreshed
+   pins (the stale MinIO image).
+4. App unit and widget tests for the messaging logic.
+5. Load tests at 500.
+6. The "unavailable" state (board 40).
+7. Close or restate every open item in known-risks and authorization.md's "Known gaps".
+
 ## 2026-09-26 (later) — Phase 11 as built: implementation choices
 
 - **Alerts are for the owner and admins (`alerts.manage`)**, like the audit log. Alerts name operators'

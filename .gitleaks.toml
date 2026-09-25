@@ -1,0 +1,13 @@
+# Secret scanning (Phase 12, threat model A9). gitleaks' own rules, plus one
+# allowance: lock files are full of package checksums that look like keys.
+# Anything else it finds is treated as a real leak and fails CI.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Package checksums in lock files"
+paths = [
+  '''(^|/)Cargo\.lock$''',
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)pubspec\.lock$''',
+]

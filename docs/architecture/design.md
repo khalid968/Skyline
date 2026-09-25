@@ -54,6 +54,7 @@ Private to the owner. Current boards:
 | 37 · Admin · Alerts | Approved 2026-09-26: metadata-only alerts, automatic limits, lift early, suspend stays human |
 | 38 · Admin · Audit log | Approved 2026-09-26: owner and admins only, filters, details, CSV |
 | 39 · Admin · Sessions | Approved 2026-09-26: dashboard sessions, sign out one or everyone but me |
+| 40 · A contact whose account is unavailable (mobile) | Approved 2026-09-26 (Phase 12): history stays, no composer or calls, nothing says why |
 
 Boards 2–7 are clickable in Play mode. Board 7 has working toggles.
 
