@@ -193,6 +193,26 @@ updates PATH only for new windows.
 The backend must be **restarted** (`npm run migrate:up`, then `npm run start`) to pick up migration 011 and the
 new activation format. The old `npm run dev:device` pretend phone was updated to match.
 
+## One click: start everything
+
+Double-click **`Start Skyline.cmd`** in the Skyline folder. It starts:
+
+1. Docker and the database, Redis and MinIO;
+2. the server on :3000 (applying new migrations first);
+3. the dashboard, which opens in your browser;
+4. the Android emulator, with the app on it;
+5. the Windows app.
+
+Each runs in its own window, and anything already running is left alone. The apps take a few minutes to
+build the first time. To skip parts, run it from PowerShell:
+
+```powershell
+& ".\Start Skyline.cmd" -NoAndroid     # also: -NoWindows, -NoDashboard
+```
+
+Double-click **`Stop Skyline.cmd`** to close the windows it opened. Docker keeps running and your data
+stays; `& ".\Stop Skyline.cmd" -StopDocker` stops the data stack too.
+
 ## Phase 8a: real messaging between two devices
 
 You will run your own server, create two people in the dashboard, and chat between the Windows app and the

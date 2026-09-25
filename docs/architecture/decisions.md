@@ -6,6 +6,25 @@ working around it.
 
 ---
 
+## 2026-09-25 (later) — Media preparation before sending (within approved boards 20-22)
+
+Implementation choices, not owner decisions. They fill in what boards 21 and 22 already show.
+
+- **Photos are re-encoded before they are encrypted.**
+  - At most 2048 px on the long side, JPEG at quality 82. PNG stays PNG, so screenshots keep sharp text.
+  - Re-encoding drops the EXIF block, so **location, camera and date details never leave the device**.
+  - Animations and formats the app cannot decode (HEIC, for one) go as they are.
+  - To send a photo untouched, send it as a File.
+- **Videos get a thumbnail and their length on every platform** (`fc_native_video_thumbnail`, and the video
+  player). Both travel inside the encrypted message.
+- **Videos over 12 MB are compressed on phones** (`video_compress`, medium quality). Windows has no
+  converter we can ship, so it sends videos as they are.
+- **"Save to this device" puts the photo in the phone's gallery** (`gal`), as board 22 says. Windows keeps a
+  "save as" dialog.
+- None of the new packages contains analytics or trackers (checked in the package sources).
+
+---
+
 ## 2026-09-25 — Media (Phase 9) brought forward, before 8b: owner decisions and design
 
 **The owner decided** (after trying 8a): media now, then Phase 8b.

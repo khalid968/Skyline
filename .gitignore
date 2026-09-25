@@ -52,3 +52,4 @@ Thumbs.db
 *firebase-service-account*.json
 **/google-services.json
 **/GoogleService-Info.plist
+.dev-pids

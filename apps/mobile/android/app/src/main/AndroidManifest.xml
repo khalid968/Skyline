@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Voice messages (board 22): only while the microphone is held. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- "Save to this device" on Android 9 and older (newer versions need no permission). -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
     <application
         android:label="Skyline"
         android:name="${applicationName}"

@@ -8,6 +8,57 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-25 (evening) — One-click dev environment; media gaps closed; boards 23-25 for approval
+
+The owner asked for:
+1. a one-click way to run the testing environment;
+2. sending several files at once;
+3. view-once messages;
+4. then "complete building what's missing".
+
+**Built**
+
+- **`Start Skyline.cmd` / `Stop Skyline.cmd`** in the repository folder (`scripts/dev-up.ps1`,
+  `scripts/dev-down.ps1`).
+  - Start runs, in order: Docker Desktop and the data stack, then migrations, the server on :3000 and the
+    dashboard (opened in the browser); then the emulator (software graphics) and the app on it, then the
+    Windows app. Each runs in its own window.
+  - Anything already running is reused, never restarted. Stop closes only the windows Start opened
+    (process ids kept in `.dev-pids`, gitignored).
+  - Checked: both scripts parse, and the Docker-health and emulator-detection steps work on this machine.
+    **The full script has not been run end to end:** that starts the owner's own server on :3000.
+- **Media gaps that fall under approved boards** (see `decisions.md`, "Media preparation before
+  sending"):
+  - photos re-encoded (at most 2048 px, EXIF and location removed);
+  - video thumbnails and lengths;
+  - video compression on phones;
+  - saving to the phone's gallery.
+  - New messages now appear at once and show "Preparing…" or "Compressing · n%" before encrypting.
+- **Verified**
+  - Windows `messaging_test`: a 3000x2000 camera JPEG with GPS EXIF arrives at 2048x1365, with no EXIF.
+  - `flutter analyze` is clean, the unit tests pass, and the Android debug APK builds.
+  - **Not verified:** video thumbnails, lengths and compression with a real video file (none in the test
+    fixtures).
+
+**Waiting for the owner (not built)**
+
+- Boards 23 (several files at once), 24 (view once) and 25 (media gallery), published to the design
+  canvas.
+- The gallery is the last item on the roadmap's media list.
+- Choices shown on the boards for the owner to confirm:
+  - up to 10 files per send, photos and videos grouped into one album;
+  - view-once for photos and videos only; screenshots blocked on Android and Windows, not possible on
+    iPhone; the sender cannot reopen it either;
+  - the gallery shows only what is on this device, never disappearing or view-once messages.
+
+**Next agent should:** on approval of 23-25, build them. Server work:
+- albums already fit: a message can claim up to 10 files;
+- view-once needs a "viewed" sync between the viewer's own devices.
+
+Then Phase 8b, prototypes first.
+
+---
+
 ## 2026-09-25 (later) — Media (Phase 9) BUILT: photos, videos, documents, voice messages
 
 The owner asked for media before Phase 8b and approved boards 20-22. Their decisions (MinIO pinned for now,

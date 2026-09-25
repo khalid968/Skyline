@@ -111,8 +111,13 @@ void main() {
     // Media (boards 20-22). A photo downloads by itself and decrypts to the
     // exact bytes; a 9 MB document (two 8 MB parts) waits for a tap.
     final dir = await Directory.systemTemp.createTemp('skyline-media-src-');
-    final photoBytes = img.encodePng(img.Image(width: 640, height: 480)..clear(img.ColorRgb8(58, 99, 216)));
-    final photoFile = File('${dir.path}${Platform.pathSeparator}site-north.png')..writeAsBytesSync(photoBytes);
+    // A 3000x2000 camera JPEG that records where it was taken (EXIF GPS).
+    final original = img.Image(width: 3000, height: 2000)..clear(img.ColorRgb8(58, 99, 216));
+    original.exif.gpsIfd['GPSLatitude'] = img.IfdValueRational(51, 1);
+    original.exif.imageIfd['Make'] = img.IfdValueAscii('SkylineTestCam');
+    final photoBytes = img.encodeJpg(original, quality: 95);
+    expect(img.decodeJpgExif(photoBytes)!.imageIfd['Make'], isNotNull, reason: 'the fixture really has EXIF');
+    final photoFile = File('${dir.path}${Platform.pathSeparator}site-north.jpg')..writeAsBytesSync(photoBytes);
     final photo = await alice.sendMedia(bobId, photoFile, MediaKind.photo, caption: 'North elevation, today');
     expect(photo.status, MessageStatus.sent);
     expect(photo.media!.state, MediaState.ready);
@@ -122,7 +127,16 @@ void main() {
       return m?.media?.state == MediaState.ready ? m : null;
     });
     expect(gotPhoto.text, 'North elevation, today');
-    expect(await bob.media.bytes(gotPhoto.media!), photoBytes);
+    // What arrives is the photo, made smaller, with the camera and location
+    // details gone.
+    final received = await bob.media.bytes(gotPhoto.media!);
+    final decoded = img.decodeJpg(received)!;
+    expect((decoded.width, decoded.height), (2048, 1365));
+    expect(decoded.getPixel(10, 10).b, closeTo(216, 3));
+    final exif = img.decodeJpgExif(received);
+    expect(exif == null || (exif.gpsIfd.isEmpty && exif.imageIfd['Make'] == null), isTrue);
+    expect(received.length, lessThan(photoBytes.length));
+    expect(gotPhoto.media!.name, 'site-north.jpg');
     expect((await bob.store.chat(aliceId))!.lastText, 'Photo · North elevation, today');
 
     final docBytes = List<int>.generate(9 * 1024 * 1024 + 123, (i) => (i * 31 + 7) & 0xff);

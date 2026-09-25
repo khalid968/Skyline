@@ -37,6 +37,9 @@ Private to the owner. Current boards:
 | 20 · Attach and send (mobile) | Approved 2026-09-25: attach menu, preview with caption, upload progress |
 | 21 · Media in a chat (mobile) | Approved 2026-09-25: photo, video (tap to download), file, voice, expired after 30 days |
 | 22 · Photo viewer and voice recording (mobile) | Approved 2026-09-25: viewer (save asks first), hold to record |
+| 23 · Several files at once (mobile) | Awaiting approval: up to 10 per send; photos and videos as one album, documents as their own messages |
+| 24 · View once (mobile) | Awaiting approval: photos and videos, opened once then deleted everywhere; screenshots blocked where the OS allows |
+| 25 · Media gallery (mobile) | Awaiting approval: a chat's photos and videos, files and voice, from a Media button in the chat header |
 
 Boards 2–7 are clickable in Play mode. Board 7 has working toggles.
 

@@ -264,9 +264,6 @@ class Messenger extends ChangeNotifier {
   }) async {
     final size = await source.length();
     if (size > MediaService.maxBytes) throw ArgumentError('Files can be up to 2 GB.');
-    final preview = kind == MediaKind.photo
-        ? await MediaService.photoPreview(source.path)
-        : (thumb: null, width: null, height: null);
     final chat = await _chatForSending(peer);
     final now = DateTime.now();
     final fileName = name ?? source.uri.pathSegments.last;
@@ -275,9 +272,6 @@ class Messenger extends ChangeNotifier {
       name: fileName,
       mime: mime ?? mimeFor(fileName, kind),
       size: size,
-      thumb: preview.thumb,
-      width: preview.width,
-      height: preview.height,
       durationMs: durationMs,
       wave: wave,
       state: MediaState.uploading,
@@ -298,8 +292,22 @@ class Messenger extends ChangeNotifier {
     await store.putMessage(m);
     await _touchChat(chat, _preview(m), now, unread: false);
     notifyListeners();
+    PreparedFile? prepared;
     try {
-      await media.encrypt(m.id, source, info);
+      // Shown at once; compressing, then encrypting, happen with progress.
+      prepared = await media.prepare(m.id, source, kind, fileName);
+      info
+        ..name = prepared.name
+        ..mime = mime ?? mimeFor(prepared.name, kind)
+        ..size = await prepared.file.length()
+        ..thumb = prepared.thumb ?? info.thumb
+        ..width = prepared.width ?? info.width
+        ..height = prepared.height ?? info.height
+        ..durationMs = durationMs ?? prepared.durationMs;
+      if (info.size > MediaService.maxBytes) throw ArgumentError('Files can be up to 2 GB.');
+      await store.putMessage(m);
+      notifyListeners();
+      await media.encrypt(m.id, prepared.file, info);
     } on Object {
       info.state = MediaState.failed;
       m.status = MessageStatus.failed;
@@ -308,9 +316,12 @@ class Messenger extends ChangeNotifier {
       notifyListeners();
       return m;
     } finally {
-      if (deleteSource) {
+      for (final f in [
+        if (deleteSource) source,
+        if (prepared != null && prepared.temporary && prepared.file.path != source.path) prepared.file,
+      ]) {
         try {
-          await source.delete();
+          await f.delete();
         } on FileSystemException {
           // already gone
         }

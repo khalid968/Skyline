@@ -2,21 +2,49 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:fc_native_video_thumbnail/fc_native_video_thumbnail.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:uuid/uuid.dart';
+import 'package:video_compress/video_compress.dart' as vc;
+import 'package:video_player/video_player.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../src/rust/api/crypto.dart' as rust;
 import '../../messages/domain/models.dart';
 
+enum TransferStage { preparing, encrypting, moving }
+
 /// Progress of one upload or download, by message id.
 class Transfer {
-  const Transfer(this.done, this.total, {this.encrypting = false});
+  const Transfer(this.done, this.total, {this.stage = TransferStage.moving});
   final int done;
   final int total;
-  final bool encrypting;
+  final TransferStage stage;
+  bool get encrypting => stage != TransferStage.moving;
   double get fraction => total <= 0 ? 0 : (done / total).clamp(0, 1);
+
+  /// "Compressing · 40%", "Preparing…", "Encrypting…"; null while moving.
+  String? get label => switch (stage) {
+        TransferStage.preparing => total > 0 ? 'Compressing · ${(fraction * 100).round()}%' : 'Preparing…',
+        TransferStage.encrypting => 'Encrypting…',
+        TransferStage.moving => null,
+      };
+}
+
+/// What actually gets encrypted and sent: for photos a re-encoded copy
+/// (smaller, with location and camera details stripped), for videos on
+/// phones a compressed copy, otherwise the original. [temporary] files are
+/// ours to delete once encrypted.
+class PreparedFile {
+  PreparedFile(this.file, this.name, {this.temporary = false, this.thumb, this.width, this.height, this.durationMs});
+  final File file;
+  final String name;
+  final bool temporary;
+  final String? thumb;
+  final int? width;
+  final int? height;
+  final int? durationMs;
 }
 
 /// The server deleted the file (30 days) before this device fetched it.
@@ -58,7 +86,7 @@ class MediaService extends ChangeNotifier {
   /// hash and size. The source itself is left alone.
   Future<void> encrypt(String messageId, File source, MediaInfo m) async {
     await dir.create(recursive: true);
-    transfers[messageId] = Transfer(0, m.size, encrypting: true);
+    transfers[messageId] = Transfer(0, m.size, stage: TransferStage.encrypting);
     notifyListeners();
     final name = '${_uuid.v4()}.enc';
     final keys = await rust.encryptMediaFile(
@@ -272,30 +300,155 @@ class MediaService extends ChangeNotifier {
     return n;
   }
 
-  /// A small JPEG preview of a photo (it travels inside the encrypted
-  /// message) and the photo's size. Runs off the UI thread.
-  static Future<({String? thumb, int? width, int? height})> photoPreview(String path) =>
-      compute(_photoPreview, path);
+  // ------------------------------------------------------------ preparing
+
+  /// Makes [source] ready to send (see [PreparedFile]). Anything that fails
+  /// here falls back to sending the original as it is.
+  Future<PreparedFile> prepare(String messageId, File source, MediaKind kind, String name) async {
+    transfers[messageId] = const Transfer(0, 0, stage: TransferStage.preparing);
+    notifyListeners();
+    await viewDir.create(recursive: true);
+    switch (kind) {
+      case MediaKind.photo:
+        final out = '${viewDir.path}${Platform.pathSeparator}${_uuid.v4()}';
+        final r = await compute(_preparePhoto, (source.path, out, name));
+        if (r == null) return PreparedFile(source, name);
+        return PreparedFile(File(r.path), r.name,
+            temporary: true, thumb: r.thumb, width: r.width, height: r.height);
+      case MediaKind.video:
+        return _prepareVideo(messageId, source, name);
+      case MediaKind.voice:
+      case MediaKind.file:
+        // Documents and recordings go exactly as they are.
+        return PreparedFile(source, name);
+    }
+  }
+
+  static const _compressVideosOver = 12 * 1024 * 1024;
+  static Future<void> _videoQueue = Future.value(); // one compression at a time
+
+  Future<PreparedFile> _prepareVideo(String messageId, File source, String name) async {
+    var file = source;
+    var fileName = name;
+    var temporary = false;
+    int? ms;
+    // Phones re-encode large videos (about a tenth of the size at medium
+    // quality). Windows has no converter we can ship, so it sends originals.
+    if ((Platform.isAndroid || Platform.isIOS) && await source.length() > _compressVideosOver) {
+      final done = Completer<void>();
+      final previous = _videoQueue;
+      _videoQueue = done.future;
+      await previous;
+      final sub = vc.VideoCompress.compressProgress$.subscribe((p) {
+        transfers[messageId] = Transfer(p.round(), 100, stage: TransferStage.preparing);
+        _notifySoon();
+      });
+      try {
+        final out = await vc.VideoCompress.compressVideo(
+          source.path,
+          quality: vc.VideoQuality.MediumQuality,
+          includeAudio: true,
+        );
+        if (out?.path != null && (out!.filesize ?? 1 << 62) < await source.length()) {
+          file = File(out.path!);
+          temporary = true;
+          final dot = name.lastIndexOf('.');
+          fileName = '${dot > 0 ? name.substring(0, dot) : name}.mp4';
+          ms = out.duration?.round();
+        }
+      } on Object {
+        // Could not convert: send the original.
+      } finally {
+        sub.unsubscribe();
+        done.complete();
+      }
+    }
+    final preview = await _videoPreview(file);
+    ms ??= await _videoLength(file);
+    return PreparedFile(file, fileName,
+        temporary: temporary, thumb: preview?.thumb, width: preview?.width, height: preview?.height, durationMs: ms);
+  }
+
+  Future<({String thumb, int width, int height})?> _videoPreview(File video) async {
+    try {
+      final jpg = await FcNativeVideoThumbnail()
+          .saveThumbnailToBytes(srcFile: video.path, width: 320, height: 320, format: 'jpeg', quality: 70)
+          .timeout(const Duration(seconds: 15));
+      if (jpg == null) return null;
+      return await compute(_shrinkPreview, jpg);
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<int?> _videoLength(File video) async {
+    final c = VideoPlayerController.file(video);
+    try {
+      await c.initialize().timeout(const Duration(seconds: 10));
+      final ms = c.value.duration.inMilliseconds;
+      return ms > 0 ? ms : null;
+    } on Object {
+      return null;
+    } finally {
+      await c.dispose();
+    }
+  }
 }
 
-({String? thumb, int? width, int? height}) _photoPreview(String path) {
+/// A small JPEG (at most ~14 KB) of [image], to travel inside the message.
+String? _previewOf(img.Image image) {
+  final small = image.width >= image.height
+      ? img.copyResize(image, width: image.width < 320 ? image.width : 320)
+      : img.copyResize(image, height: image.height < 320 ? image.height : 320);
+  var quality = 60;
+  var jpg = img.encodeJpg(small, quality: quality);
+  while (jpg.length > 14000 && quality > 20) {
+    quality -= 10;
+    jpg = img.encodeJpg(small, quality: quality);
+  }
+  return jpg.length > 20000 ? null : base64.encode(jpg);
+}
+
+({String thumb, int width, int height})? _shrinkPreview(Uint8List jpg) {
+  final image = img.decodeImage(jpg);
+  if (image == null) return null;
+  final t = _previewOf(image);
+  return t == null ? null : (thumb: t, width: image.width, height: image.height);
+}
+
+/// Re-encodes a photo: at most 2048 px on the long side, JPEG at quality 82
+/// (PNG stays PNG, for screenshots). Re-encoding drops EXIF, so location,
+/// camera and date details never leave the device. Null if it cannot be
+/// decoded (HEIC, for one): the original is sent instead.
+({String path, String name, String thumb, int width, int height})? _preparePhoto((String, String, String) args) {
+  final (source, outBase, name) = args;
   try {
-    final file = File(path);
-    if (file.lengthSync() > 60 * 1024 * 1024) return (thumb: null, width: null, height: null);
+    final file = File(source);
+    if (file.lengthSync() > 80 * 1024 * 1024) return null;
     final decoded = img.decodeImage(file.readAsBytesSync());
-    if (decoded == null) return (thumb: null, width: null, height: null);
-    final image = img.bakeOrientation(decoded);
-    final small = image.width >= image.height
-        ? img.copyResize(image, width: image.width < 320 ? image.width : 320)
-        : img.copyResize(image, height: image.height < 320 ? image.height : 320);
-    var quality = 60;
-    var jpg = img.encodeJpg(small, quality: quality);
-    while (jpg.length > 14000 && quality > 20) {
-      quality -= 10;
-      jpg = img.encodeJpg(small, quality: quality);
+    if (decoded == null) return null;
+    if (decoded.numFrames > 1) return null; // an animation: keep it whole
+    var image = img.bakeOrientation(decoded);
+    const edge = 2048;
+    if (image.width > edge || image.height > edge) {
+      image = image.width >= image.height ? img.copyResize(image, width: edge) : img.copyResize(image, height: edge);
     }
-    return (thumb: jpg.length > 20000 ? null : base64.encode(jpg), width: image.width, height: image.height);
+    image.exif = img.ExifData();
+    final png = name.toLowerCase().endsWith('.png');
+    final bytes = png ? img.encodePng(image, level: 6) : img.encodeJpg(image, quality: 82);
+    final dot = name.lastIndexOf('.');
+    final base = dot > 0 ? name.substring(0, dot) : name;
+    final outName = png ? '$base.png' : '$base.jpg';
+    final outPath = '$outBase${png ? '.png' : '.jpg'}';
+    File(outPath).writeAsBytesSync(bytes);
+    return (
+      path: outPath,
+      name: outName,
+      thumb: _previewOf(image) ?? '',
+      width: image.width,
+      height: image.height,
+    );
   } on Object {
-    return (thumb: null, width: null, height: null);
+    return null;
   }
 }

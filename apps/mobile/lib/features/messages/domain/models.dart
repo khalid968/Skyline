@@ -114,18 +114,18 @@ class MediaInfo {
   });
 
   final MediaKind kind;
-  final String name;
-  final String mime;
-  final int size; // plaintext bytes
+  String name; // may change when a photo is re-encoded before sending
+  String mime;
+  int size; // plaintext bytes
   String? attachmentId;
   int cipherSize;
   String key; // base64
   String nonce; // base64
   String sha256; // base64, of the ciphertext
-  final String? thumb; // base64 JPEG, a few KB
-  final int? width;
-  final int? height;
-  final int? durationMs;
+  String? thumb; // base64 JPEG, a few KB
+  int? width;
+  int? height;
+  int? durationMs;
   final List<int> wave; // voice: 0..31 per bar
   String? localFile; // file name of the ciphertext in the media folder
   MediaState state;

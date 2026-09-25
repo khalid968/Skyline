@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:gal/gal.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:video_player/video_player.dart';
 
@@ -161,11 +162,10 @@ class MediaBubble extends StatelessWidget {
 
   Widget _progressOverlay(Transfer tr) {
     final pct = (tr.fraction * 100).round();
-    final text = tr.encrypting
-        ? 'Encrypting…'
-        : m.fromMe && info.state == MediaState.uploading
+    final text = tr.label ??
+        (m.fromMe && info.state == MediaState.uploading
             ? 'Encrypting and sending · $pct%'
-            : 'Downloading · $pct%';
+            : 'Downloading · $pct%');
     return ColoredBox(
       color: const Color(0x73080C16),
       child: Center(
@@ -174,7 +174,7 @@ class MediaBubble extends StatelessWidget {
             width: 44,
             height: 44,
             child: CircularProgressIndicator(
-              value: tr.encrypting ? null : tr.fraction,
+              value: tr.encrypting && tr.total <= 0 ? null : tr.fraction,
               strokeWidth: 3,
               color: Colors.white,
               backgroundColor: Colors.white24,
@@ -247,9 +247,8 @@ class MediaBubble extends StatelessWidget {
     final ready = info.state == MediaState.ready && messenger.media.hasLocal(info);
     final ext = info.name.contains('.') ? info.name.split('.').last.toUpperCase() : 'FILE';
     final line = tr != null
-        ? (tr.encrypting
-            ? 'Encrypting…'
-            : '${m.fromMe && info.state == MediaState.uploading ? 'Uploading' : 'Downloading'} ${formatProgress(tr.done, tr.total)}')
+        ? (tr.label ??
+            '${m.fromMe && info.state == MediaState.uploading ? 'Uploading' : 'Downloading'} ${formatProgress(tr.done, tr.total)}')
         : ready
             ? '${formatBytes(info.size)} · $ext'
             : info.state == MediaState.remote
@@ -625,9 +624,10 @@ class PhotoViewerScreen extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: t.surface,
         title: const Text('Save an unencrypted copy?'),
-        content: const Text(
-          'The copy is a normal file on this device. Other apps, backups and anyone who can open this '
-          'device can see it. Skyline cannot delete it later, even if the message disappears.',
+        content: Text(
+          '${Platform.isWindows ? 'The copy is a normal file on this PC.' : 'The copy goes into your photo gallery.'} '
+          'Other apps, backups and anyone who can open this device can see it. Skyline cannot delete it '
+          'later, even if the message disappears.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -638,6 +638,16 @@ class PhotoViewerScreen extends StatelessWidget {
     if (ok != true) return;
     try {
       final bytes = await media.bytes(m.media!);
+      if (Platform.isAndroid || Platform.isIOS) {
+        // Into the gallery (board 22). The OS asks for permission the first time.
+        if (!await Gal.hasAccess() && !await Gal.requestAccess()) {
+          snack.showSnackBar(const SnackBar(content: Text('Skyline was not allowed to add to your photos.')));
+          return;
+        }
+        await Gal.putImageBytes(bytes, name: MediaService.safeName(m.media!.name));
+        snack.showSnackBar(const SnackBar(content: Text('Saved to your photos.')));
+        return;
+      }
       final path = await FilePicker.saveFile(fileName: MediaService.safeName(m.media!.name), bytes: bytes);
       if (path != null && Platform.isWindows) await File(path).writeAsBytes(bytes);
       if (path != null) snack.showSnackBar(const SnackBar(content: Text('Saved.')));
