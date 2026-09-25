@@ -31,6 +31,11 @@ export class StorageService {
     this.logger = new Logger('Storage');
   }
 
+  // For the dashboard overview (board 36): is the object store answering?
+  async ping() {
+    await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+  }
+
   async onModuleInit() {
     try {
       await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));

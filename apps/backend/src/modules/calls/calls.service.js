@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { Injectable, Dependencies, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { UsageService } from '../monitoring/usage.service';
 import {
   RateLimitService,
   enforceLimit,
@@ -13,9 +14,10 @@ const TURN_LIMIT = { limit: 30, windowSec: 60 };
 // audio and video go device to device through the relay, encrypted end to end.
 // All the server does is hand out relay credentials.
 @Injectable()
-@Dependencies(ConfigService, RateLimitService)
+@Dependencies(ConfigService, RateLimitService, UsageService)
 export class CallsService {
-  constructor(config, limiter) {
+  constructor(config, limiter, usage) {
+    this.usage = usage;
     this.turn = config.get('turn');
     this.limiter = limiter;
     this.logger = new Logger('Calls');
@@ -33,6 +35,8 @@ export class CallsService {
       res,
       this.logger,
     );
+    // Both sides of a call fetch credentials: the overview halves this count.
+    await this.usage.bump('relay_credentials');
     const expires = Math.floor(Date.now() / 1000) + this.turn.ttlSeconds;
     const username = `${expires}:${crypto.randomBytes(8).toString('hex')}`;
     const credential = crypto

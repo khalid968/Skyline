@@ -78,6 +78,13 @@ export function capabilities(me) {
     manageGroups: admin || me?.role === 'moderator',
     revokeDevices: admin,
     makeAdmins: !!me?.isOwner,
+    // Phase 11 (decisions.md 2026-09-26): every operator sees the overview
+    // and their own sessions; the audit log and alerts are the owner's and
+    // admins'; only the owner sees and ends everyone's sessions.
+    overview: admin || me?.role === 'moderator',
+    audit: admin,
+    alerts: admin,
+    allSessions: !!me?.isOwner,
   };
 }
 

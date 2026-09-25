@@ -9,6 +9,10 @@ import Groups from './pages/Groups';
 import ContactGraph from './pages/ContactGraph';
 import Devices from './pages/Devices';
 import Account from './pages/Account';
+import Overview from './pages/Overview';
+import Alerts from './pages/Alerts';
+import AuditLog from './pages/AuditLog';
+import Sessions from './pages/Sessions';
 
 // Signed out -> sign-in. Signed in with a temporary password -> the account
 // page only, until a new password is chosen (the server enforces the same).
@@ -24,7 +28,7 @@ function RequireAuth({ children }) {
 function SignedOutOnly({ children }) {
   const { status } = useAuth();
   if (status === 'loading') return <div className="splash">Loading…</div>;
-  if (status === 'signedIn') return <Navigate to="/users" replace />;
+  if (status === 'signedIn') return <Navigate to="/overview" replace />;
   return children;
 }
 
@@ -40,8 +44,12 @@ export default function App() {
         <Route path="/groups" element={<Groups />} />
         <Route path="/devices" element={<Devices />} />
         <Route path="/account" element={<Account />} />
+        <Route path="/overview" element={<Overview />} />
+        <Route path="/alerts" element={<Alerts />} />
+        <Route path="/audit" element={<AuditLog />} />
+        <Route path="/sessions" element={<Sessions />} />
       </Route>
-      <Route path="*" element={<Navigate to="/users" replace />} />
+      <Route path="*" element={<Navigate to="/overview" replace />} />
     </Routes>
   );
 }

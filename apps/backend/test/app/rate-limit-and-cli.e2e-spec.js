@@ -50,15 +50,18 @@ describe('rate limits and operator tools (real Redis, real processes)', () => {
   });
 
   describe('rate limits (production values)', () => {
-    it('allows 10 activation attempts per address per 15 minutes, then answers 429 with Retry-After', async () => {
+    // The rate limit allows 10 per 15 minutes, but abuse detection (board 37)
+    // acts first: the 8th wrong code in an hour blocks the address for an
+    // hour, which is why Retry-After is far longer than the 15-minute window.
+    it('blocks an address for an hour after 8 wrong codes, answering 429 with Retry-After', async () => {
       const statuses = [];
-      for (let i = 0; i < 11; i++)
+      for (let i = 0; i < 8; i++)
         statuses.push((await activate('SKY-00000-00000-00000-00000')).status);
-      expect(statuses.slice(0, 10)).toEqual(Array(10).fill(401));
+      expect(statuses).toEqual(Array(8).fill(401));
 
       const blocked = await activate('SKY-00000-00000-00000-00000');
       expect(blocked.status).toBe(429);
-      expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+      expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(15 * 60);
       expect(blocked.body).toEqual({
         statusCode: 429,
         error: 'Too Many Requests',

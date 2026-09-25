@@ -12,6 +12,7 @@ import {
   enforceLimit,
 } from '../../common/rate-limit/rate-limit';
 import { StorageService } from './storage.service';
+import { AbuseService } from '../abuse/abuse.service';
 
 // Encrypted media (decisions.md 2026-09-25). The phone encrypts first; this
 // service moves opaque bytes into and out of the object store in 8 MB parts,
@@ -23,9 +24,10 @@ const START_LIMIT = { limit: 120, windowSec: 3600 };
 const SWEEP_EVERY_MS = 60 * 60 * 1000;
 
 @Injectable()
-@Dependencies(DatabaseService, RateLimitService, StorageService)
+@Dependencies(DatabaseService, RateLimitService, StorageService, AbuseService)
 export class MediaService {
-  constructor(db, limiter, storage) {
+  constructor(db, limiter, storage, abuse) {
+    this.abuse = abuse;
     this.db = db;
     this.limiter = limiter;
     this.storage = storage;
@@ -58,6 +60,7 @@ export class MediaService {
       res,
       this.logger,
     );
+    await this.abuse.beforeUpload(caller, res);
     const hash = decodeSha(sha256);
     if (!hash)
       throw new BadRequestException(['sha256 must be 32 bytes, base64']);

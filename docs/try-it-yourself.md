@@ -364,6 +364,34 @@ Limits for now:
   Ringing a closed app is a later piece of work.
 - **iOS:** calls there are untested.
 
+## Phase 11: the dashboard's Overview, Alerts, Audit log and Sessions
+
+Restart the server first: it applies migration 015. **Start Skyline.cmd** runs migrations whenever it
+starts the server, and so does `npm run migrate:up`. Then sign in to the dashboard. You now land on
+**Overview**.
+
+1. **Overview:**
+   - A card for each service. If the call relay is stopped, a yellow warning names it.
+   - Totals, with messages and calls per day (7, 14 or 30 days), storage, and server numbers.
+   - Nothing on the page is about any one person.
+2. **Alerts** (owner and admins):
+   - To see one, sign out and enter a wrong dashboard password 5 times for another operator, for
+     example a moderator you created.
+   - An alert appears, and that account can't sign in for 15 minutes, even with the right password.
+   - **Lift now** ends the pause.
+   - **Mark as reviewed** closes the alert. **Suspend** is offered only for people you may manage, and
+     asks first.
+3. **Audit log** (owner and admins):
+   - Filter by Links, Groups, Accounts and devices, Sign-ins or Automatic, or type a name.
+   - Click a row for its details.
+   - **Download CSV** saves exactly what the page shows.
+4. **Sessions:**
+   - Sign in from a second browser, then end that session from here. The other browser is signed out on
+     its next click.
+   - As the owner, you see everyone's sessions and can sign out everyone except yourself.
+
+Moderators see Overview and Sessions (their own), but not Alerts or the Audit log.
+
 ## Starting over
 
 Your development accounts live in the Docker volume. To wipe everything and start clean:

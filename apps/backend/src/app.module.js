@@ -18,6 +18,8 @@ import { CallsModule } from './modules/calls/calls.module';
 import { MediaModule } from './modules/media/media.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { AbuseModule } from './modules/abuse/abuse.module';
+import { MonitoringModule } from './modules/monitoring/monitoring.module';
 import { WebsocketModule } from './modules/websocket/websocket.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { createValidationPipe } from './common/pipes/validation.pipe';
@@ -42,6 +44,8 @@ import {
     RateLimitModule,
     AuthorizationModule,
     AuditModule,
+    AbuseModule,
+    MonitoringModule,
     HealthModule,
     AuthModule,
     UsersModule,

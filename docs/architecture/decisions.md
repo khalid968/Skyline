@@ -6,6 +6,35 @@ working around it.
 
 ---
 
+## 2026-09-26 (later) — Phase 11 as built: implementation choices
+
+- **Alerts are for the owner and admins (`alerts.manage`)**, like the audit log. Alerts name operators'
+  accounts and internet addresses, which is the same sensitivity as the audit trail.
+- **Thresholds sit below the existing hard limits**, so detection acts first:
+  - sending: 150 in 5 minutes (the limit is 120 a minute);
+  - uploads: 60 starts in 10 minutes (the limit is 120 an hour);
+  - wrong activation codes: 8 in an hour from one address (the limit is 10 per 15 minutes);
+  - wrong dashboard passwords: 5 in 10 minutes;
+  - new devices: 3 in an hour.
+- **Thresholds scale with `RATE_LIMIT_SCALE`**, like every limit. Production refuses anything but 1.
+- **Counters and active limits are in Redis; alerts are rows in Postgres.** The limit is set before the
+  alert is written, so it holds even if the write fails. There is one open alert per kind and subject (a
+  partial unique index); a repeat updates it.
+- **A paused dashboard account fails exactly like a wrong password**: the same 401 and body, with Argon2
+  still run for timing. A 429 for real usernames only would reveal which usernames are operators.
+- **An address blocked from activating gets 429 with Retry-After.** That says nothing about any code.
+- **Calls per day are counted from relay credentials divided by two**, because both sides fetch them.
+  The server never sees a call.
+- **Messages per day count everything that travels as a message**, including edits, reactions and call
+  set-up, and each group message once. The page says so.
+- **Request statistics are per instance and in memory, for the last hour**: a status and a duration
+  only, with no path and no caller.
+- **The CSV export is a plain GET link** carrying the session cookie. A GET changes nothing, so it
+  needs no CSRF header. Cells starting with = + - @ are neutralised.
+- **Entries with no actor read "Skyline" only for automatic actions** (`abuse.*`). A failed sign-in
+  reads "Not signed in".
+- **Overview is the landing page** after sign-in.
+
 ## 2026-09-26 — Phase 11 (Admin dashboard v2) planned: owner decisions
 
 The owner's answers:
@@ -33,7 +62,7 @@ The owner's answers:
   anyone's, or everyone's but their own. Member devices stay on the Devices page (revoking one signs it
   out).
 
-Prototypes 36-39 were drawn for approval. Nothing is built until they are approved.
+Prototypes 36-39 were drawn for approval, and approved the same day ("looks good").
 
 ## 2026-09-25 (night) — Phase 10 (Calls) as built: implementation choices
 

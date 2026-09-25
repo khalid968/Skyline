@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { fakeBackend, renderApp, OWNER, MODERATOR, person, UNAUTHORIZED } from './helpers';
+import { fakeBackend, renderApp, OWNER, MODERATOR, person, UNAUTHORIZED, OVERVIEW } from './helpers';
 
 describe('signing in', () => {
-  it('signed out lands on sign-in; password then code leads to the users list', async () => {
+  it('signed out lands on sign-in; password then code leads to the overview', async () => {
     let signedIn = false;
     const { calls } = fakeBackend({
       'GET /admin/auth/me': () => (signedIn ? OWNER : UNAUTHORIZED),
@@ -14,6 +14,8 @@ describe('signing in', () => {
         return { expiresAt: 'later' };
       },
       'GET /admin/users': [person(1)],
+      'GET /admin/overview?days=14': OVERVIEW,
+      'GET /admin/alerts?state=open': { alerts: [], open: 0, reviewed: 0 },
     });
     renderApp('/users');
     const user = userEvent.setup();
@@ -25,8 +27,7 @@ describe('signing in', () => {
     await user.type(await screen.findByLabelText('Six-digit code'), '123456');
     await user.click(screen.getByRole('button', { name: 'Verify and sign in' }));
 
-    expect(await screen.findByRole('heading', { name: 'Users' })).toBeInTheDocument();
-    expect(await screen.findByText('Person 1')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Overview' })).toBeInTheDocument();
     expect(calls.find((c) => c.path === '/admin/auth/mfa').body).toEqual({ mfaToken: 'skm_x', code: '123456' });
   });
 

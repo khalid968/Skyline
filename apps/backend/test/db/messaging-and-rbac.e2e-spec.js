@@ -353,6 +353,34 @@ describe('messaging and RBAC (database layer)', () => {
       expect(mod).toContain('groups.manage');
     });
 
+    it('keeps the audit log and alerts from moderators, but shows them the overview (owner decision, 2026-09-26)', async () => {
+      const mod = await permsOf('moderator');
+      expect(mod).not.toContain('audit.read');
+      expect(mod).not.toContain('alerts.manage');
+      expect(mod).toContain('overview.read');
+      const admin = await permsOf('admin');
+      expect(admin).toEqual(expect.arrayContaining(['audit.read', 'alerts.manage', 'overview.read']));
+      expect(await permsOf('member')).toEqual([]);
+    });
+
+    it('keeps one open alert per kind and subject; a reviewed one makes room for the next', async () => {
+      const ins = () =>
+        db.client.query(
+          `INSERT INTO alerts (kind, level, subject_key) VALUES ('code_guessing', 'high', '203.0.113.9') RETURNING id`,
+        );
+      const first = (await ins()).rows[0].id;
+      await expect(ins()).rejects.toMatchObject({ code: '23505' });
+      // Reviewed needs an outcome, and an outcome needs reviewed.
+      await expect(
+        db.client.query(`UPDATE alerts SET reviewed_at = now() WHERE id = $1`, [first]),
+      ).rejects.toMatchObject({ code: '23514' });
+      await db.client.query(`UPDATE alerts SET reviewed_at = now(), outcome = 'none' WHERE id = $1`, [first]);
+      await ins();
+      await expect(
+        db.client.query(`INSERT INTO alerts (kind, level, subject_key) VALUES ('read_messages', 'high', 'x')`),
+      ).rejects.toMatchObject({ code: '23514' });
+    });
+
     it('has NO permission -- for any role -- that could grant access to message plaintext', async () => {
       const { rows } = await db.client.query(
         'SELECT key, description FROM permissions',

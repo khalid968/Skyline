@@ -1027,3 +1027,46 @@ relay's limits (production must deny private ranges). CLAUDE.md and decisions.md
 **Phase 11 (dashboard v2) planned.** The owner's decisions are in decisions.md: usage totals only,
 alerts with automatic limits, an audit log for the owner and admins, a built-in Overview page, and a
 Sessions page. Prototypes 36-39 are on the canvas, awaiting approval.
+
+
+## 2026-09-26 — Phase 11 (Admin dashboard v2) built (boards 36-39 approved: "looks good")
+
+Committed first: 5c26ab3, the Calls work (local; not pushed).
+
+**Backend:**
+- Migration 015:
+  - moderators lose `audit.read`;
+  - new permissions `overview.read` and `alerts.manage`;
+  - `admin_sessions` gains ip, user_agent and two_factor;
+  - new tables `usage_daily` (totals only) and `alerts`.
+- `modules/abuse/abuse.service.js` holds the five rules. It hooks into send (direct and group), upload
+  start, activation (in the controller), and dashboard sign-in, including the two-factor step.
+- `modules/monitoring`: `MetricsService` (middleware, the last hour in memory), `UsageService` (bumped on
+  send, group send and relay credentials), and `OverviewService` (health, including a STUN probe of
+  coturn, plus totals and storage).
+- Admin controllers and services: overview, audit (paged, filtered, CSV), alerts (list, lift, review
+  with an optional policy-checked suspend), and sessions.
+
+**Dashboard:**
+- Pages: `Overview.jsx`, `Alerts.jsx`, `AuditLog.jsx`, `Sessions.jsx`.
+- The sidebar has the new entries and an open-alert badge, polled every 30 s and refreshed after actions.
+- Overview is the landing page.
+
+**Tests:**
+- Backend 484: 115 unit, 264 app (the new `dashboard-v2.e2e-spec.js` has 12), and 105 db (new: moderator
+  permissions, one open alert per subject).
+- Dashboard 31 (a new `dashboard-v2.test.jsx`).
+- Five mutations, all caught: a paused account signing in, moderators reading the audit log, anyone
+  ending anyone's session, slowed devices not being slowed, alerts never raising.
+- The existing activation rate-limit test now expects the abuse block at 8 wrong codes (1 h
+  Retry-After).
+- Screenshots of all four pages were taken against a throwaway server (:3078) and dashboard (:5174),
+  with a throwaway database dropped afterwards. They led to fixes: failed sign-ins had read "Skyline";
+  the audit column wrapping; Yes/No details; ISO times in the CSV.
+
+**For the owner:** restart the server so migration 015 applies (Start Skyline does it when it starts the
+server).
+
+**Still open from Phase 10:**
+- The Android emulator's system_server had crashed. Rerun `calls_test` on Android after restarting it,
+  and try screen sharing by hand.

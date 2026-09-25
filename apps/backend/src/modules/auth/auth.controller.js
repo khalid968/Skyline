@@ -5,7 +5,9 @@ import {
   Body,
   Ip,
   Req,
+  Res,
   HttpCode,
+  Logger,
   Dependencies,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -14,6 +16,7 @@ import { Validated } from '../../common/decorators/validated.decorator';
 import { RateLimit } from '../../common/rate-limit/rate-limit';
 import { SessionService } from '../authorization/session.service';
 import { ActivationService } from './activation.service';
+import { AbuseService } from '../abuse/abuse.service';
 import { ActivateDto, RefreshDto } from './auth.dto';
 
 const FIFTEEN_MIN = 15 * 60;
@@ -22,11 +25,13 @@ const FIFTEEN_MIN = 15 * 60;
 // one-time activation code registers the device, and from then on the device
 // itself is the credential.
 @Controller('auth')
-@Dependencies(ActivationService, SessionService)
+@Dependencies(ActivationService, SessionService, AbuseService)
 export class AuthController {
-  constructor(activation, sessions) {
+  constructor(activation, sessions, abuse) {
     this.activation = activation;
     this.sessions = sessions;
+    this.abuse = abuse;
+    this.logger = new Logger('Auth');
   }
 
   // Redeem an activation code. Tight limit: this is where code guessing would
@@ -34,10 +39,25 @@ export class AuthController {
   @Public()
   @Post('activate')
   @RateLimit('activate', [{ by: 'ip', limit: 10, windowSec: FIFTEEN_MIN }])
-  @Bind(Body(), Ip())
+  //
+  // Abuse detection (board 37): an address that keeps getting codes wrong is
+  // blocked for an hour, and several new devices for one person raise an
+  // alert. Every wrong code counts the same, so nothing here tells a spent
+  // code from one that never existed.
+  @Bind(Body(), Ip(), Res({ passthrough: true }))
   @Validated(ActivateDto)
-  async activate(dto, ip) {
-    const r = await this.activation.activate(dto, ip);
+  async activate(dto, ip, res) {
+    await this.abuse.assertMayActivate(ip, res);
+    let r;
+    try {
+      r = await this.activation.activate(dto, ip);
+    } catch (err) {
+      if (err instanceof UnauthorizedException) await this.abuse.noteActivationFailure(ip);
+      throw err;
+    }
+    await this.abuse.noteDeviceActivated(r.userId).catch((err) =>
+      this.logger.warn(`device burst check failed: ${err.message}`),
+    );
     return {
       userId: r.userId,
       deviceId: r.deviceId,

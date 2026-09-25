@@ -1,3 +1,4 @@
+import { isIP } from 'net';
 import { Injectable, Dependencies } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../database/database.service';
@@ -201,20 +202,25 @@ export class SessionService {
 
   // -------------------------------------------------------------- dashboard
 
-  async createDashboardSession(userId, state = 'active', client = this.db) {
+  // `meta` (board 39): the address and browser it signed in from, and
+  // whether a two-factor code was used. Shown back to operators only.
+  async createDashboardSession(userId, state = 'active', client = this.db, meta = {}) {
     const pending = state === 'pending_mfa';
     const token = newToken(
       pending ? TOKEN_PREFIX.mfaPending : TOKEN_PREFIX.dashboard,
     );
     const { rows } = await client.query(
-      `INSERT INTO admin_sessions (user_id, token_hash, state, expires_at)
-       VALUES ($1, $2, $3, now() + make_interval(secs => $4))
+      `INSERT INTO admin_sessions (user_id, token_hash, state, expires_at, ip, user_agent, two_factor)
+       VALUES ($1, $2, $3, now() + make_interval(secs => $4), $5::inet, $6, $7)
        RETURNING id, expires_at`,
       [
         userId,
         this.hash(token),
         state,
         pending ? LIFETIME.mfaPendingSec : LIFETIME.dashboardAbsoluteSec,
+        meta.ip && isIP(meta.ip) ? meta.ip : null,
+        typeof meta.userAgent === 'string' ? meta.userAgent.slice(0, 300) : null,
+        meta.twoFactor === true,
       ],
     );
     return { token, sessionId: rows[0].id, expiresAt: rows[0].expires_at };

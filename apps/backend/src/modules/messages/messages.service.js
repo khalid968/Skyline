@@ -14,6 +14,8 @@ import { PublicBodyException } from '../../common/filters/all-exceptions.filter'
 import { FanoutService } from '../websocket/fanout.service';
 import { PushService } from '../notifications/push.service';
 import { MediaService } from '../media/media.service';
+import { AbuseService } from '../abuse/abuse.service';
+import { UsageService } from '../monitoring/usage.service';
 
 // How messages move (decisions.md, 2026-09-24):
 //
@@ -51,9 +53,13 @@ export const REACHABLE_DEVICES = `
   FanoutService,
   PushService,
   MediaService,
+  AbuseService,
+  UsageService,
 )
 export class MessagesService {
-  constructor(db, limiter, fanout, push, media) {
+  constructor(db, limiter, fanout, push, media, abuse, usage) {
+    this.abuse = abuse;
+    this.usage = usage;
     this.media = media;
     this.db = db;
     this.limiter = limiter;
@@ -125,6 +131,7 @@ export class MessagesService {
       res,
       this.logger,
     );
+    await this.abuse.beforeSend(caller, res);
     const envelopes = decodeEnvelopes(dto.envelopes);
 
     const result = await this.db.transaction(async (client) => {
@@ -185,6 +192,7 @@ export class MessagesService {
     });
 
     if (!result.duplicate) {
+      await this.usage.bump('messages');
       // Open apps hear the socket nudge; closed ones get a content-free push.
       await this.nudge(caller.userId, [recipientUserId, caller.userId]);
       await this.push.wake(result.devices);

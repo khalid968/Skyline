@@ -26,6 +26,8 @@ import {
   unkey,
   decodeEnvelopes,
 } from '../messages/messages.service';
+import { AbuseService } from '../abuse/abuse.service';
+import { UsageService } from '../monitoring/usage.service';
 
 // Groups, as members see them (Phase 8b, decisions.md 2026-09-25).
 //
@@ -52,9 +54,13 @@ const MAX_GROUP_DEVICES = 1000;
   KeysService,
   MessagesService,
   FanoutService,
+  AbuseService,
+  UsageService,
 )
 export class GroupsService {
-  constructor(db, limiter, audit, push, media, keys, messages, fanout) {
+  constructor(db, limiter, audit, push, media, keys, messages, fanout, abuse, usage) {
+    this.abuse = abuse;
+    this.usage = usage;
     this.fanout = fanout;
     this.db = db;
     this.limiter = limiter;
@@ -148,6 +154,7 @@ export class GroupsService {
       res,
       this.logger,
     );
+    await this.abuse.beforeSend(caller, res);
     const body = decodeBody(dto.body);
 
     const result = await this.db.transaction(async (client) => {
@@ -182,8 +189,10 @@ export class GroupsService {
       };
     });
 
-    if (!result.duplicate)
+    if (!result.duplicate) {
+      await this.usage.bump('group_messages');
       await this.wake(groupId, caller.userId, result.devices);
+    }
     return { messageId: dto.messageId, sentAt: result.sentAt };
   }
 

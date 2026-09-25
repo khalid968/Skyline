@@ -77,3 +77,8 @@ export class SetGroupMemberDto {
 export class ArchiveGroupDto {
   @IsBoolean() archived;
 }
+
+// Board 37: mark an alert reviewed, optionally suspending its person.
+export class ReviewAlertDto {
+  @IsBoolean() suspend;
+}

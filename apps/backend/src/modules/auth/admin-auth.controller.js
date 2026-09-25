@@ -57,7 +57,7 @@ export class AdminAuthController {
   @Bind(Body(), Ip(), Req(), Res({ passthrough: true }))
   @Validated(AdminLoginDto)
   async login(dto, ip, req, res) {
-    return this.deliver(await this.auth.login(dto, ip), req, res);
+    return this.deliver(await this.auth.login(dto, ip, req.headers['user-agent']), req, res);
   }
 
   // Second step, for admins who turned two-factor on.
@@ -69,7 +69,7 @@ export class AdminAuthController {
   @Validated(MfaDto)
   async mfa(dto, ip, req, res) {
     return this.deliver(
-      { mfaRequired: false, ...(await this.auth.completeMfa(dto, ip)) },
+      { mfaRequired: false, ...(await this.auth.completeMfa(dto, ip, req.headers['user-agent'])) },
       req,
       res,
     );

@@ -8,6 +8,7 @@ import { StorageService } from './storage.service';
 @Module({
   controllers: [MediaController],
   providers: [MediaService, StorageService],
-  exports: [MediaService],
+  // StorageService: the dashboard overview checks the object store is up.
+  exports: [MediaService, StorageService],
 })
 export class MediaModule {}

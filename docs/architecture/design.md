@@ -50,10 +50,10 @@ Private to the owner. Current boards:
 | 34 · Video call and screen sharing (mobile) | Approved 2026-09-25: self view, flip, share screen (Windows and Android) |
 | 35 · Calls in a chat (mobile) | Approved 2026-09-25: call buttons, call notices, missed call with Call back |
 | 31 · Admin · Groups (dashboard) | Approved 2026-09-25: create, rename, add or remove members, archive |
-| 36 · Admin · Overview | Proposed 2026-09-26: service health, usage totals (never per person), storage |
-| 37 · Admin · Alerts | Proposed 2026-09-26: metadata-only alerts, automatic limits, lift early, suspend stays human |
-| 38 · Admin · Audit log | Proposed 2026-09-26: owner and admins only, filters, details, CSV |
-| 39 · Admin · Sessions | Proposed 2026-09-26: dashboard sessions, sign out one or everyone but me |
+| 36 · Admin · Overview | Approved 2026-09-26: service health, usage totals (never per person), storage |
+| 37 · Admin · Alerts | Approved 2026-09-26: metadata-only alerts, automatic limits, lift early, suspend stays human |
+| 38 · Admin · Audit log | Approved 2026-09-26: owner and admins only, filters, details, CSV |
+| 39 · Admin · Sessions | Approved 2026-09-26: dashboard sessions, sign out one or everyone but me |
 
 Boards 2–7 are clickable in Play mode. Board 7 has working toggles.
 

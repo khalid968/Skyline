@@ -268,6 +268,20 @@ These are member routes (device sessions only). Every route that names another p
 - **A 409 body may be structured** (`PublicBodyException` for status 409). No graph check ever answers 409,
   so 404s stay indistinguishable.
 
+## Dashboard v2 (Phase 11)
+
+| Route | Who | Guarded by |
+| --- | --- | --- |
+| `GET /admin/overview` | every operator | `overview.read` |
+| `GET /admin/audit`, `GET /admin/audit/export` | owner, admins | `audit.read` (moderators lost it in migration 015) |
+| `GET /admin/alerts`, `POST /admin/alerts/:alertId/{lift,review}` | owner, admins | `alerts.manage` + `@GraphExempt` |
+| `GET /admin/sessions`, `POST /admin/sessions/{revoke-others,:sessionId/revoke}` | every operator | `dashboard.access` + `@DashboardSession`; the service limits non-owners to their own sessions and answers 404 otherwise |
+
+Reviewing an alert with `suspend: true` goes through `AdminUsersService.suspend`, so admin-policy's
+who-may-act-on-whom rules apply exactly as they do on the Users page.
+
+Abuse limits are rate limiting (Redis), not authorization. Nothing about who may do what is cached.
+
 ## Tests
 
 | Command | Suite | Needs |

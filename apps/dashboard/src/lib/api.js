@@ -101,6 +101,19 @@ export const api = {
   // devices
   devices: (params = {}) => get(`/admin/devices${q(params)}`),
   revokeDevice: (id) => post(`/admin/devices/${id}/revoke`),
+
+  // dashboard v2 (Phase 11, boards 36-39)
+  overview: (days) => get(`/admin/overview${q({ days })}`),
+  alerts: (state = 'open') => get(`/admin/alerts${q({ state })}`),
+  liftAlert: (id) => post(`/admin/alerts/${id}/lift`),
+  reviewAlert: (id, suspend) => post(`/admin/alerts/${id}/review`, { suspend }),
+  audit: (params = {}) => get(`/admin/audit${q(params)}`),
+  // A plain link the browser downloads with the session cookie (a GET
+  // changes nothing, so it needs no CSRF header).
+  auditExportUrl: (params = {}) => `/api/admin/audit/export${q(params)}`,
+  sessions: () => get('/admin/sessions'),
+  revokeSession: (id) => post(`/admin/sessions/${id}/revoke`),
+  revokeOtherSessions: () => post('/admin/sessions/revoke-others'),
 };
 
 // One sentence for whatever went wrong, for the error line under a form.

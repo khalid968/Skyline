@@ -75,3 +75,24 @@ export const person = (n, over = {}) => ({
 });
 
 export const UNAUTHORIZED = { status: 401, body: { statusCode: 401, message: 'Unauthorized' } };
+
+// Board 36's data, as the server sends it.
+export const OVERVIEW = {
+  checkedAt: new Date().toISOString(),
+  services: [
+    { id: 'server', ok: true, ms: 0 },
+    { id: 'database', ok: true, ms: 4 },
+    { id: 'realtime', ok: true, ms: 2, connectedDevices: 118 },
+    { id: 'storage', ok: true, ms: 9 },
+    { id: 'relay', ok: true, ms: 3 },
+  ],
+  totals: { people: 146, notActivated: 9, suspended: 3, activeToday: 112, devices: 231, waitingMessages: 37 },
+  perDay: Array.from({ length: 14 }, (_, i) => ({ day: `2026-09-${String(i + 10).padStart(2, '0')}`, messages: 100 + i, calls: i })),
+  storage: {
+    mediaBytes: 42 * 1024 ** 3,
+    mediaFiles: 812,
+    databaseBytes: 1.8 * 1024 ** 3,
+    disk: { freeBytes: 612 * 1024 ** 3, totalBytes: 1000 * 1024 ** 3 },
+  },
+  server: { version: '0.0.1 · 0e2a91c', uptimeSeconds: 12 * 86400, requestsPerMinute: 1240, errorsLastHour: 0, p95Ms: 84, memoryBytes: 312 * 1024 ** 2 },
+};

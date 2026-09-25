@@ -51,6 +51,18 @@ the current state of play.
   - Also built: several files at once (albums), view once (screenshots blocked on Android and Windows) and
     the media gallery (boards 23-25). Photos are re-encoded with EXIF stripped; `Start Skyline.cmd` starts everything.
 - **Phase 8b (groups and message tools) — ✅ built and pushed 2026-09-25.**
+- **Phase 11 (Admin dashboard v2) — ✅ built 2026-09-26**, awaiting the owner's review. Boards 36-39.
+  - **Overview:** service health (server, Postgres, Redis, MinIO, coturn via STUN) and usage totals.
+    `usage_daily` has no per-person column, by design.
+  - **Alerts:** `modules/abuse`, metadata only. Automatic limits live in Redis; an operator can lift one.
+    Suspending is always a person's decision. A paused dashboard sign-in answers exactly like a wrong
+    password.
+  - **Audit log:** a viewer plus CSV export (cells neutralised against formula injection).
+  - **Sessions:** everyone ends their own; the owner ends anyone's.
+  - Migration 015: moderators lose `audit.read`; new permissions `overview.read` (all operators) and
+    `alerts.manage` (admins).
+  - Tests: 484 backend (`test/app/dashboard-v2.e2e-spec.js`) and 31 dashboard. Five mutation checks were
+    all caught.
 - **Phase 10 (Calls) — ✅ built 2026-09-25**, awaiting the owner's review.
   - What it covers: one-to-one voice and video with `flutter_webrtc`, and screen sharing on Windows
     (desktopCapturer) and Android (a mediaProjection foreground service).
@@ -158,7 +170,7 @@ Rationale for each is in `docs/architecture/decisions.md`.
 
 ```
 apps/mobile/     Flutter client — feature-first Clean Architecture (lib/features/<name>/{data,domain,presentation})
-apps/backend/    NestJS (JS) — src/modules/{auth,users,devices,chats,messages,groups,media,notifications,admin,websocket}
+apps/backend/    NestJS (JS) — src/modules/{auth,users,devices,chats,messages,groups,media,calls,notifications,admin,abuse,monitoring,websocket}
 apps/dashboard/  Admin web app — React + Vite, plain JS (src/lib/api.js is the only fetch path; src/pages/*)
 crypto-core/     Rust workspace: core/ (libsignal + encrypted vault), ffi/ (flutter_rust_bridge surface), e2e/ (dev tool)
 infra/docker/    Dev docker-compose.yml (Postgres, Redis, MinIO)
@@ -195,8 +207,8 @@ npm run format             # prettier --write "**/*.js"
 
 # Migrations (apps/backend) — plain SQL via node-pg-migrate; needs DATABASE_URL in .env
 npm run migrate:up                       # apply; migrate:down rolls back one; migrate:redo redoes the last
-npm run test:db                          # 102 schema-invariant tests against a throwaway database
-npm run test:app                         # 239 tests: guards, auth, admin API, keys, messaging, media (real MinIO), push, crypto e2e, WebSocket, rate limits, CLI, route inventory
+npm run test:db                          # 105 schema-invariant tests against a throwaway database
+npm run test:app                         # 264 tests: guards, auth, admin API, dashboard v2, keys, messaging, media (real MinIO), calls, push, crypto e2e, WebSocket, rate limits, CLI, route inventory
                                          #   (needs the dev Postgres AND Redis up; each suite drops its own DB)
 npm run migrate:create -- add-something  # scaffold a new .sql migration
 

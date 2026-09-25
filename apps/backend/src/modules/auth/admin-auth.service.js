@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { SessionService } from '../authorization/session.service';
+import { AbuseService } from '../abuse/abuse.service';
 import { seal, open, deriveKey } from './auth-crypto';
 
 // Argon2id with the library defaults (64 MiB, 3 passes, 4 lanes): slow enough
@@ -23,9 +24,10 @@ export const hashPassword = (password) =>
 // code for admins who have turned two-factor on (optional, by the owner's
 // choice; see decisions.md). Members never have a password.
 @Injectable()
-@Dependencies(DatabaseService, ConfigService, AuditService, SessionService)
+@Dependencies(DatabaseService, ConfigService, AuditService, SessionService, AbuseService)
 export class AdminAuthService {
-  constructor(db, config, audit, sessions) {
+  constructor(db, config, audit, sessions, abuse) {
+    this.abuse = abuse;
     this.db = db;
     this.audit = audit;
     this.sessions = sessions;
@@ -36,7 +38,7 @@ export class AdminAuthService {
 
   // ----------------------------------------------------------------- sign in
 
-  async login({ username, password }, ip) {
+  async login({ username, password }, ip, userAgent) {
     const { rows } = await this.db.query(
       `SELECT u.id, u.status, c.password_hash, c.totp_enabled_at
          FROM users u
@@ -47,9 +49,14 @@ export class AdminAuthService {
     );
     const account = rows[0];
 
+    // An account whose sign-in is paused (board 37: too many wrong
+    // passwords) answers exactly like a wrong password, timing included, so a
+    // pause never reveals that a username belongs to an operator.
+    const paused = account ? await this.abuse.signInPaused(account.id) : false;
+
     // An unknown username still pays for a full Argon2 verification, so the
     // response time does not reveal which usernames are operators.
-    const passwordOk = account
+    const passwordOk = account && !paused
       ? await argon2.verify(account.password_hash, password)
       : await this.burnTime(password);
 
@@ -59,7 +66,9 @@ export class AdminAuthService {
           action: 'admin_auth.login_failed',
           target: { userId: account.id },
           ip,
+          ...(paused ? { detail: { paused: true } } : {}),
         });
+        if (!paused) await this.abuse.noteAdminLoginFailure(account.id, ip);
       }
       throw new UnauthorizedException();
     }
@@ -76,7 +85,11 @@ export class AdminAuthService {
       };
     }
 
-    const session = await this.sessions.createDashboardSession(account.id);
+    const session = await this.sessions.createDashboardSession(account.id, 'active', undefined, {
+      ip,
+      userAgent,
+      twoFactor: false,
+    });
     await this.audit.record({
       action: 'admin_auth.login',
       actor: { userId: account.id },
@@ -90,7 +103,7 @@ export class AdminAuthService {
     };
   }
 
-  async completeMfa({ mfaToken, code }, ip) {
+  async completeMfa({ mfaToken, code }, ip, userAgent) {
     return this.db.transaction(async (client) => {
       const pending = await this.sessions.findMfaPending(client, mfaToken);
       if (!pending) throw new UnauthorizedException();
@@ -103,7 +116,8 @@ export class AdminAuthService {
       if (
         !creds ||
         !creds.totp_enabled_at ||
-        status.rows[0]?.status !== 'active'
+        status.rows[0]?.status !== 'active' ||
+        (await this.abuse.signInPaused(pending.user_id))
       ) {
         throw new UnauthorizedException();
       }
@@ -119,6 +133,7 @@ export class AdminAuthService {
           ip,
           detail: { stage: 'two_factor' },
         });
+        await this.abuse.noteAdminLoginFailure(pending.user_id, ip);
         throw new UnauthorizedException();
       }
 
@@ -133,6 +148,7 @@ export class AdminAuthService {
         pending.user_id,
         'active',
         client,
+        { ip, userAgent, twoFactor: true },
       );
       await this.audit.record(
         {

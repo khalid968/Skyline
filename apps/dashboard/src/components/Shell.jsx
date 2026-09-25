@@ -1,17 +1,31 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { useAuth } from '../lib/auth';
+import { api } from '../lib/api';
+import { useAuth, capabilities } from '../lib/auth';
 import { Avatar, Icon, ROLE_LABEL } from './ui';
 
-// The sidebar: Users, Contact graph, Groups (brought forward to Phase 8b,
-// decisions.md 2026-09-25), Devices. The audit log is v2. While a temporary password is in force, only the account
-// page is reachable, so the rest of the navigation is shown disabled.
+// Pages fire this after acting on an alert, so the count in the menu follows
+// at once instead of on the next poll.
+export const ALERTS_CHANGED = 'skyline:alerts-changed';
+
+// The sidebar (boards 36-39 order): Overview, Users, Contact graph, Groups,
+// Devices, Sessions, Alerts, Audit log. Alerts and the audit log appear only
+// for the owner and admins. While a temporary password is in force, only the
+// account page is reachable, so the rest is shown disabled.
 export default function Shell() {
   const { me } = useAuth();
+  const can = capabilities(me);
   const locked = me?.mustChangePassword;
-  const link = (to, icon, label) => (
+  const openAlerts = useOpenAlerts(can.alerts && !locked);
+  const link = (to, icon, label, badge) => (
     <NavLink to={to} aria-disabled={locked ? 'true' : undefined} tabIndex={locked ? -1 : undefined}>
       <Icon name={icon} />
-      {label}
+      <span style={{ flex: 1 }}>{label}</span>
+      {badge > 0 && (
+        <span className="nav-badge" aria-label={`${badge} open`}>
+          {badge}
+        </span>
+      )}
     </NavLink>
   );
 
@@ -24,10 +38,14 @@ export default function Shell() {
           <span className="brand-tag">ADMIN</span>
         </div>
         <nav className="nav">
+          {can.overview && link('/overview', 'overview', 'Overview')}
           {link('/users', 'users', 'Users')}
           {link('/contacts', 'graph', 'Contact graph')}
           {link('/groups', 'groups', 'Groups')}
           {link('/devices', 'device', 'Devices')}
+          {link('/sessions', 'sessions', 'Sessions')}
+          {can.alerts && link('/alerts', 'alert', 'Alerts', openAlerts)}
+          {can.audit && link('/audit', 'audit', 'Audit log')}
         </nav>
         <div style={{ flex: 1 }} />
         <NavLink to="/account" className={({ isActive }) => `account-card${isActive ? ' active' : ''}`}>
@@ -43,4 +61,28 @@ export default function Shell() {
       </main>
     </div>
   );
+}
+
+// How many alerts are open, refreshed every 30 seconds and whenever a page
+// says it changed them. A failure just leaves the last count.
+function useOpenAlerts(enabled) {
+  const [open, setOpen] = useState(0);
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let alive = true;
+    const load = () =>
+      api
+        .alerts('open')
+        .then((r) => alive && setOpen(r.open))
+        .catch(() => {});
+    load();
+    const timer = setInterval(load, 30000);
+    window.addEventListener(ALERTS_CHANGED, load);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      window.removeEventListener(ALERTS_CHANGED, load);
+    };
+  }, [enabled]);
+  return open;
 }
