@@ -47,6 +47,7 @@ describe('validateEnv', () => {
       STORAGE_SECRET_KEY: 'a-genuinely-long-random-storage-secret',
       AUTH_TOKEN_PEPPER: 'Qk3v9-a-genuinely-random-pepper-value-8Hn2',
       AUTH_TOTP_KEY: 'Zp7w1-a-genuinely-random-totp-key-value-4Rt6',
+      TURN_SECRET: 'Qm3v8-a-genuinely-random-relay-secret-9Kd2',
     };
 
     it('accepts properly configured production settings', () => {
@@ -76,6 +77,8 @@ describe('validateEnv', () => {
         { AUTH_TOKEN_PEPPER: 'dev-only-token-pepper-never-use-in-production' },
       ],
       ['a missing 2FA key', { AUTH_TOTP_KEY: undefined }],
+      ['a missing relay secret', { TURN_SECRET: undefined }],
+      ['the development relay secret', { TURN_SECRET: 'dev-only-turn-secret' }],
       ['a scaled-up rate limit', { RATE_LIMIT_SCALE: '100' }],
     ])('rejects %s', (_label, override) => {
       expect(() => validateEnv({ ...good, ...override })).toThrow(/production/);

@@ -87,7 +87,7 @@ export function validateEnv(env) {
     // These keys protect every stored activation code, session token and 2FA
     // secret. Development falls back to fixed, clearly-labelled values;
     // production must supply real ones.
-    for (const name of ['AUTH_TOKEN_PEPPER', 'AUTH_TOTP_KEY']) {
+    for (const name of ['AUTH_TOKEN_PEPPER', 'AUTH_TOTP_KEY', 'TURN_SECRET']) {
       const v = env[name];
       if (!v || v.length < 32 || v.startsWith('dev-only')) {
         problems.push(

@@ -51,6 +51,33 @@ services:
       timeout: 5s
       retries: 10
 
+  coturn:
+    # The call relay (Phase 10). Every call goes through it, so neither person
+    # learns the other's IP address; it only ever forwards encrypted packets.
+    # Credentials are short-lived and signed by the Skyline server with the
+    # shared secret (use-auth-secret). Pinned by digest to coturn 4.6.3.
+    image: coturn/coturn@sha256:71c3c990283385567f11794ee692e3a47b66fd9b0bb39e42afbe776e331dd888
+    restart: unless-stopped
+    command:
+      - -n
+      - --log-file=stdout
+      - --listening-port=3478
+      - --fingerprint
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SECRET:-dev-only-turn-secret}
+      - --realm=skyline.local
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --min-port=49160
+      - --max-port=49200
+      - --no-multicast-peers
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+
 volumes:
   postgres-data:
   redis-data:

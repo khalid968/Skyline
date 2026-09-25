@@ -14,6 +14,7 @@ import { DevicesModule } from './modules/devices/devices.module';
 import { ChatsModule } from './modules/chats/chats.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { GroupsModule } from './modules/groups/groups.module';
+import { CallsModule } from './modules/calls/calls.module';
 import { MediaModule } from './modules/media/media.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
@@ -48,6 +49,7 @@ import {
     ChatsModule,
     MessagesModule,
     GroupsModule,
+    CallsModule,
     MediaModule,
     NotificationsModule,
     AdminModule,

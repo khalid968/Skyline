@@ -60,5 +60,18 @@ export default () => {
       bucket: process.env.STORAGE_BUCKET || 'skyline-media',
       useSsl: process.env.STORAGE_USE_SSL === 'true',
     },
+    // Phase 10: the call relay (coturn). Short-lived credentials are signed
+    // with this secret (coturn's use-auth-secret); coturn has the same one.
+    turn: {
+      secret: process.env.TURN_SECRET || 'dev-only-turn-secret',
+      urls: (
+        process.env.TURN_URLS ||
+        'turn:localhost:3478?transport=udp,turn:localhost:3478?transport=tcp'
+      )
+        .split(',')
+        .map((u) => u.trim())
+        .filter(Boolean),
+      ttlSeconds: parseInt(process.env.TURN_TTL_SECONDS, 10) || 600,
+    },
   };
 };
