@@ -1116,3 +1116,19 @@ Board 40 was approved ("great keep going").
   - Android: `calls_test` and a manual screen share once the emulator is restarted.
   - Production decisions (Phase 13): the TLS proxy (`trust proxy`), the relay's private-range denial,
     separate database roles, the object store.
+
+## 2026-09-26 — Session closed (owner: "finish and close")
+
+- **Committed locally, NOT pushed:** adcfe7b (Phase 12). The last push was 9a2433c. The owner has not yet
+  said "push" for Phase 12. Pushing also runs the new CI for the first time, so watch that run and fix
+  whatever the runners need (iOS simulator selection, Android NDK, runner images).
+- **Clean state:** no throwaway servers (3078, 3079, 5174, 5175), no test containers, no `skyline_e2e_*`
+  or `skyline_test_*` databases left. The owner's server on :3000 and the dev stack were not touched.
+  Their running MinIO container switches to the source-built image (already built,
+  `skyline-minio:2025-09-07`) on the next Start Skyline.
+- **Next session, in order:**
+  1. Ask to push adcfe7b and fix CI until it is green.
+  2. After an emulator restart: run `calls_test` on Android and try screen sharing by hand.
+  3. Phase 13 (Deployment) planning, which needs the owner's approval. It starts from the items marked
+     Phase 13 in `docs/security/threat-model.md`: TLS and `trust proxy`, the relay's private-range
+     denial, separate database roles, the production object store, and `DATABASE_POOL_MAX=20`.
