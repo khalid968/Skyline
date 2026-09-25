@@ -15,8 +15,9 @@ use libsignal_protocol::{
     IdentityKeyPair, IdentityKeyStore as _, KeyPair, KyberPreKeyRecord, KyberPreKeyStore as _,
     PreKeyBundle, PreKeyRecord, PreKeySignalMessage, PreKeyStore as _, ProtocolAddress, PublicKey,
     SessionStore as _, SessionUsabilityRequirements, SignalMessage, SignedPreKeyRecord,
-    SignedPreKeyStore as _, Timestamp, kem, message_decrypt, message_encrypt,
-    process_prekey_bundle,
+    SenderKeyDistributionMessage, SenderKeyMessage, SignedPreKeyStore as _, Timestamp,
+    create_sender_key_distribution_message, group_decrypt, group_encrypt, kem, message_decrypt,
+    message_encrypt, process_prekey_bundle, process_sender_key_distribution_message,
 };
 use rand::rngs::OsRng;
 use rand::{Rng as _, RngCore as _, TryRngCore as _};
@@ -443,6 +444,95 @@ impl SkylineCrypto {
         })
     }
 
+    // ---------------------------------------------------------- groups (8b)
+    //
+    // libsignal's Sender Keys, exactly as Signal uses them: each member device
+    // has its own sender key per group, hands it to the other member devices in
+    // a distribution message (sent over the ordinary pairwise sessions, so it
+    // is authenticated), then encrypts each group message once. The app picks a
+    // fresh distribution id whenever membership shrinks, so a former member
+    // cannot read what follows.
+
+    /// Our distribution message for `distribution_id` (a UUID the app chose
+    /// for this group and membership epoch), creating our sender key on first
+    /// use. Send it to each member device over a pairwise session.
+    pub fn group_sender_key(&self, distribution_id: String) -> Result<Vec<u8>> {
+        let id = distribution(&distribution_id)?;
+        self.atomic(|vault| {
+            let local = local_address(vault)?;
+            let mut store = VaultStore { vault };
+            let m = block_on(create_sender_key_distribution_message(
+                &local, id, &mut store, &mut rng(),
+            ))?;
+            Ok(m.serialized().to_vec())
+        })
+    }
+
+    /// Stores a member device's sender key from the distribution message it
+    /// sent us. Call this ONLY with a message that arrived inside a pairwise
+    /// envelope that decrypted as coming from (`user_id`, `device_number`):
+    /// that is what authenticates it. Returns the distribution id, which the
+    /// app records against the group.
+    pub fn accept_group_sender_key(
+        &self,
+        user_id: String,
+        device_number: u32,
+        distribution_message: Vec<u8>,
+    ) -> Result<String> {
+        let sender = address(&user_id, device_number)?;
+        let m = SenderKeyDistributionMessage::try_from(distribution_message.as_slice())?;
+        let id = m.distribution_id()?;
+        self.atomic(|vault| {
+            let mut store = VaultStore { vault };
+            block_on(process_sender_key_distribution_message(&sender, &m, &mut store))?;
+            Ok(id.to_string())
+        })
+    }
+
+    /// Encrypts one group message with our sender key (once, for everyone).
+    pub fn group_encrypt(&self, distribution_id: String, plaintext: Vec<u8>) -> Result<Vec<u8>> {
+        let id = distribution(&distribution_id)?;
+        self.atomic(|vault| {
+            let local = local_address(vault)?;
+            let mut store = VaultStore { vault };
+            let m = block_on(group_encrypt(&mut store, &local, id, &plaintext, &mut rng()))?;
+            Ok(m.serialized().to_vec())
+        })
+    }
+
+    /// Decrypts a group message from (`user_id`, `device_number`).
+    /// `distribution_id` is the one the app recorded for that device IN THIS
+    /// GROUP: a message under any other id is refused, so a sender key handed
+    /// out for one group cannot be used to post into another.
+    pub fn group_decrypt(
+        &self,
+        user_id: String,
+        device_number: u32,
+        body: Vec<u8>,
+        distribution_id: String,
+    ) -> Result<Vec<u8>> {
+        let sender = address(&user_id, device_number)?;
+        let expected = distribution(&distribution_id)?;
+        let claimed = SenderKeyMessage::try_from(body.as_slice())?.distribution_id();
+        if claimed != expected {
+            return Err(CryptoError::protocol(
+                "this group message uses a sender key from somewhere else",
+            ));
+        }
+        self.atomic(|vault| {
+            let mut store = VaultStore { vault };
+            Ok(block_on(group_decrypt(&body, &mut store, &sender))?)
+        })
+    }
+
+    /// The distribution id a group message claims (to find which recorded
+    /// sender key it needs, e.g. after a rotation). Nothing is decrypted.
+    pub fn group_message_distribution_id(&self, body: Vec<u8>) -> Result<String> {
+        Ok(SenderKeyMessage::try_from(body.as_slice())?
+            .distribution_id()
+            .to_string())
+    }
+
     // -------------------------------------------------------- safety numbers
 
     /// The safety number between this device and one device of a contact. Both
@@ -686,6 +776,10 @@ fn address(user_id: &str, device_number: u32) -> Result<ProtocolAddress> {
         uuid.to_string(),
         device_id(device_number)?,
     ))
+}
+
+fn distribution(id: &str) -> Result<uuid::Uuid> {
+    uuid::Uuid::parse_str(id).map_err(|_| CryptoError::invalid("distribution id must be a UUID"))
 }
 
 fn local_address(vault: &Vault) -> Result<ProtocolAddress> {

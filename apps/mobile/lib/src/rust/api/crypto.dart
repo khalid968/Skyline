@@ -44,6 +44,13 @@ Future<SealedBytes> encryptSmall({required List<int> plain}) =>
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CryptoDevice>>
 abstract class CryptoDevice implements RustOpaqueInterface {
+  /// Files a member device's sender key. ONLY with a message that arrived in
+  /// a pairwise envelope from exactly (`user_id`, `device_number`).
+  Future<String> acceptGroupSenderKey(
+      {required String userId,
+      required int deviceNumber,
+      required List<int> distributionMessage});
+
   Future<PinCheck> checkAppLockPin({required String pin});
 
   Future<void> clearAppLockPin();
@@ -66,6 +73,22 @@ abstract class CryptoDevice implements RustOpaqueInterface {
       required List<int> plaintext});
 
   Future<Uint8List?> getRecord({required String kind, required String id});
+
+  /// Refused unless the message uses `distribution_id` (the one recorded
+  /// for that device in this group).
+  Future<Uint8List> groupDecrypt(
+      {required String userId,
+      required int deviceNumber,
+      required List<int> body,
+      required String distributionId});
+
+  Future<Uint8List> groupEncrypt(
+      {required String distributionId, required List<int> plaintext});
+
+  Future<String> groupMessageDistributionId({required List<int> body});
+
+  /// Our distribution message for a group epoch (creates our sender key).
+  Future<Uint8List> groupSenderKey({required String distributionId});
 
   Future<bool> hasAppLockPin();
 

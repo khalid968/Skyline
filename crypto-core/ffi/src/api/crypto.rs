@@ -196,6 +196,48 @@ impl CryptoDevice {
         })
     }
 
+    // Groups (Phase 8b): libsignal Sender Keys. See core::api for the rules.
+
+    /// Our distribution message for a group epoch (creates our sender key).
+    pub fn group_sender_key(&self, distribution_id: String) -> Result<Vec<u8>> {
+        Ok(self.0.group_sender_key(distribution_id)?)
+    }
+
+    /// Files a member device's sender key. ONLY with a message that arrived in
+    /// a pairwise envelope from exactly (`user_id`, `device_number`).
+    pub fn accept_group_sender_key(
+        &self,
+        user_id: String,
+        device_number: u32,
+        distribution_message: Vec<u8>,
+    ) -> Result<String> {
+        Ok(self
+            .0
+            .accept_group_sender_key(user_id, device_number, distribution_message)?)
+    }
+
+    pub fn group_encrypt(&self, distribution_id: String, plaintext: Vec<u8>) -> Result<Vec<u8>> {
+        Ok(self.0.group_encrypt(distribution_id, plaintext)?)
+    }
+
+    /// Refused unless the message uses `distribution_id` (the one recorded
+    /// for that device in this group).
+    pub fn group_decrypt(
+        &self,
+        user_id: String,
+        device_number: u32,
+        body: Vec<u8>,
+        distribution_id: String,
+    ) -> Result<Vec<u8>> {
+        Ok(self
+            .0
+            .group_decrypt(user_id, device_number, body, distribution_id)?)
+    }
+
+    pub fn group_message_distribution_id(&self, body: Vec<u8>) -> Result<String> {
+        Ok(self.0.group_message_distribution_id(body)?)
+    }
+
     /// `directory_identity_key`: the key directory's identity key for the
     /// sending device. Required for a first message from an unseen device.
     pub fn decrypt(

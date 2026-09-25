@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 686933062;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1415553503;
 
 // Section: executor
 
@@ -48,6 +48,63 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
+fn wire__crate__api__crypto__CryptoDevice_accept_group_sender_key_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "CryptoDevice_accept_group_sender_key",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CryptoDevice>,
+            >>::sse_decode(&mut deserializer);
+            let api_user_id = <String>::sse_decode(&mut deserializer);
+            let api_device_number = <u32>::sse_decode(&mut deserializer);
+            let api_distribution_message = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::crypto::CryptoException>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::crypto::CryptoDevice::accept_group_sender_key(
+                        &*api_that_guard,
+                        api_user_id,
+                        api_device_number,
+                        api_distribution_message,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__crypto__CryptoDevice_check_app_lock_pin_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -425,6 +482,227 @@ fn wire__crate__api__crypto__CryptoDevice_get_record_impl(
                         &*api_that_guard,
                         api_kind,
                         api_id,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__crypto__CryptoDevice_group_decrypt_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "CryptoDevice_group_decrypt",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CryptoDevice>,
+            >>::sse_decode(&mut deserializer);
+            let api_user_id = <String>::sse_decode(&mut deserializer);
+            let api_device_number = <u32>::sse_decode(&mut deserializer);
+            let api_body = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_distribution_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::crypto::CryptoException>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::crypto::CryptoDevice::group_decrypt(
+                        &*api_that_guard,
+                        api_user_id,
+                        api_device_number,
+                        api_body,
+                        api_distribution_id,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__crypto__CryptoDevice_group_encrypt_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "CryptoDevice_group_encrypt",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CryptoDevice>,
+            >>::sse_decode(&mut deserializer);
+            let api_distribution_id = <String>::sse_decode(&mut deserializer);
+            let api_plaintext = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::crypto::CryptoException>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::crypto::CryptoDevice::group_encrypt(
+                        &*api_that_guard,
+                        api_distribution_id,
+                        api_plaintext,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__crypto__CryptoDevice_group_message_distribution_id_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "CryptoDevice_group_message_distribution_id",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CryptoDevice>,
+            >>::sse_decode(&mut deserializer);
+            let api_body = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::crypto::CryptoException>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok =
+                        crate::api::crypto::CryptoDevice::group_message_distribution_id(
+                            &*api_that_guard,
+                            api_body,
+                        )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__crypto__CryptoDevice_group_sender_key_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "CryptoDevice_group_sender_key",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CryptoDevice>,
+            >>::sse_decode(&mut deserializer);
+            let api_distribution_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::crypto::CryptoException>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::crypto::CryptoDevice::group_sender_key(
+                        &*api_that_guard,
+                        api_distribution_id,
                     )?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -1862,137 +2140,167 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        1 => wire__crate__api__crypto__CryptoDevice_check_app_lock_pin_impl(
+        1 => wire__crate__api__crypto__CryptoDevice_accept_group_sender_key_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        2 => wire__crate__api__crypto__CryptoDevice_clear_app_lock_pin_impl(
+        2 => wire__crate__api__crypto__CryptoDevice_check_app_lock_pin_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        3 => wire__crate__api__crypto__CryptoDevice_decrypt_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__crypto__CryptoDevice_delete_record_impl(
+        3 => wire__crate__api__crypto__CryptoDevice_clear_app_lock_pin_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        5 => wire__crate__api__crypto__CryptoDevice_delete_record_group_impl(
+        4 => wire__crate__api__crypto__CryptoDevice_decrypt_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__crypto__CryptoDevice_delete_record_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        6 => wire__crate__api__crypto__CryptoDevice_encrypt_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__crypto__CryptoDevice_get_record_impl(
+        6 => wire__crate__api__crypto__CryptoDevice_delete_record_group_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        8 => wire__crate__api__crypto__CryptoDevice_has_app_lock_pin_impl(
+        7 => wire__crate__api__crypto__CryptoDevice_encrypt_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__crypto__CryptoDevice_get_record_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        9 => wire__crate__api__crypto__CryptoDevice_has_session_impl(
+        9 => wire__crate__api__crypto__CryptoDevice_group_decrypt_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        10 => {
+        10 => wire__crate__api__crypto__CryptoDevice_group_encrypt_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        11 => wire__crate__api__crypto__CryptoDevice_group_message_distribution_id_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        12 => wire__crate__api__crypto__CryptoDevice_group_sender_key_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        13 => wire__crate__api__crypto__CryptoDevice_has_app_lock_pin_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        14 => wire__crate__api__crypto__CryptoDevice_has_session_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        15 => {
             wire__crate__api__crypto__CryptoDevice_identity_impl(port, ptr, rust_vec_len, data_len)
         }
-        11 => wire__crate__api__crypto__CryptoDevice_list_records_impl(
+        16 => wire__crate__api__crypto__CryptoDevice_list_records_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        12 => wire__crate__api__crypto__CryptoDevice_new_kyber_pre_keys_impl(
+        17 => wire__crate__api__crypto__CryptoDevice_new_kyber_pre_keys_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        13 => wire__crate__api__crypto__CryptoDevice_new_last_resort_kyber_pre_key_impl(
+        18 => wire__crate__api__crypto__CryptoDevice_new_last_resort_kyber_pre_key_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        14 => wire__crate__api__crypto__CryptoDevice_new_one_time_pre_keys_impl(
+        19 => wire__crate__api__crypto__CryptoDevice_new_one_time_pre_keys_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        15 => wire__crate__api__crypto__CryptoDevice_new_signed_pre_key_impl(
+        20 => wire__crate__api__crypto__CryptoDevice_new_signed_pre_key_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        16 => wire__crate__api__crypto__CryptoDevice_open_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__crypto__CryptoDevice_open_in_memory_impl(
+        21 => wire__crate__api__crypto__CryptoDevice_open_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__crypto__CryptoDevice_open_in_memory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        18 => wire__crate__api__crypto__CryptoDevice_put_record_impl(
+        23 => wire__crate__api__crypto__CryptoDevice_put_record_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__api__crypto__CryptoDevice_safety_number_impl(
+        24 => wire__crate__api__crypto__CryptoDevice_safety_number_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        20 => wire__crate__api__crypto__CryptoDevice_set_app_lock_pin_impl(
+        25 => wire__crate__api__crypto__CryptoDevice_set_app_lock_pin_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        21 => wire__crate__api__crypto__CryptoDevice_set_local_address_impl(
+        26 => wire__crate__api__crypto__CryptoDevice_set_local_address_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__api__crypto__CryptoDevice_sign_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__crypto__CryptoDevice_start_session_impl(
+        27 => wire__crate__api__crypto__CryptoDevice_sign_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__crypto__CryptoDevice_start_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__api__crypto__CryptoDevice_verify_scanned_safety_number_impl(
+        29 => wire__crate__api__crypto__CryptoDevice_verify_scanned_safety_number_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__api__crypto__decrypt_media_file_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__crypto__decrypt_media_to_memory_impl(
+        30 => wire__crate__api__crypto__decrypt_media_file_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__crypto__decrypt_media_to_memory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        27 => wire__crate__api__crypto__encrypt_media_file_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__crypto__encrypt_small_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__crypto__init_app_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__crypto__encrypt_media_file_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__crypto__encrypt_small_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__crypto__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

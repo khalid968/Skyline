@@ -10,9 +10,11 @@ use async_trait::async_trait;
 use libsignal_protocol::{
     CiphertextMessageType, Direction, GenericSignedPreKey as _, IdentityChange, IdentityKey,
     IdentityKeyPair, IdentityKeyStore, KyberPreKeyId, KyberPreKeyRecord, KyberPreKeyStore,
-    PreKeyId, PreKeyRecord, PreKeyStore, ProtocolAddress, PublicKey, SessionRecord, SessionStore,
-    SignalProtocolError, SignedPreKeyId, SignedPreKeyRecord, SignedPreKeyStore,
+    PreKeyId, PreKeyRecord, PreKeyStore, ProtocolAddress, PublicKey, SenderKeyRecord,
+    SenderKeyStore, SessionRecord, SessionStore, SignalProtocolError, SignedPreKeyId,
+    SignedPreKeyRecord, SignedPreKeyStore,
 };
+use uuid::Uuid;
 
 use crate::error::{CryptoError, to_signal};
 use crate::vault::Vault;
@@ -28,6 +30,7 @@ const SIGNED: &str = "signed-prekey";
 const KYBER: &str = "kyber-prekey";
 const KYBER_ONE_TIME: &str = "kyber-one-time";
 const KYBER_SEEN: &str = "kyber-base-key-seen";
+const SENDER_KEY: &str = "sender-key";
 
 pub(crate) const META_IDENTITY: &[u8] = b"identity-key-pair";
 pub(crate) const META_REGISTRATION: &[u8] = b"registration-id";
@@ -225,6 +228,38 @@ impl KyberPreKeyStore for VaultStore<'_> {
             ));
         }
         self.put(KYBER_SEEN, &seen, &[1])
+    }
+}
+
+/// Group Sender Keys (Phase 8b): ours, under our own address, and every other
+/// member device's, learned from the distribution message it sent us over our
+/// pairwise session. Keyed by (sender address, distribution id).
+fn sender_key(sender: &ProtocolAddress, distribution_id: Uuid) -> Vec<u8> {
+    let mut k = addr_key(sender);
+    k.push(b'/');
+    k.extend_from_slice(distribution_id.as_bytes());
+    k
+}
+
+#[async_trait(?Send)]
+impl SenderKeyStore for VaultStore<'_> {
+    async fn store_sender_key(
+        &mut self,
+        sender: &ProtocolAddress,
+        distribution_id: Uuid,
+        record: &SenderKeyRecord,
+    ) -> Result<()> {
+        self.put(SENDER_KEY, &sender_key(sender, distribution_id), &record.serialize()?)
+    }
+
+    async fn load_sender_key(
+        &mut self,
+        sender: &ProtocolAddress,
+        distribution_id: Uuid,
+    ) -> Result<Option<SenderKeyRecord>> {
+        self.get(SENDER_KEY, &sender_key(sender, distribution_id))?
+            .map(|b| SenderKeyRecord::deserialize(&b))
+            .transpose()
     }
 }
 
