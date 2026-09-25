@@ -50,7 +50,8 @@ the current state of play.
   - The server deletes every file at 30 days (`modules/media`, migration 013; app: `lib/features/media`).
   - Also built: several files at once (albums), view once (screenshots blocked on Android and Windows) and
     the media gallery (boards 23-25). Photos are re-encoded with EXIF stripped; `Start Skyline.cmd` starts everything.
-- **Phase 8b (groups and message tools) — ✅ built 2026-09-25, NOT pushed, awaiting review.**
+- **Phase 8b (groups and message tools) — ✅ built and pushed 2026-09-25.**
+- **Phase 10 (Calls) — planned 2026-09-25:** owner decisions in `decisions.md`; prototypes 32-35 await approval.
   - Groups: managed in the dashboard (Groups page), libsignal Sender Keys rotated when anyone leaves.
   - Message tools: reply, edit (15 minutes), delete (24 hours), reactions, pins, mentions.
   - Chat list and search: local search, drafts, archive and mute.

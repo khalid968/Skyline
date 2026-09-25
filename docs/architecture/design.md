@@ -45,6 +45,10 @@ Private to the owner. Current boards:
 | 28 · Message actions (mobile) | Approved 2026-09-25: reactions, reply, edit (15 min), copy, pin, info, delete (24 h for everyone) |
 | 29 · Group info, leaving, mentions (mobile) | Approved 2026-09-25 |
 | 30 · Search messages (mobile) | Approved 2026-09-25: local only, never people |
+| 32 · Incoming call (mobile) | Awaiting approval (Phase 10) |
+| 33 · Voice call (mobile) | Awaiting approval: mute, speaker, video, weak-connection warning |
+| 34 · Video call and screen sharing (mobile) | Awaiting approval: self view, flip, share screen (Windows and Android) |
+| 35 · Calls in a chat (mobile) | Awaiting approval: call buttons, call notices, missed call with Call back |
 | 31 · Admin · Groups (dashboard) | Approved 2026-09-25: create, rename, add or remove members, archive |
 
 Boards 2–7 are clickable in Play mode. Board 7 has working toggles.

@@ -8,6 +8,33 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-25 (evening) — 8b pushed; Phase 10 (Calls) planned, prototypes 32-35 for approval
+
+- **Pushed** everything through 26e42e7 (the whole of Phase 8b). The commits were checked for secrets first.
+- **Fixed from the owner's testing:**
+  - a reply's quote is full width and names the author;
+  - tapping a quote jumps to the original message and highlights it;
+  - a typing signal that arrives as a prekey message on an existing session is now accepted.
+- **Owner decisions for Calls** (`decisions.md`, "Phase 10 (Calls) started"):
+  - one-to-one voice and video (group calls later);
+  - always through our own TURN relay, so there is no IP exposure;
+  - screen sharing on Windows and Android.
+- **Plan:**
+  - `flutter_webrtc`;
+  - call setup as Signal-encrypted messages, with the DTLS fingerprint checked against them;
+  - short-lived TURN credentials from `GET /calls/turn`;
+  - coturn in Docker Compose;
+  - ringing through the existing wake-up (iOS CallKit later).
+- **Prototypes 32-35 published** to the design canvas.
+- **Next agent should:** wait for approval of 32-35, then build:
+  1. coturn and the TURN-credential route;
+  2. call setup messages and the WebRTC engine;
+  3. the call screens;
+  4. screen sharing;
+  5. tests on Windows and Android.
+
+---
+
 ## 2026-09-25 (resumed) — 8b follow-ups: typing in groups, Android runs, try-it-yourself
 
 - **Typing in groups** (commit c252af8):

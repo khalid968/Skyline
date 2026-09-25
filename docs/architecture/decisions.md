@@ -6,6 +6,40 @@ working around it.
 
 ---
 
+## 2026-09-25 — Phase 10 (Calls) started: owner decisions and plan
+
+**The owner decided:**
+
+- **One-to-one voice and video calls in v1.** Group calls come later: they need a media server (SFU) and
+  frame encryption on top, a phase of their own.
+- **Every call goes through our own relay (TURN, in Docker Compose).** Neither person learns the other's IP
+  address. The relay only forwards encrypted packets. The cost is slightly more delay.
+- **Screen sharing on Windows and Android.** iPhone screen sharing needs an Apple broadcast extension and
+  comes with the rest of iOS.
+
+**How it will be built** (implementation choices):
+
+- **WebRTC through `flutter_webrtc`** (Android, iOS, Windows).
+  - Audio and video are encrypted end to end between the two devices (DTLS-SRTP). The relay cannot
+    decrypt them.
+  - The app checks that each side's DTLS fingerprint is the one sent inside the Signal-encrypted call
+    setup. So the call is bound to the verified Skyline identities, and a relay or server in the middle
+    cannot join.
+- **Call setup travels as ordinary encrypted Skyline messages** (offer, answer, network candidates, hang
+  up), pairwise to the contact's devices. The server sees only that messages were sent.
+- **Only direct contacts can call each other.** Calls are messages, so the contact graph rule applies
+  unchanged. Sharing a group is not enough.
+- **Relay credentials:** short-lived and issued per call by the server (`GET /calls/turn`, members only),
+  so the relay is useless to anyone outside Skyline.
+- **Ringing when the app is closed** uses the existing content-free wake-up. The app wakes, fetches and
+  decrypts the offer, then rings. iPhone ringing (PushKit/CallKit) needs the Apple developer account and
+  comes with iOS.
+- **No recording, ever.** Nothing about a call's content touches the server.
+- **Prototypes first** (boards 32-35): incoming call, voice call, video call with screen sharing, and calls
+  in a chat.
+
+---
+
 ## 2026-09-25 (later) — Phase 8b as built: implementation choices
 
 Boards 26-31 were approved ("looks good"). Choices made while building, within the owner's decisions:
