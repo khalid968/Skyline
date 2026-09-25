@@ -89,6 +89,8 @@ export async function createTestApp({
       // A fresh namespace per app, so counters never leak between runs.
       RATE_LIMIT_PREFIX: `skyline:test:${randomUUID()}`,
       RATE_LIMIT_SCALE: String(rateLimitScale),
+      // Tests use their own bucket in the dev object store.
+      STORAGE_BUCKET: 'skyline-test',
     },
     async () => {
       let builder = Test.createTestingModule({

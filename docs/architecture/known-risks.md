@@ -65,6 +65,12 @@ Phase 6 starts, so nobody builds admin surface into the client binary by followi
 
 ## MinIO: the compose image was gone, and the replacement is a year stale — OPEN (before Phase 9)
 
+**Update 2026-09-25 (media built; the owner chose MinIO for now, production store at Deployment):** the dev
+compose file is pinned by digest to the image already on the owner's machine. quay.io now refuses
+anonymous pulls of MinIO images altogether (HTTP 401, even by digest), so **a fresh machine cannot set up
+the dev stack**. Decide the store (SeaweedFS, Garage, a source-built MinIO, or plain disk) before anyone
+else needs to run it, and certainly before Deployment.
+
 `minio/minio` no longer exists on Docker Hub, so `docker compose up` failed outright. The dev compose
 file now uses `quay.io/minio/minio:latest`, which starts and passes its healthcheck. **But that image is
 release 2025-09-07 — a year old** — so `latest` is not receiving updates. Fine for local development;

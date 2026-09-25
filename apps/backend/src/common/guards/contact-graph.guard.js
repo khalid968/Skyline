@@ -48,6 +48,10 @@ export class ContactGraphGuard {
         return this.graph.canAccessChat(me, id);
       case 'own-device':
         return this.graph.ownsDevice(me, id);
+      case 'own-upload':
+        return this.graph.ownsUpload(me, id);
+      case 'attachment':
+        return this.graph.canDownloadAttachment(me, id);
       default:
         return false; // an unknown kind can only be a bug, so deny
     }

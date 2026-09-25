@@ -58,6 +58,7 @@ export default () => {
       accessKey: process.env.STORAGE_ACCESS_KEY || 'skyline',
       secretKey: process.env.STORAGE_SECRET_KEY || 'skyline-secret',
       bucket: process.env.STORAGE_BUCKET || 'skyline-media',
+      useSsl: process.env.STORAGE_USE_SSL === 'true',
     },
   };
 };

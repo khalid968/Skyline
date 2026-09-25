@@ -92,6 +92,43 @@ export class GraphService {
     );
   }
 
+  // An upload still in progress, started by one of `me`'s live devices.
+  ownsUpload(me, attachmentId) {
+    return this._ask(
+      `SELECT EXISTS (
+         SELECT 1 FROM attachments a JOIN devices d ON d.id = a.uploaded_by_device_id
+          WHERE a.id = $2 AND a.status = 'uploading'
+            AND d.user_id = $1 AND d.revoked_at IS NULL
+       ) AS ok`,
+      [me, attachmentId],
+    );
+  }
+
+  // A ready file `me` may download: they uploaded it, or it rides on a message
+  // in a chat they can still access. Expired and deleted files are gone.
+  canDownloadAttachment(me, attachmentId) {
+    return this._ask(
+      `SELECT EXISTS (
+         SELECT 1 FROM attachments a
+           JOIN devices up ON up.id = a.uploaded_by_device_id
+          WHERE a.id = $2 AND a.status = 'ready' AND a.expires_at > now()
+            AND (
+              up.user_id = $1
+              OR EXISTS (
+                SELECT 1 FROM messages m JOIN chats c ON c.id = m.chat_id
+                 WHERE m.id = a.message_id
+                   AND ((c.kind = 'direct' AND $1 IN (c.user_a_id, c.user_b_id)
+                         AND are_linked(c.user_a_id, c.user_b_id))
+                        OR (c.kind = 'group' AND EXISTS (
+                             SELECT 1 FROM group_members gm
+                              WHERE gm.group_id = c.group_id AND gm.user_id = $1
+                                AND gm.removed_at IS NULL))))
+            )
+       ) AS ok`,
+      [me, attachmentId],
+    );
+  }
+
   // Of these devices, the ones that may right now receive something from
   // `senderId`: not revoked, owner active, owner in the sender's graph. Used by
   // WebSocket fan-out so a delivery re-checks the graph at the moment it

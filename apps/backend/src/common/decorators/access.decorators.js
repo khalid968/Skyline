@@ -47,6 +47,13 @@ export const ChatTarget = (param) => addTarget({ kind: 'chat', param });
 // devices). Someone else's device is a 404, like anything outside the graph.
 export const OwnDeviceTarget = (param) =>
   addTarget({ kind: 'own-device', param });
+// A media upload still in progress, started by one of the caller's devices.
+export const OwnUploadTarget = (param) =>
+  addTarget({ kind: 'own-upload', param });
+// A stored file the caller may download: they uploaded it, or it rides on a
+// message in a chat they are in (and that chat's link is live).
+export const AttachmentTarget = (param) =>
+  addTarget({ kind: 'attachment', param });
 
 // Which kind of session a route accepts. A route that requires a permission is
 // an OPERATOR route and accepts only a dashboard session; every other

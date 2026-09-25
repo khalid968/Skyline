@@ -13,6 +13,7 @@ import {
 import { PublicBodyException } from '../../common/filters/all-exceptions.filter';
 import { FanoutService } from '../websocket/fanout.service';
 import { PushService } from '../notifications/push.service';
+import { MediaService } from '../media/media.service';
 
 // How messages move (decisions.md, 2026-09-24):
 //
@@ -44,9 +45,10 @@ const REACHABLE_DEVICES = `
                   WHERE s.device_id = d.id AND s.superseded_at IS NULL)`;
 
 @Injectable()
-@Dependencies(DatabaseService, RateLimitService, FanoutService, PushService)
+@Dependencies(DatabaseService, RateLimitService, FanoutService, PushService, MediaService)
 export class MessagesService {
-  constructor(db, limiter, fanout, push) {
+  constructor(db, limiter, fanout, push, media) {
+    this.media = media;
     this.db = db;
     this.limiter = limiter;
     this.fanout = fanout;
@@ -166,6 +168,7 @@ export class MessagesService {
           [dto.messageId, targets.get(key(e)), e.kind, e.bytes],
         );
       }
+      await this.media.claim(client, caller, dto.messageId, dto.attachmentIds);
       return {
         messageId: dto.messageId,
         chatId: chat.rows[0].id,

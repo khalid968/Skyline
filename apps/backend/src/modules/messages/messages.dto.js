@@ -37,6 +37,13 @@ export class SendMessageDto {
   @ValidateNested({ each: true })
   @Type(() => EnvelopeDto)
   envelopes;
+
+  // Uploaded files this message carries (their keys are inside the envelopes).
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsUUID('all', { each: true })
+  attachmentIds;
 }
 
 // Typing indicators: relayed live to online devices only, never stored.
