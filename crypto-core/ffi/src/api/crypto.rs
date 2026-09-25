@@ -327,3 +327,74 @@ fn signed(k: core::SignedPreKeyPublic) -> SignedPreKey {
 pub fn init_app() {
     flutter_rust_bridge::setup_default_user_utils();
 }
+
+// ---------------------------------------------------------------- media
+// Streaming AES-256-GCM from libsignal (see skyline_crypto_core::media).
+
+pub struct MediaKeys {
+    pub key: Vec<u8>,
+    pub nonce: Vec<u8>,
+    pub ciphertext_sha256: Vec<u8>,
+    pub ciphertext_size: u64,
+    pub plaintext_size: u64,
+}
+
+pub struct SealedBytes {
+    pub key: Vec<u8>,
+    pub nonce: Vec<u8>,
+    pub ciphertext: Vec<u8>,
+}
+
+/// Encrypts a file for sending (up to 2 GB), streaming.
+pub fn encrypt_media_file(input: String, output: String) -> Result<MediaKeys> {
+    let k = core::media::encrypt_file(&input, &output)?;
+    Ok(MediaKeys {
+        key: k.key,
+        nonce: k.nonce,
+        ciphertext_sha256: k.ciphertext_sha256,
+        ciphertext_size: k.ciphertext_size,
+        plaintext_size: k.plaintext_size,
+    })
+}
+
+/// Decrypts a downloaded file; `output` appears only if it verifies.
+pub fn decrypt_media_file(
+    input: String,
+    output: String,
+    key: Vec<u8>,
+    nonce: Vec<u8>,
+    expected_sha256: Option<Vec<u8>>,
+) -> Result<()> {
+    Ok(core::media::decrypt_file(
+        &input,
+        &output,
+        &key,
+        &nonce,
+        expected_sha256.as_deref(),
+    )?)
+}
+
+/// Decrypts a small file (photo, voice) into memory, never to disk.
+pub fn decrypt_media_to_memory(
+    input: String,
+    key: Vec<u8>,
+    nonce: Vec<u8>,
+    expected_sha256: Option<Vec<u8>>,
+) -> Result<Vec<u8>> {
+    Ok(core::media::decrypt_to_memory(
+        &input,
+        &key,
+        &nonce,
+        expected_sha256.as_deref(),
+    )?)
+}
+
+/// Encrypts a small buffer (a thumbnail that travels inside the message).
+pub fn encrypt_small(plain: Vec<u8>) -> Result<SealedBytes> {
+    let (key, nonce, ciphertext) = core::media::encrypt_bytes(&plain)?;
+    Ok(SealedBytes {
+        key,
+        nonce,
+        ciphertext,
+    })
+}

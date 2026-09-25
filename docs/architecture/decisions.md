@@ -6,6 +6,37 @@ working around it.
 
 ---
 
+## 2026-09-25 — Media (Phase 9) brought forward, before 8b: owner decisions and design
+
+**The owner decided** (after trying 8a): media now, then Phase 8b.
+
+- **Types:** photos, videos, files and documents, and voice messages.
+- **Size limit:** 2 GB per file.
+- **Retention:** the server keeps each encrypted file for **30 days, then deletes it** (even if downloaded).
+- **File store:** MinIO for development, **pinned to a fixed version**; the production store is decided in
+  the Deployment phase. The code speaks S3, so switching is a configuration change. This keeps the
+  known-risk about the stale MinIO image open until then.
+
+**How it is built** (implementation choices within those decisions):
+
+- **Encryption happens on the phone, streaming.** Each file gets a fresh random 32-byte key and 12-byte
+  nonce, and is encrypted with libsignal's own streaming AES-256-GCM (`signal-crypto`,
+  `Aes256GcmEncryption`). The 16-byte tag is appended. No new cryptography.
+  - Decryption writes to a temporary file, and nothing is shown until the tag verifies.
+  - The key, the nonce, the file name, the type and a small thumbnail travel only inside the encrypted
+    message. The server sees an opaque blob, its size and its SHA-256.
+- **Uploads are resumable and go through the Skyline server,** in 8 MB chunks, as an S3 multipart upload.
+  MinIO is never exposed to the internet. Every chunk and every download is authorised by the server.
+- **Download is authorised by the contact graph:** only the uploader, and the people in a chat whose message
+  carries the file (while their link is live). Anyone else gets the usual 404.
+- **On the device, media stays encrypted at rest.** The downloaded ciphertext is kept, and its key lives in
+  the vault. It is decrypted into memory (photos) or a short-lived cache file (video, files) only while
+  being viewed. Disappearing messages delete their media too.
+- **Auto-download:** photos and voice messages download automatically; videos and files download when
+  tapped, to save data.
+
+---
+
 ## 2026-09-24 — How messages move (Phase 8a design; boards 16-19 approved)
 
 These are implementation choices within the owner's Phase 8 decisions.

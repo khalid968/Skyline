@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1750168426;
+  int get rustContentHash => 686933062;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -183,6 +183,24 @@ abstract class RustLibApi extends BaseApi {
       required int theirDeviceNumber,
       required List<int> theirIdentityKey,
       required List<int> scanned});
+
+  Future<void> crateApiCryptoDecryptMediaFile(
+      {required String input,
+      required String output,
+      required List<int> key,
+      required List<int> nonce,
+      Uint8List? expectedSha256});
+
+  Future<Uint8List> crateApiCryptoDecryptMediaToMemory(
+      {required String input,
+      required List<int> key,
+      required List<int> nonce,
+      Uint8List? expectedSha256});
+
+  Future<MediaKeys> crateApiCryptoEncryptMediaFile(
+      {required String input, required String output});
+
+  Future<SealedBytes> crateApiCryptoEncryptSmall({required List<int> plain});
 
   Future<void> crateApiCryptoInitApp();
 
@@ -947,12 +965,129 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
+  Future<void> crateApiCryptoDecryptMediaFile(
+      {required String input,
+      required String output,
+      required List<int> key,
+      required List<int> nonce,
+      Uint8List? expectedSha256}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(input, serializer);
+        sse_encode_String(output, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(nonce, serializer);
+        sse_encode_opt_list_prim_u_8_strict(expectedSha256, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 25, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_crypto_exception,
+      ),
+      constMeta: kCrateApiCryptoDecryptMediaFileConstMeta,
+      argValues: [input, output, key, nonce, expectedSha256],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCryptoDecryptMediaFileConstMeta =>
+      const TaskConstMeta(
+        debugName: "decrypt_media_file",
+        argNames: ["input", "output", "key", "nonce", "expectedSha256"],
+      );
+
+  @override
+  Future<Uint8List> crateApiCryptoDecryptMediaToMemory(
+      {required String input,
+      required List<int> key,
+      required List<int> nonce,
+      Uint8List? expectedSha256}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(input, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(nonce, serializer);
+        sse_encode_opt_list_prim_u_8_strict(expectedSha256, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 26, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_prim_u_8_strict,
+        decodeErrorData: sse_decode_crypto_exception,
+      ),
+      constMeta: kCrateApiCryptoDecryptMediaToMemoryConstMeta,
+      argValues: [input, key, nonce, expectedSha256],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCryptoDecryptMediaToMemoryConstMeta =>
+      const TaskConstMeta(
+        debugName: "decrypt_media_to_memory",
+        argNames: ["input", "key", "nonce", "expectedSha256"],
+      );
+
+  @override
+  Future<MediaKeys> crateApiCryptoEncryptMediaFile(
+      {required String input, required String output}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(input, serializer);
+        sse_encode_String(output, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 27, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_media_keys,
+        decodeErrorData: sse_decode_crypto_exception,
+      ),
+      constMeta: kCrateApiCryptoEncryptMediaFileConstMeta,
+      argValues: [input, output],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCryptoEncryptMediaFileConstMeta =>
+      const TaskConstMeta(
+        debugName: "encrypt_media_file",
+        argNames: ["input", "output"],
+      );
+
+  @override
+  Future<SealedBytes> crateApiCryptoEncryptSmall({required List<int> plain}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_8_loose(plain, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 28, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_sealed_bytes,
+        decodeErrorData: sse_decode_crypto_exception,
+      ),
+      constMeta: kCrateApiCryptoEncryptSmallConstMeta,
+      argValues: [plain],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCryptoEncryptSmallConstMeta => const TaskConstMeta(
+        debugName: "encrypt_small",
+        argNames: ["plain"],
+      );
+
+  @override
   Future<void> crateApiCryptoInitApp() {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 25, port: port_);
+            funcId: 29, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1129,6 +1264,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MediaKeys dco_decode_media_keys(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return MediaKeys(
+      key: dco_decode_list_prim_u_8_strict(arr[0]),
+      nonce: dco_decode_list_prim_u_8_strict(arr[1]),
+      ciphertextSha256: dco_decode_list_prim_u_8_strict(arr[2]),
+      ciphertextSize: dco_decode_u_64(arr[3]),
+      plaintextSize: dco_decode_u_64(arr[4]),
+    );
+  }
+
+  @protected
   OneTimePreKey dco_decode_one_time_pre_key(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1199,6 +1349,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  SealedBytes dco_decode_sealed_bytes(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return SealedBytes(
+      key: dco_decode_list_prim_u_8_strict(arr[0]),
+      nonce: dco_decode_list_prim_u_8_strict(arr[1]),
+      ciphertext: dco_decode_list_prim_u_8_strict(arr[2]),
+    );
+  }
+
+  @protected
   SignedPreKey dco_decode_signed_pre_key(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1227,6 +1390,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int dco_decode_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
   }
 
   @protected
@@ -1421,6 +1590,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MediaKeys sse_decode_media_keys(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_key = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_nonce = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_ciphertextSha256 = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_ciphertextSize = sse_decode_u_64(deserializer);
+    var var_plaintextSize = sse_decode_u_64(deserializer);
+    return MediaKeys(
+        key: var_key,
+        nonce: var_nonce,
+        ciphertextSha256: var_ciphertextSha256,
+        ciphertextSize: var_ciphertextSize,
+        plaintextSize: var_plaintextSize);
+  }
+
+  @protected
   OneTimePreKey sse_decode_one_time_pre_key(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_keyId = sse_decode_u_32(deserializer);
@@ -1497,6 +1682,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  SealedBytes sse_decode_sealed_bytes(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_key = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_nonce = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_ciphertext = sse_decode_list_prim_u_8_strict(deserializer);
+    return SealedBytes(
+        key: var_key, nonce: var_nonce, ciphertext: var_ciphertext);
+  }
+
+  @protected
   SignedPreKey sse_decode_signed_pre_key(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_keyId = sse_decode_u_32(deserializer);
@@ -1518,6 +1713,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int sse_decode_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint32();
+  }
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
@@ -1704,6 +1905,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_media_keys(MediaKeys self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_u_8_strict(self.key, serializer);
+    sse_encode_list_prim_u_8_strict(self.nonce, serializer);
+    sse_encode_list_prim_u_8_strict(self.ciphertextSha256, serializer);
+    sse_encode_u_64(self.ciphertextSize, serializer);
+    sse_encode_u_64(self.plaintextSize, serializer);
+  }
+
+  @protected
   void sse_encode_one_time_pre_key(
       OneTimePreKey self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -1770,6 +1981,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_sealed_bytes(SealedBytes self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_u_8_strict(self.key, serializer);
+    sse_encode_list_prim_u_8_strict(self.nonce, serializer);
+    sse_encode_list_prim_u_8_strict(self.ciphertext, serializer);
+  }
+
+  @protected
   void sse_encode_signed_pre_key(SignedPreKey self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.keyId, serializer);
@@ -1788,6 +2007,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint32(self);
+  }
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
   }
 
   @protected

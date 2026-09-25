@@ -29,7 +29,7 @@
 
 use crate::api::crypto::*;
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1750168426;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 686933062;
 
 // Section: executor
 
@@ -1311,6 +1311,157 @@ fn wire__crate__api__crypto__CryptoDevice_verify_scanned_safety_number_impl(
         },
     )
 }
+fn wire__crate__api__crypto__decrypt_media_file_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "decrypt_media_file",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_input = <String>::sse_decode(&mut deserializer);
+            let api_output = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_nonce = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_expected_sha256 = <Option<Vec<u8>>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::crypto::CryptoException>((move || {
+                    let output_ok = crate::api::crypto::decrypt_media_file(
+                        api_input,
+                        api_output,
+                        api_key,
+                        api_nonce,
+                        api_expected_sha256,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__crypto__decrypt_media_to_memory_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "decrypt_media_to_memory",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_input = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_nonce = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_expected_sha256 = <Option<Vec<u8>>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::crypto::CryptoException>((move || {
+                    let output_ok = crate::api::crypto::decrypt_media_to_memory(
+                        api_input,
+                        api_key,
+                        api_nonce,
+                        api_expected_sha256,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__crypto__encrypt_media_file_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "encrypt_media_file",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_input = <String>::sse_decode(&mut deserializer);
+            let api_output = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::crypto::CryptoException>((move || {
+                    let output_ok = crate::api::crypto::encrypt_media_file(api_input, api_output)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__crypto__encrypt_small_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "encrypt_small",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_plain = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::crypto::CryptoException>((move || {
+                    let output_ok = crate::api::crypto::encrypt_small(api_plain)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__crypto__init_app_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1520,6 +1671,24 @@ impl SseDecode for Vec<crate::api::crypto::StoredRecord> {
     }
 }
 
+impl SseDecode for crate::api::crypto::MediaKeys {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_key = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_nonce = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_ciphertextSha256 = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_ciphertextSize = <u64>::sse_decode(deserializer);
+        let mut var_plaintextSize = <u64>::sse_decode(deserializer);
+        return crate::api::crypto::MediaKeys {
+            key: var_key,
+            nonce: var_nonce,
+            ciphertext_sha256: var_ciphertextSha256,
+            ciphertext_size: var_ciphertextSize,
+            plaintext_size: var_plaintextSize,
+        };
+    }
+}
+
 impl SseDecode for crate::api::crypto::OneTimePreKey {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1611,6 +1780,20 @@ impl SseDecode for crate::api::crypto::SafetyNumber {
     }
 }
 
+impl SseDecode for crate::api::crypto::SealedBytes {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_key = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_nonce = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_ciphertext = <Vec<u8>>::sse_decode(deserializer);
+        return crate::api::crypto::SealedBytes {
+            key: var_key,
+            nonce: var_nonce,
+            ciphertext: var_ciphertext,
+        };
+    }
+}
+
 impl SseDecode for crate::api::crypto::SignedPreKey {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1641,6 +1824,13 @@ impl SseDecode for u32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_u32::<NativeEndian>().unwrap()
+    }
+}
+
+impl SseDecode for u64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u64::<NativeEndian>().unwrap()
     }
 }
 
@@ -1793,7 +1983,16 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__api__crypto__init_app_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__crypto__decrypt_media_file_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__crypto__decrypt_media_to_memory_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        27 => wire__crate__api__crypto__encrypt_media_file_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__crypto__encrypt_small_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__crypto__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1936,6 +2135,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::crypto::EnvelopeKind>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::crypto::MediaKeys {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.key.into_into_dart().into_dart(),
+            self.nonce.into_into_dart().into_dart(),
+            self.ciphertext_sha256.into_into_dart().into_dart(),
+            self.ciphertext_size.into_into_dart().into_dart(),
+            self.plaintext_size.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::crypto::MediaKeys {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::crypto::MediaKeys>
+    for crate::api::crypto::MediaKeys
+{
+    fn into_into_dart(self) -> crate::api::crypto::MediaKeys {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::crypto::OneTimePreKey {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -2017,6 +2237,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::crypto::SafetyNumber>
     for crate::api::crypto::SafetyNumber
 {
     fn into_into_dart(self) -> crate::api::crypto::SafetyNumber {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::crypto::SealedBytes {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.key.into_into_dart().into_dart(),
+            self.nonce.into_into_dart().into_dart(),
+            self.ciphertext.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::crypto::SealedBytes
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::crypto::SealedBytes>
+    for crate::api::crypto::SealedBytes
+{
+    fn into_into_dart(self) -> crate::api::crypto::SealedBytes {
         self
     }
 }
@@ -2212,6 +2454,17 @@ impl SseEncode for Vec<crate::api::crypto::StoredRecord> {
     }
 }
 
+impl SseEncode for crate::api::crypto::MediaKeys {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<u8>>::sse_encode(self.key, serializer);
+        <Vec<u8>>::sse_encode(self.nonce, serializer);
+        <Vec<u8>>::sse_encode(self.ciphertext_sha256, serializer);
+        <u64>::sse_encode(self.ciphertext_size, serializer);
+        <u64>::sse_encode(self.plaintext_size, serializer);
+    }
+}
+
 impl SseEncode for crate::api::crypto::OneTimePreKey {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2278,6 +2531,15 @@ impl SseEncode for crate::api::crypto::SafetyNumber {
     }
 }
 
+impl SseEncode for crate::api::crypto::SealedBytes {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<u8>>::sse_encode(self.key, serializer);
+        <Vec<u8>>::sse_encode(self.nonce, serializer);
+        <Vec<u8>>::sse_encode(self.ciphertext, serializer);
+    }
+}
+
 impl SseEncode for crate::api::crypto::SignedPreKey {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2299,6 +2561,13 @@ impl SseEncode for u32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_u32::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for u64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_u64::<NativeEndian>(self).unwrap();
     }
 }
 
@@ -2336,7 +2605,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -2375,7 +2644,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

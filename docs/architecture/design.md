@@ -34,6 +34,9 @@ Private to the owner. Current boards:
 | 17 · Security notices in a chat (mobile) | Approved 2026-09-24: new device, admin rename, blocked message with a mismatched key |
 | 18 · No contacts yet (mobile) | Approved 2026-09-24: empty chat list, no search |
 | 19 · Offline and reconnecting (mobile) | Approved 2026-09-24: offline banner, queued messages |
+| 20 · Attach and send (mobile) | Approved 2026-09-25: attach menu, preview with caption, upload progress |
+| 21 · Media in a chat (mobile) | Approved 2026-09-25: photo, video (tap to download), file, voice, expired after 30 days |
+| 22 · Photo viewer and voice recording (mobile) | Approved 2026-09-25: viewer (save asks first), hold to record |
 
 Boards 2–7 are clickable in Play mode. Board 7 has working toggles.
 

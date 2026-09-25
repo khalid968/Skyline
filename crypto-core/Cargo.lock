@@ -2257,6 +2257,7 @@ dependencies = [
  "rand 0.9.5",
  "rusqlite",
  "sha2 0.11.0",
+ "signal-crypto",
  "thiserror",
  "uuid",
  "zeroize",

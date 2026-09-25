@@ -94,6 +94,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<StoredRecord> dco_decode_list_stored_record(dynamic raw);
 
   @protected
+  MediaKeys dco_decode_media_keys(dynamic raw);
+
+  @protected
   OneTimePreKey dco_decode_one_time_pre_key(dynamic raw);
 
   @protected
@@ -115,6 +118,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SafetyNumber dco_decode_safety_number(dynamic raw);
 
   @protected
+  SealedBytes dco_decode_sealed_bytes(dynamic raw);
+
+  @protected
   SignedPreKey dco_decode_signed_pre_key(dynamic raw);
 
   @protected
@@ -122,6 +128,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int dco_decode_u_32(dynamic raw);
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
@@ -207,6 +216,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  MediaKeys sse_decode_media_keys(SseDeserializer deserializer);
+
+  @protected
   OneTimePreKey sse_decode_one_time_pre_key(SseDeserializer deserializer);
 
   @protected
@@ -229,6 +241,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SafetyNumber sse_decode_safety_number(SseDeserializer deserializer);
 
   @protected
+  SealedBytes sse_decode_sealed_bytes(SseDeserializer deserializer);
+
+  @protected
   SignedPreKey sse_decode_signed_pre_key(SseDeserializer deserializer);
 
   @protected
@@ -236,6 +251,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
@@ -326,6 +344,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<StoredRecord> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_media_keys(MediaKeys self, SseSerializer serializer);
+
+  @protected
   void sse_encode_one_time_pre_key(
       OneTimePreKey self, SseSerializer serializer);
 
@@ -351,6 +372,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_safety_number(SafetyNumber self, SseSerializer serializer);
 
   @protected
+  void sse_encode_sealed_bytes(SealedBytes self, SseSerializer serializer);
+
+  @protected
   void sse_encode_signed_pre_key(SignedPreKey self, SseSerializer serializer);
 
   @protected
@@ -358,6 +382,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);

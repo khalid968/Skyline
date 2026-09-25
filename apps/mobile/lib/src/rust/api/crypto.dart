@@ -9,6 +9,39 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `signed`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `fmt`, `from`
 
+/// Encrypts a file for sending (up to 2 GB), streaming.
+Future<MediaKeys> encryptMediaFile(
+        {required String input, required String output}) =>
+    RustLib.instance.api
+        .crateApiCryptoEncryptMediaFile(input: input, output: output);
+
+/// Decrypts a downloaded file; `output` appears only if it verifies.
+Future<void> decryptMediaFile(
+        {required String input,
+        required String output,
+        required List<int> key,
+        required List<int> nonce,
+        Uint8List? expectedSha256}) =>
+    RustLib.instance.api.crateApiCryptoDecryptMediaFile(
+        input: input,
+        output: output,
+        key: key,
+        nonce: nonce,
+        expectedSha256: expectedSha256);
+
+/// Decrypts a small file (photo, voice) into memory, never to disk.
+Future<Uint8List> decryptMediaToMemory(
+        {required String input,
+        required List<int> key,
+        required List<int> nonce,
+        Uint8List? expectedSha256}) =>
+    RustLib.instance.api.crateApiCryptoDecryptMediaToMemory(
+        input: input, key: key, nonce: nonce, expectedSha256: expectedSha256);
+
+/// Encrypts a small buffer (a thumbnail that travels inside the message).
+Future<SealedBytes> encryptSmall({required List<int> plain}) =>
+    RustLib.instance.api.crateApiCryptoEncryptSmall(plain: plain);
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CryptoDevice>>
 abstract class CryptoDevice implements RustOpaqueInterface {
   Future<PinCheck> checkAppLockPin({required String pin});
@@ -180,6 +213,41 @@ enum EnvelopeKind {
   ;
 }
 
+class MediaKeys {
+  final Uint8List key;
+  final Uint8List nonce;
+  final Uint8List ciphertextSha256;
+  final BigInt ciphertextSize;
+  final BigInt plaintextSize;
+
+  const MediaKeys({
+    required this.key,
+    required this.nonce,
+    required this.ciphertextSha256,
+    required this.ciphertextSize,
+    required this.plaintextSize,
+  });
+
+  @override
+  int get hashCode =>
+      key.hashCode ^
+      nonce.hashCode ^
+      ciphertextSha256.hashCode ^
+      ciphertextSize.hashCode ^
+      plaintextSize.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MediaKeys &&
+          runtimeType == other.runtimeType &&
+          key == other.key &&
+          nonce == other.nonce &&
+          ciphertextSha256 == other.ciphertextSha256 &&
+          ciphertextSize == other.ciphertextSize &&
+          plaintextSize == other.plaintextSize;
+}
+
 class OneTimePreKey {
   final int keyId;
   final Uint8List publicKey;
@@ -280,6 +348,30 @@ class SafetyNumber {
           runtimeType == other.runtimeType &&
           displayable == other.displayable &&
           scannable == other.scannable;
+}
+
+class SealedBytes {
+  final Uint8List key;
+  final Uint8List nonce;
+  final Uint8List ciphertext;
+
+  const SealedBytes({
+    required this.key,
+    required this.nonce,
+    required this.ciphertext,
+  });
+
+  @override
+  int get hashCode => key.hashCode ^ nonce.hashCode ^ ciphertext.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SealedBytes &&
+          runtimeType == other.runtimeType &&
+          key == other.key &&
+          nonce == other.nonce &&
+          ciphertext == other.ciphertext;
 }
 
 class SignedPreKey {
