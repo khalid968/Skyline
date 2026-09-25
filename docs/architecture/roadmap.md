@@ -38,7 +38,7 @@ See `design.md` for the standing design-review rule.
    setup (libsignal's successor to X3DH), Double Ratchet messaging, safety numbers. Verified in the app on
    Windows and Android; iOS is untested (no Mac).
 
-8. **Messaging** — private chats, group chats, replies/threads, edit/delete, typing/read/delivered
+8. **Messaging** — 8a (one-to-one) ✅ built 2026-09-25, awaiting review; 8b not started. Private chats, group chats, replies/threads, edit/delete, typing/read/delivered
    receipts, pinned messages, search, reactions, mentions, drafts, archive/mute, disappearing messages.
    Forwarding and "new chat" are constrained by the contact graph, not by user search.
 

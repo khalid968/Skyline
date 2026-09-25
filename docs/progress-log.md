@@ -8,6 +8,60 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-25 — Phase 8a BUILT: one-to-one messaging, app lock, safety-number scanning, push
+
+The owner set up Firebase (project `skyline-a090f`; `google-services.json` in `apps/mobile/android/app`, and
+the service account OUTSIDE the repo in `C:\Users\kkhal\Skyline-secrets\`; both are gitignored). **8a is complete and awaiting the
+owner's review. 8b needs explicit approval.**
+
+**Since the previous entry:**
+
+- **App lock (board 14):**
+  - The PIN is an Argon2id hash in the vault. Backoff (30 s after 5 misses, doubling) is kept in the core.
+  - Biometrics use `local_auth`.
+  - The lock screen replaces the app, rather than covering it.
+- **Safety-number QR scan (board 4):**
+  - `flutter_zxing` 2.2.1. `mobile_scanner` was rejected because its Android ML Kit reports usage to
+    Google.
+  - The match itself is libsignal's scannable-fingerprint check, in the core.
+- **Push:**
+  - Server: `PUT`/`DELETE /me/push`. After a send, the recipient's devices are woken with data
+    `{t:"inbox"}`, coalesced to one wake-up per device every 5 s. Dead tokens are dropped. FCM HTTP v1 is
+    called with a service-account JWT, without an SDK.
+  - Client: `firebase_messaging`. In the foreground a wake-up just triggers a pull. In the background the
+    phone shows only "New message" and does not decrypt, to avoid a second isolate touching the vault.
+  - **Verified on the emulator with real Firebase:**
+    - a data-only wake-up arrives, and Google shows nothing;
+    - a wake-up to a killed app shows "Skyline · New message";
+    - a dead token is reported and dropped.
+  - Android 13+ asks for notification permission once. Tests grant it with `adb shell pm grant`.
+- **Tools:**
+  - `scripts/e2e-fixture.js` (throwaway fixtures).
+  - `scripts/push-probe.js` (one real wake-up; refuses any database that is not `skyline_e2e_*`).
+- The chat row now reads as one sentence to screen readers. It used to read the name twice.
+
+**Tests at the close of 8a:**
+
+- Backend: 439 tests (112 unit, 95 db, 232 app).
+- Rust: 24 tests (4 store unit, 20 protocol); clippy clean.
+- Dashboard: 18.
+- Windows app build: `crypto_test` 4 tests; `messaging_test` (two devices through a real server) 1 test.
+- Android: the push test on a real device.
+
+**Known issues:**
+
+- The Firebase plugin also compiles into the Windows app. It is never initialised there (push is Android
+  only), but it makes the Windows binary larger (`known-risks.md`).
+- With read receipts off, other own devices learn a chat was read only when it is opened there.
+- iOS: push (APNs) and every iOS build still need an Apple account and a Mac.
+- The background wake-up does not decrypt, so "delivered" ticks appear when the phone opens the app.
+
+**Next agent:** wait for the owner's review of 8a; 8b (groups, replies, edit/delete, reactions, mentions,
+pins, search, drafts, archive/mute) needs an explicit go. The owner can try it all with
+`docs/try-it-yourself.md`, section "Phase 8a".
+
+---
+
 ## 2026-09-24 (evening) — Phase 8a IN PROGRESS: one-to-one messaging works end to end
 
 The owner approved boards 16-19 ("this looks good") and said go.

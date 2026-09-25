@@ -36,10 +36,16 @@ the current state of play.
   - Proven end to end: real devices against the real backend (`crypto-e2e`), and in the app on Windows and
     Android (`integration_test/crypto_test.dart`). iOS is untested (no Mac).
   - Tests: 417 backend, 20 Rust, 3 integration. Nine mutation checks were all caught.
-  - **Phase 8 is split into 8a (one-to-one chats) and 8b (groups and the rest).** Decisions are in
-    `decisions.md` (2026-09-24): empty push wake-ups through APNs and FCM, receipts on by default and
-    reciprocal, and a new device starts empty. **8a needs the owner's go**, and its first step is
-    prototypes. Its first code task is the sender-identity check in `known-risks.md`.
+- **Phase 8a (one-to-one messaging) — ✅ built 2026-09-25**, awaiting the owner's review.
+  - Server: `modules/messages` (per-device inbox; ciphertext erased on delivery) and
+    `modules/notifications` (content-free FCM wake-ups).
+  - App: activation, chats, conversation, safety numbers with QR scan, app lock, and Privacy & security
+    (boards 1-5 and 13-19).
+  - Local history lives in the vault's encrypted records.
+  - Proven between two devices through a real server, and push on a real device.
+  - **8b needs explicit approval.** Design notes are in `decisions.md` ("How messages move").
+  - Firebase secrets stay OUT of git: `google-services.json` is gitignored, and the service account lives in
+    `C:\Users\kkhal\Skyline-secrets\`.
 - **Owner decisions 2026-09-21** (`decisions.md`): admins never see message content in v1 (a *disclosed*
   compliance archive may be designed later as an opt-in mode — build nothing toward it now); app lock
   (PIN/biometrics) is always the user's own choice, no admin override; user-set disappearing messages are
@@ -166,8 +172,8 @@ npm run format             # prettier --write "**/*.js"
 
 # Migrations (apps/backend) — plain SQL via node-pg-migrate; needs DATABASE_URL in .env
 npm run migrate:up                       # apply; migrate:down rolls back one; migrate:redo redoes the last
-npm run test:db                          # 91 schema-invariant tests against a throwaway database
-npm run test:app                         # 216 tests: guards, auth, admin API, key directory, crypto e2e, WebSocket, rate limits, CLI, route inventory
+npm run test:db                          # 95 schema-invariant tests against a throwaway database
+npm run test:app                         # 232 tests: guards, auth, admin API, keys, messaging, push, crypto e2e, WebSocket, rate limits, CLI, route inventory
                                          #   (needs the dev Postgres AND Redis up; each suite drops its own DB)
 npm run migrate:create -- add-something  # scaffold a new .sql migration
 
@@ -175,6 +181,13 @@ npm run migrate:create -- add-something  # scaffold a new .sql migration
 npm run admin:create -- --username x --display-name "Name"   # FIRST admin only; prompts for password
 npm run user:invite -- --username x --display-name "Name"    # member + one-time code, printed once
 npm run dev:device -- activate SKY-...                      # pretend phone (dev only): activate|me|devices|refresh|logout|forget
+
+# End-to-end app tests against a THROWAWAY server (apps/backend)
+npx babel-node scripts/e2e-fixture.js create    # prints JSON: db url + two linked people + codes
+DATABASE_URL=<its url> PORT=3078 npm run start  # then run integration_test/messaging_test.dart -d windows
+                                                #   with the --dart-defines listed at the top of that test
+npx babel-node scripts/e2e-fixture.js drop <skyline_e2e_...>
+# Push on Android: set FCM_SERVICE_ACCOUNT_FILE for the server; scripts/push-probe.js sends one wake-up
 
 # Admin dashboard (apps/dashboard) — needs the backend running on :3000 (override: SKYLINE_API=...)
 npm install

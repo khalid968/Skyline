@@ -101,3 +101,15 @@ Carol's. It still cannot forge content, and cannot read anything.
 - surface identity changes and new devices as system notices.
 
 Safety-number verification remains the final guard.
+
+## The Firebase plugin is linked into the Windows app — OPEN (low)
+
+`firebase_core` has a Windows implementation, so the Firebase C++ SDK is compiled into the Windows binary
+even though Skyline never initialises Firebase there (`pushSupported` is Android only). It is dead code, but
+it is third-party code in a privacy product and it makes the build larger. Before the first release,
+consider moving push into an Android-only plugin, or excluding the Windows plugin registration.
+
+## iOS push (APNs) not built — OPEN (needs an Apple developer account and a Mac)
+
+The server's transport has an `apns` slot that currently answers "error". Build it together with the first
+iOS build.
