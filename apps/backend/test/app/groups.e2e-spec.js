@@ -278,6 +278,38 @@ describe('groups (real sign-ins, real database)', () => {
     expect(events(await inbox(a))).toContain('group_member_removed');
   });
 
+  it('typing signals go to members only, and never outside the group', async () => {
+    const env = (d) => ({
+      ...dev(d),
+      kind: 'whisper',
+      body: b64(crypto.randomBytes(40)),
+    });
+    expect(
+      (
+        await api()
+          .post(`/groups/${groupId}/signals`)
+          .set(a.h)
+          .send({ envelopes: [env(b)] })
+      ).status,
+    ).toBe(204);
+    expect(
+      (
+        await api()
+          .post(`/groups/${groupId}/signals`)
+          .set(a.h)
+          .send({ envelopes: [env(s)] })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await api()
+          .post(`/groups/${groupId}/signals`)
+          .set(s.h)
+          .send({ envelopes: [env(a)] })
+      ).status,
+    ).toBe(404);
+  });
+
   it('a member leaves by themselves; the group is told', async () => {
     const res = await api().post(`/groups/${groupId}/leave`).set(b.h);
     expect(res.status).toBe(204);

@@ -28,7 +28,7 @@ import {
 } from 'class-validator';
 import { GroupTarget } from '../../common/decorators/access.decorators';
 import { Validated } from '../../common/decorators/validated.decorator';
-import { EnvelopeDto } from '../messages/messages.dto';
+import { EnvelopeDto, SignalDto } from '../messages/messages.dto';
 import { GroupsService } from './groups.service';
 
 export class DeviceRefDto {
@@ -106,6 +106,16 @@ export class GroupsController {
   @Validated(undefined, undefined, KeyShareDto)
   shareKeys(req, groupId, dto, res) {
     return this.groups.shareKeys(req.account, groupId, dto, res);
+  }
+
+  // Typing, relayed live and never stored.
+  @Post('groups/:groupId/signals')
+  @HttpCode(204)
+  @GroupTarget('groupId')
+  @Bind(Req(), Param('groupId'), Body(), Res({ passthrough: true }))
+  @Validated(undefined, undefined, SignalDto)
+  async signal(req, groupId, dto, res) {
+    await this.groups.signal(req.account, groupId, dto, res);
   }
 
   @Post('groups/:groupId/leave')

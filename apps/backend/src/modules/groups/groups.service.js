@@ -14,6 +14,7 @@ import {
 import { PublicBodyException } from '../../common/filters/all-exceptions.filter';
 import { AuditService } from '../audit/audit.service';
 import { PushService } from '../notifications/push.service';
+import { FanoutService } from '../websocket/fanout.service';
 import { MediaService } from '../media/media.service';
 import { KeysService } from '../devices/keys.service';
 import {
@@ -38,6 +39,7 @@ import {
 // of a group that is not archived, else 404) and again at delivery.
 
 const KEY_SHARE_LIMIT = { limit: 120, windowSec: 60 };
+const SIGNAL_LIMIT = { limit: 240, windowSec: 60 };
 const MAX_GROUP_DEVICES = 1000;
 
 @Injectable()
@@ -49,9 +51,11 @@ const MAX_GROUP_DEVICES = 1000;
   MediaService,
   KeysService,
   MessagesService,
+  FanoutService,
 )
 export class GroupsService {
-  constructor(db, limiter, audit, push, media, keys, messages) {
+  constructor(db, limiter, audit, push, media, keys, messages, fanout) {
+    this.fanout = fanout;
     this.db = db;
     this.limiter = limiter;
     this.audit = audit;
@@ -236,6 +240,51 @@ export class GroupsService {
     if (!result.duplicate)
       await this.wake(groupId, caller.userId, result.devices);
     return { messageId: dto.messageId };
+  }
+
+  // ------------------------------------------------------------- signals
+
+  // Typing in a group: pairwise-encrypted, relayed live to the members'
+  // connected devices, never stored (like a direct typing signal).
+  async signal(caller, groupId, dto, res) {
+    await enforceLimit(
+      this.limiter,
+      `signal:device:${caller.deviceId}`,
+      SIGNAL_LIMIT,
+      res,
+      this.logger,
+    );
+    const { rows: members } = await this.db.query(
+      'SELECT user_id FROM group_members WHERE group_id = $1 AND removed_at IS NULL',
+      [groupId],
+    );
+    const live = new Set(members.map((m) => m.user_id));
+    for (const e of dto.envelopes) {
+      if (!live.has(e.userId))
+        throw new BadRequestException(['signals go to members of this group']);
+    }
+    const me = await this.db.query(
+      'SELECT device_number FROM devices WHERE id = $1',
+      [caller.deviceId],
+    );
+    await this.fanout.publish({
+      type: 'signal',
+      senderUserId: caller.userId,
+      recipientUserIds: [...new Set(dto.envelopes.map((e) => e.userId))].slice(
+        0,
+        500,
+      ),
+      payload: {
+        groupId,
+        fromDevice: me.rows[0].device_number,
+        envelopes: dto.envelopes.map((e) => ({
+          userId: e.userId,
+          deviceNumber: e.deviceNumber,
+          kind: e.kind,
+          body: e.body,
+        })),
+      },
+    });
   }
 
   // ------------------------------------------------------------- leaving

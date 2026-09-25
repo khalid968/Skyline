@@ -83,6 +83,7 @@ class Messenger extends ChangeNotifier {
   final Map<int, String> _ownIdentities = {}; // our other devices
   final Map<String, Group> _groups = {};
   final Map<String, DateTime> _typingUntil = {};
+  final Map<String, String> _typingWho = {}; // group id -> who is typing
   StreamSubscription<RealtimeEvent>? _eventsSub;
   StreamSubscription<ConnectionStatus>? _statusSub;
   Timer? _sweeper;
@@ -99,6 +100,9 @@ class Messenger extends ChangeNotifier {
   Group? group(String groupId) => _groups[groupId];
   List<Group> get groups => _groups.values.toList();
   bool isTyping(String peer) => (_typingUntil[peer]?.isAfter(DateTime.now())) ?? false;
+
+  /// In a group, who is typing (their first name).
+  String? typingName(String peer) => isTyping(peer) ? _typingWho[peer] : null;
 
   // ------------------------------------------------------------ lifecycle
 
@@ -1078,23 +1082,31 @@ class Messenger extends ChangeNotifier {
     if (now.difference(_lastTypingSent) < const Duration(seconds: 4)) return;
     _lastTypingSent = now;
     try {
+      final g = _groups[peer];
       final c = _contacts[peer];
-      if (c == null) return;
-      final bytes = utf8.encode(jsonEncode({'v': 1, 'type': 'typing', 'peer': peer, 'on': true}));
+      if (g == null && c == null) return;
+      final bytes = utf8.encode(jsonEncode({'v': 1, 'type': 'typing', 'peer': peer, 'on': true, 'group': g != null}));
+      // A group: every other member's devices. One to one: the contact's.
+      final targets = g != null
+          ? [
+              for (final t in _groupTargets(g))
+                if (t.$1 != me) t,
+            ]
+          : [for (final d in c!.devices) (peer, d.deviceNumber)];
       final envelopes = <Map<String, Object?>>[];
-      for (final d in c.devices) {
+      for (final t in targets) {
         // Only to devices we already have a session with: typing never starts one.
-        if (!await crypto.hasSession(userId: peer, deviceNumber: d.deviceNumber)) continue;
-        final e = await crypto.encrypt(userId: peer, deviceNumber: d.deviceNumber, plaintext: bytes);
+        if (!await crypto.hasSession(userId: t.$1, deviceNumber: t.$2)) continue;
+        final e = await crypto.encrypt(userId: t.$1, deviceNumber: t.$2, plaintext: bytes);
         envelopes.add({
-          'userId': peer,
-          'deviceNumber': d.deviceNumber,
+          'userId': t.$1,
+          'deviceNumber': t.$2,
           'kind': e.kind == EnvelopeKind.preKey ? 'prekey' : 'whisper',
           'body': base64.encode(e.body),
         });
       }
       if (envelopes.isEmpty) return;
-      await api.post('/users/$peer/signals', {'envelopes': envelopes});
+      await api.post(g != null ? '/groups/$peer/signals' : '/users/$peer/signals', {'envelopes': envelopes});
     } on Object {
       // Typing indicators are best effort.
     }
@@ -1116,7 +1128,15 @@ class Messenger extends ChangeNotifier {
           envelope: Envelope(kind: EnvelopeKind.whisper, body: base64.decode(e['body']! as String)),
         );
         final c = jsonDecode(utf8.decode(plain)) as Map<String, Object?>;
-        if (c['type'] == 'typing') {
+        final groupId = payload['groupId'] as String?;
+        if (c['type'] == 'typing' && groupId != null) {
+          // Typing in a group: only if it really is that group, and they are in it.
+          if (c['peer'] != groupId || _groups[groupId]?.member(from) == null) return;
+          _typingUntil[groupId] = DateTime.now().add(const Duration(seconds: 6));
+          _typingWho[groupId] = _groups[groupId]!.member(from)!.displayName.split(' ').first;
+          notifyListeners();
+          Timer(const Duration(seconds: 6, milliseconds: 100), notifyListeners);
+        } else if (c['type'] == 'typing') {
           _typingUntil[from] = DateTime.now().add(const Duration(seconds: 6));
           notifyListeners();
           Timer(const Duration(seconds: 6, milliseconds: 100), notifyListeners);

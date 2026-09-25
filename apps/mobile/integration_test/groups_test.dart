@@ -73,6 +73,10 @@ void main() {
     final reply = await bob.sendText(groupId, 'Bob here.');
     expect((await arrives(alice, reply.id)).senderName, 'Bob Example');
     expect((await arrives(carol, reply.id)).text, 'Bob here.');
+    // Typing in the group shows who is typing (live only, never stored).
+    await bob.typing(groupId);
+    await eventually(() async => alice.typingName(groupId) == 'Bob' ? true : null);
+
     final fromCarol = await carol.sendText(groupId, 'Carol here, not linked to Alice.');
     expect((await arrives(alice, fromCarol.id)).text, 'Carol here, not linked to Alice.');
 

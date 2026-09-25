@@ -297,6 +297,46 @@ to MinIO.
    - Files are kept on the server for 30 days. After that, a device that never downloaded one shows
      "no longer available".
 
+## Phase 8b: groups, message tools, search
+
+Double-click **`Stop Skyline.cmd`** and then **`Start Skyline.cmd`**: Start runs the new migration, but only when it starts the server itself. Then **restart both apps**: the
+new features include native code, so a hot reload is not enough.
+
+You need three people for a real group. In the dashboard, make a third member (for example Leila) and
+give her a code, but **do not** link her to Amina. She can sign in on a second Windows window
+(`flutter run -d windows` again, from another terminal) or on the emulator.
+
+1. **Make a group (dashboard → Groups):**
+   - **New group:** name it, for example Operations.
+   - **Add members:** type a name to add Amina, Omar and Leila.
+   - The group appears in each person's chat list by itself, with a square picture.
+2. **Talk in it:**
+   - Each message shows its sender's name in their own colour.
+   - Leila can read Amina's messages even though they are not contacts.
+   - In group info (tap the group's name), Leila is marked "not linked to you".
+3. **Message tools.** Long-press a message (right-click on Windows):
+   - **React:** one of the six quick reactions, or **+** for any emoji.
+   - **Reply:** the answer shows a quote of the message it answers.
+   - **Edit:** only your own messages, for 15 minutes. The others see "edited".
+   - **Pin:** it appears in a bar at the top, and the chat says who pinned it. Tap the bar to go through
+     up to 3 pins.
+   - **Delete:** "for everyone" works for 24 hours and leaves "This message was deleted"; "for me" works any
+     time.
+   - **Mention:** in a group, type **@** and pick a name. That person sees an **@** badge in their chat
+     list.
+4. **Chat list:**
+   - Use the **All / Unread / Groups** filters.
+   - Long-press a chat (right-click on Windows, or swipe left on a phone) to **Mute** it (crossed bell, grey
+     count) or **Archive** it. Archived chats sit behind the **Archived** row and come back when someone
+     writes, unless muted.
+   - Type half a message and leave the chat: it shows as an amber **Draft** in the list.
+5. **Search:** the magnifier at the top searches the messages on this device. It never finds people.
+6. **Leaving and removing:**
+   - In group info, **Leave group** asks first.
+   - In the dashboard, **Remove** someone, or **Archive group** to close it.
+   - Removed members stop receiving at once, and the others' next messages use new keys the removed
+     person does not have.
+
 ## Starting over
 
 Your development accounts live in the Docker volume. To wipe everything and start clean:

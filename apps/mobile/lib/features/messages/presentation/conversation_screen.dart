@@ -294,7 +294,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                       itemCount: messages.length + 1 + (messenger.isTyping(widget.peer) ? 1 : 0),
                       itemBuilder: (context, i) {
                         if (messenger.isTyping(widget.peer)) {
-                          if (i == 0) return const _Typing();
+                          if (i == 0) return _Typing(name: messenger.typingName(widget.peer));
                           i--;
                         }
                         if (i == messages.length) return const _EncryptionNote();
@@ -861,7 +861,8 @@ class _Notice extends StatelessWidget {
 }
 
 class _Typing extends StatelessWidget {
-  const _Typing();
+  const _Typing({this.name});
+  final String? name; // in a group, who is typing
 
   @override
   Widget build(BuildContext context) {
@@ -869,7 +870,7 @@ class _Typing extends StatelessWidget {
     return Align(
       alignment: Alignment.centerLeft,
       child: Semantics(
-        label: 'typing',
+        label: name == null ? 'typing' : '$name is typing',
         child: Container(
           margin: const EdgeInsets.only(top: 10),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -883,6 +884,10 @@ class _Typing extends StatelessWidget {
             ),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
+            if (name != null) ...[
+              Text(name!, style: TextStyle(fontSize: 12.5, color: t.textSecondary)),
+              const SizedBox(width: 8),
+            ],
             for (final c in const [Color(0xFF8E9BB4), Color(0xFF6E7E99), Color(0xFF55637D)])
               Container(
                 width: 6,
