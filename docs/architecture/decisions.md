@@ -6,6 +6,28 @@ working around it.
 
 ---
 
+## 2026-09-25 (later) — Phase 8b as built: implementation choices
+
+Boards 26-31 were approved ("looks good"). Choices made while building, within the owner's decisions:
+
+- **View once stays one-to-one.** In a group, the "opened" notice would need to reach every member's
+  devices and still leave the others able to view it once each; not designed yet. The toggle is hidden in
+  groups.
+- **Groups send no read receipts.** Delivered ticks still work (any member's device has it).
+- **Sender Keys:** the app picks a new distribution id whenever a device holding the current key is no
+  longer a member device, and it records which distribution ids each sender device handed over for each
+  group. A group message under any other id is refused. A message that arrives before its key waits,
+  sealed in the vault (at most 300), and is retried when the key comes.
+- **Mute** is kept on the device. It quiets the chat list (a grey count; an archived chat stays archived).
+  Push wake-ups carry no chat id, so a phone still shows the generic "New message" for a muted chat while
+  the app is closed. This is a known limit.
+- **Emoji picker:** recently used emoji are not stored, because that list would sit in unencrypted app
+  storage.
+- **Test servers** now use their own rate-limit counters (`RATE_LIMIT_PREFIX=skyline-e2e`), so test runs
+  never count against the owner's dev server.
+
+---
+
 ## 2026-09-25 — Phase 8b started: owner decisions and plan
 
 **The owner decided** (asked at the start of 8b):

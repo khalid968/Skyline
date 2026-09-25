@@ -40,12 +40,12 @@ Private to the owner. Current boards:
 | 23 · Several files at once (mobile) | Approved 2026-09-25: up to 10 per send; photos and videos as one album, documents as their own messages |
 | 24 · View once (mobile) | Approved 2026-09-25: photos and videos, opened once then deleted everywhere; screenshots blocked where the OS allows |
 | 25 · Media gallery (mobile) | Approved 2026-09-25: a chat's photos and videos, files and voice, from a Media button in the chat header |
-| 26 · Chats with groups, archive and mute (mobile) | Awaiting approval (Phase 8b) |
-| 27 · Group conversation (mobile) | Awaiting approval: sender names, pinned bar, reactions, replies, edited and deleted |
-| 28 · Message actions (mobile) | Awaiting approval: reactions, reply, edit (15 min), copy, pin, info, delete (24 h for everyone) |
-| 29 · Group info, leaving, mentions (mobile) | Awaiting approval |
-| 30 · Search messages (mobile) | Awaiting approval: local only, never people |
-| 31 · Admin · Groups (dashboard) | Awaiting approval: create, rename, add or remove members, archive |
+| 26 · Chats with groups, archive and mute (mobile) | Approved 2026-09-25 (Phase 8b) |
+| 27 · Group conversation (mobile) | Approved 2026-09-25: sender names, pinned bar, reactions, replies, edited and deleted |
+| 28 · Message actions (mobile) | Approved 2026-09-25: reactions, reply, edit (15 min), copy, pin, info, delete (24 h for everyone) |
+| 29 · Group info, leaving, mentions (mobile) | Approved 2026-09-25 |
+| 30 · Search messages (mobile) | Approved 2026-09-25: local only, never people |
+| 31 · Admin · Groups (dashboard) | Approved 2026-09-25: create, rename, add or remove members, archive |
 
 Boards 2–7 are clickable in Play mode. Board 7 has working toggles.
 

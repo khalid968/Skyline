@@ -8,6 +8,59 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-25 (night, paused) — Phase 8b BUILT, not yet reviewed; paused at the owner's request
+
+Boards 26-31 were approved ("looks good"). Everything below is committed on the branch.
+
+**Status: nothing from 8b is pushed yet.** The last push was 644aee7 (8b prototypes). The owner asked to
+pause and document. **Ask before pushing.**
+
+**Built, in order (commits):**
+
+1. **1894479 — server:**
+   - Migration 014: `sender_key` envelopes; moderators may create groups; an archived group is closed.
+   - Dashboard routes `/admin/groups*`: create, rename, add or remove members, archive or reopen. Each is
+     announced in the group, audited, and checked against admin-policy.
+   - Member routes: `GET /me/groups`, `GET /groups/:id/keys?userId=`, `POST /groups/:id/messages` (one
+     ciphertext, full device coverage or a 409), `POST /groups/:id/key-shares`, `POST /groups/:id/leave`.
+   - The inbox checks group membership since before each message was sent.
+   - Tests: 103 db, 112 unit, 249 app; 10 mutation checks were all caught.
+2. **da24500 — dashboard:** the Groups page (board 31). 21 dashboard tests pass.
+3. **2f8b93d — crypto core:** libsignal Sender Keys, plus a guard that refuses a sender key from another
+   group. 7 new Rust tests; clippy is clean. The Dart bindings were regenerated.
+4. **8219ded — app groups:**
+   - `messenger_groups.dart`: key sharing and rotation, receiving, pending messages, group notices,
+     leaving.
+   - Screens: the group header, sender names and colours, and group info (board 29).
+   - The e2e fixture now includes Carol (not linked to Alice) and a group of all three.
+5. **be69a39 — message actions:** `messenger_actions.dart`, `message_actions_sheet.dart`.
+   - Reply with a quote, edit (15 minutes), reactions (six quick ones plus the full picker), pins (3,
+     announced, with a pinned bar), delete for everyone (24 hours) or for me, and mentions in groups.
+6. **f1c2ddf — chat list and search:**
+   - Chat list (board 26): filters, archive, mute, drafts, and "@" badges.
+   - Search (board 30): local only.
+
+**Verified on Windows through a real throwaway server:**
+- `groups_test` (three devices, key rotation after leaving), `actions_test` and `messaging_test` all pass.
+- `group_ui_test` screenshots match boards 26-30.
+- Tip: `scratchpad/run_e2e.sh <test>` makes a fixture, starts the server on :3078, runs the test and
+  drops the fixture. It lives in the session scratchpad; recreate it from its description if it is gone.
+
+**Not done yet:**
+- Android and iOS runs of the 8b features. Only Windows was tested.
+- Typing indicators in groups.
+- View once in groups (hidden on purpose, see `decisions.md`).
+- Muting a closed phone's wake-up (see `known-risks.md`).
+- No `try-it-yourself.md` section for 8b yet.
+- The owner has not reviewed 8b.
+
+**Next agent should:**
+1. Report 8b to the owner and ask to push.
+2. Add a `try-it-yourself.md` section: create a group in the dashboard, then chat, react, pin and search.
+3. Run the Android build and one Android integration run.
+
+---
+
 ## 2026-09-25 (late night) — Media pushed; Phase 8b started: decisions and prototypes
 
 - **Pushed** everything through commit 591b996 to GitHub. Before pushing, the new commits were checked

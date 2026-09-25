@@ -144,3 +144,12 @@ It still is not a guarantee:
 
 The composer and the viewer say this in plain words. Tell users to send nothing by view-once that they
 could not bear to have kept.
+
+## Muting cannot silence a closed phone's wake-up (Phase 8b, 2026-09-25)
+
+Push notifications carry no sender and no chat, on purpose. So when the app is closed, the phone shows
+"Skyline · New message" even for a muted chat: it cannot know which chat woke it until the app opens and
+decrypts.
+
+- **Fix for later:** after the wake-up, fetch and decrypt in the background, then decide whether to show
+  anything. Android allows a short background run; iOS needs a notification service extension.

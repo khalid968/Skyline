@@ -50,7 +50,11 @@ the current state of play.
   - The server deletes every file at 30 days (`modules/media`, migration 013; app: `lib/features/media`).
   - Also built: several files at once (albums), view once (screenshots blocked on Android and Windows) and
     the media gallery (boards 23-25). Photos are re-encoded with EXIF stripped; `Start Skyline.cmd` starts everything.
-  - **Phase 8b started 2026-09-25:** owner decisions recorded (`decisions.md`); prototypes 26-31 await approval.
+- **Phase 8b (groups and message tools) — ✅ built 2026-09-25, NOT pushed, awaiting review.**
+  - Groups: managed in the dashboard (Groups page), libsignal Sender Keys rotated when anyone leaves.
+  - Message tools: reply, edit (15 minutes), delete (24 hours), reactions, pins, mentions.
+  - Chat list and search: local search, drafts, archive and mute.
+  - See the progress log for what remains.
   - Firebase secrets stay OUT of git: `google-services.json` is gitignored, and the service account lives in
     `C:\Users\kkhal\Skyline-secrets\`.
 - **Owner decisions 2026-09-21** (`decisions.md`): admins never see message content in v1 (a *disclosed*
