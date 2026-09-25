@@ -41,6 +41,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   String? _mentionQuery;
   int _pin = 0;
   Timer? _draftTimer;
+  // Tapping a quote jumps to the message it quotes (and flashes it).
+  final _scroll = ScrollController();
+  final Map<String, GlobalKey> _keys = {};
+  String? _flash;
 
   @override
   void initState() {
@@ -65,6 +69,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     if (messenger.openChat == widget.peer) messenger.openChat = null;
     _draftTimer?.cancel();
     if (_editing == null) unawaited(messenger.saveDraft(widget.peer, _input.text));
+    _scroll.dispose();
     _input.dispose();
     super.dispose();
   }
@@ -74,7 +79,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     if (text.isEmpty) return;
     final editing = _editing;
     final reply = _replyTo == null ? null : messenger.quoteOf(_replyTo!);
-    final mentions = [for (final e in _mentioned.entries) if (text.contains(e.value)) e.key];
+    final mentions = [
+      for (final e in _mentioned.entries)
+        if (text.contains(e.value)) e.key
+    ];
     _input.clear();
     setState(() {
       _editing = null;
@@ -122,7 +130,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   }
 
   /// Board 28: long-press (right-click on a PC) a message.
-  Future<void> _actions(LocalMessage m, {required bool canWrite, required ChatSummary? chat, required String name}) async {
+  Future<void> _actions(LocalMessage m,
+      {required bool canWrite, required ChatSummary? chat, required String name}) async {
     final pinned = chat?.pins.contains(m.id) ?? false;
     final actions = [
       if (canWrite && !m.deleted) MessageAction.reply,
@@ -191,7 +200,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           .showSnackBar(const SnackBar(content: Text('Files can be up to 2 GB; larger ones were left out.')));
     }
     if (kept.isEmpty || !mounted) return;
-    final r = await showMediaPreview(context, kept, peerName: name, allowViewOnce: messenger.group(widget.peer) == null);
+    final r =
+        await showMediaPreview(context, kept, peerName: name, allowViewOnce: messenger.group(widget.peer) == null);
     if (r == null) {
       for (final p in kept) {
         await p.discard();
@@ -215,6 +225,31 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         wave: clip.wave,
         deleteSource: true,
       );
+
+  /// Scrolls to the quoted message: older ones are built only when near the
+  /// screen, so it moves up a screenful at a time until the message exists.
+  Future<void> _jumpTo(String id) async {
+    for (var step = 0; step < 60 && mounted; step++) {
+      final ctx = _keys[id]?.currentContext;
+      if (ctx != null && ctx.mounted) {
+        await Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 300), alignment: 0.4);
+        setState(() => _flash = id);
+        Timer(const Duration(milliseconds: 1400), () {
+          if (mounted && _flash == id) setState(() => _flash = null);
+        });
+        return;
+      }
+      if (!_scroll.hasClients) break;
+      final pos = _scroll.position;
+      if (pos.pixels >= pos.maxScrollExtent) break; // the oldest message on this device
+      _scroll.jumpTo((pos.pixels + pos.viewportDimension * 0.8).clamp(0, pos.maxScrollExtent));
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('That message is no longer on this device.')));
+    }
+  }
 
   List<String> _tagsFor(LocalMessage m) {
     if (m.mentions.isEmpty) return const [];
@@ -258,8 +293,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
             final group = messenger.group(widget.peer);
             final isGroup = (chat?.isGroup ?? false) || group != null;
             final name = group?.name ?? contact?.displayName ?? chat?.displayName ?? '';
-            final canWrite =
-                isGroup ? group != null && !group.archived && !(chat?.left ?? false) : contact != null;
+            final canWrite = isGroup ? group != null && !group.archived && !(chat?.left ?? false) : contact != null;
             final waiting = messages.where((m) => m.status == MessageStatus.waiting).length;
             return Scaffold(
               body: SafeArea(
@@ -289,6 +323,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                   ConnectionBanner(status: messenger.connection, waiting: waiting),
                   Expanded(
                     child: ListView.builder(
+                      controller: _scroll,
                       reverse: true,
                       padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
                       itemCount: messages.length + 1 + (messenger.isTyping(widget.peer) ? 1 : 0),
@@ -302,33 +337,42 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                         if (m.isNotice) {
                           return Padding(
                             padding: const EdgeInsets.only(top: 10),
-                            child: _Notice(m: m, name: name, onVerify: () => context.push('/chat/${widget.peer}/verify')),
+                            child:
+                                _Notice(m: m, name: name, onVerify: () => context.push('/chat/${widget.peer}/verify')),
                           );
                         }
                         void act() => _actions(m, canWrite: canWrite, chat: chat, name: name);
-                        return Padding(
+                        return AnimatedContainer(
+                          key: _keys.putIfAbsent(m.id, GlobalKey.new),
+                          duration: const Duration(milliseconds: 250),
                           padding: const EdgeInsets.only(top: 10),
+                          decoration: BoxDecoration(
+                            color: _flash == m.id ? t.accentFill.withValues(alpha: 0.18) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                           child: _Actionable(
                             m: m,
                             me: messenger.me,
                             onActions: act,
                             onReact: canWrite && !m.deleted ? (e) => messenger.react(m.id, e) : null,
                             child: m.isMedia
-                                  ? _FromMember(
+                                ? _FromMember(
+                                    m: m,
+                                    child: MediaBubble(
                                       m: m,
-                                      child: MediaBubble(
-                                        m: m,
-                                        messenger: messenger,
-                                        meta: _Meta(m: m),
-                                        onDetails: m.fromMe ? () => _details(m) : null,
-                                      ),
-                                    )
-                                  : _Bubble(
-                                      m: m,
-                                      me: messenger.me,
-                                      mentionTags: _tagsFor(m),
-                                      onTap: m.fromMe && !m.deleted ? () => _details(m) : null,
+                                      messenger: messenger,
+                                      meta: _Meta(m: m),
+                                      onDetails: m.fromMe ? () => _details(m) : null,
                                     ),
+                                  )
+                                : _Bubble(
+                                    m: m,
+                                    me: messenger.me,
+                                    mentionTags: _tagsFor(m),
+                                    nameOf: messenger.nameOf,
+                                    onQuote: m.replyTo == null ? null : () => _jumpTo(m.replyTo!['id']! as String),
+                                    onTap: m.fromMe && !m.deleted ? () => _details(m) : null,
+                                  ),
                           ),
                         );
                       },
@@ -400,7 +444,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       MessageStatus.read => [('Sent', at(m.sentAt)), ('Delivered', 'Yes'), ('Read', 'Yes')],
     };
     final note = switch (m.status) {
-      MessageStatus.sending => 'Encrypted on this phone and on its way. The clock turns into a tick as soon as the server has it.',
+      MessageStatus.sending =>
+        'Encrypted on this phone and on its way. The clock turns into a tick as soon as the server has it.',
       MessageStatus.waiting => 'Encrypted and waiting on this phone. It sends by itself when you are back online.',
       MessageStatus.failed => 'This message never left your phone. Nothing was sent, so nothing can be read.',
       MessageStatus.sent => 'Sent means Skyline’s server has it, encrypted. It arrives when their device reconnects.',
@@ -417,10 +462,12 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text('Message details',
-                style: TextStyle(fontFamily: SkyFonts.display, fontSize: 18, fontWeight: FontWeight.w700, color: t.textPrimary)),
+                style: TextStyle(
+                    fontFamily: SkyFonts.display, fontSize: 18, fontWeight: FontWeight.w700, color: t.textPrimary)),
             const SizedBox(height: 4),
             Text(m.isMedia ? (m.text.isEmpty ? m.mediaLabel : '${m.mediaLabel} · “${m.text}”') : '“${m.text}”',
-                maxLines: 3, overflow: TextOverflow.ellipsis,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 13.5, height: 1.45, color: t.textSecondary)),
             const SizedBox(height: 14),
             Container(
@@ -562,11 +609,20 @@ class _EncryptionNote extends StatelessWidget {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.m, required this.me, this.mentionTags = const [], this.onTap});
+  const _Bubble({
+    required this.m,
+    required this.me,
+    this.mentionTags = const [],
+    this.onTap,
+    this.onQuote,
+    this.nameOf,
+  });
   final LocalMessage m;
   final String me;
   final List<String> mentionTags;
   final VoidCallback? onTap;
+  final VoidCallback? onQuote;
+  final String? Function(String userId)? nameOf;
 
   @override
   Widget build(BuildContext context) {
@@ -621,7 +677,8 @@ class _Bubble extends StatelessWidget {
           bottomRight: Radius.circular(m.fromMe ? 5 : 18),
         ),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+      child: IntrinsicWidth(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
         if (m.senderName != null)
           Align(
             alignment: Alignment.centerLeft,
@@ -631,7 +688,7 @@ class _Bubble extends StatelessWidget {
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _nameColor(m.senderUserId!))),
             ),
           ),
-        if (m.replyTo != null) _Quote(quote: m.replyTo!, onBlue: m.fromMe, me: me),
+        if (m.replyTo != null) _Quote(quote: m.replyTo!, onBlue: m.fromMe, me: me, nameOf: nameOf, onTap: onQuote),
         Align(
           alignment: Alignment.centerLeft,
           // Plain text: long-press opens the actions, which include Copy.
@@ -646,7 +703,7 @@ class _Bubble extends StatelessWidget {
             child: Text('Not sent · tap to try again',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFFFD0D2))),
           ),
-      ]),
+      ])),
     );
     final shown = Semantics(
       button: onTap != null,
@@ -789,13 +846,16 @@ class _Notice extends StatelessWidget {
               SkyIcon(platform == 'windows' ? SkyIcons.monitor : SkyIcons.phone, size: 18, color: t.accentText),
               const SizedBox(width: 10),
               Expanded(
-                child: Text.rich(TextSpan(children: [
-                  TextSpan(
-                      text: '$first added a new device',
-                      style: TextStyle(fontWeight: FontWeight.w600, color: t.textPrimary)),
-                  TextSpan(
-                      text: ' — $what, activated with a code from your administrator. It has its own safety number.'),
-                ]), style: TextStyle(fontSize: 13, height: 1.5, color: t.textSecondary)),
+                child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                          text: '$first added a new device',
+                          style: TextStyle(fontWeight: FontWeight.w600, color: t.textPrimary)),
+                      TextSpan(
+                          text:
+                              ' — $what, activated with a code from your administrator. It has its own safety number.'),
+                    ]),
+                    style: TextStyle(fontSize: 13, height: 1.5, color: t.textSecondary)),
               ),
             ]),
             Align(
@@ -808,17 +868,18 @@ class _Notice extends StatelessWidget {
         return _pill(context, SkyIcons.pen,
             'Your administrator renamed ${m.noticeData['from'] ?? 'this person'} to ${m.noticeData['to'] ?? name}. Their safety numbers did not change.');
       case NoticeType.pinned:
-        final who = m.noticeData['byMe'] == true
-            ? 'You'
-            : ((m.noticeData['name'] as String?)?.split(' ').first ?? first);
+        final who =
+            m.noticeData['byMe'] == true ? 'You' : ((m.noticeData['name'] as String?)?.split(' ').first ?? first);
         return _pill(context, SkyIcons.pin, '$who ${m.noticeData['pinned'] == true ? 'pinned' : 'unpinned'} a message');
       case NoticeType.groupEvent:
         final who = m.noticeData['you'] == true ? 'You' : (m.noticeData['name'] as String? ?? 'Someone');
         final text = switch (m.noticeData['event']) {
           'group_created' => 'Your administrator created this group',
-          'group_renamed' => 'Your administrator renamed the group from ${m.noticeData['from']} to ${m.noticeData['to']}',
+          'group_renamed' =>
+            'Your administrator renamed the group from ${m.noticeData['from']} to ${m.noticeData['to']}',
           'group_member_added' => m.noticeData['you'] == true ? 'You were added to the group' : '$who was added',
-          'group_member_removed' => m.noticeData['you'] == true ? 'You were removed from the group' : '$who was removed',
+          'group_member_removed' =>
+            m.noticeData['you'] == true ? 'You were removed from the group' : '$who was removed',
           'group_member_left' => m.noticeData['you'] == true ? 'You left the group' : '$who left the group',
           'group_archived' => 'Your administrator closed this group',
           'group_reopened' => 'Your administrator reopened this group',
@@ -827,9 +888,8 @@ class _Notice extends StatelessWidget {
         return _pill(context, SkyIcons.chat, text);
       case NoticeType.timerChanged:
         final seconds = m.noticeData['seconds'] as int?;
-        final who = m.noticeData['byMe'] == true
-            ? 'You'
-            : ((m.noticeData['name'] as String?)?.split(' ').first ?? first);
+        final who =
+            m.noticeData['byMe'] == true ? 'You' : ((m.noticeData['name'] as String?)?.split(' ').first ?? first);
         return _pill(
           context,
           SkyIcons.clock,
@@ -977,8 +1037,7 @@ class _ComposerState extends State<_Composer> {
     final clip = await _recorder.stop();
     if (clip == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Hold the microphone to record.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Hold the microphone to record.')));
       }
       return;
     }
@@ -1126,7 +1185,8 @@ class _FromMember extends StatelessWidget {
 
 /// Board 27: a group's header. Tapping the name opens group info (board 29).
 class _GroupHeader extends StatelessWidget {
-  const _GroupHeader({required this.peer, required this.name, required this.members, required this.timer, this.onTimer});
+  const _GroupHeader(
+      {required this.peer, required this.name, required this.members, required this.timer, this.onTimer});
   final String peer;
   final String name;
   final int? members;
@@ -1220,32 +1280,47 @@ TextSpan _withMentions(String text, List<String> tags, Color fg, bool onBlue) {
 
 /// A reply's quote at the top of a bubble (board 27).
 class _Quote extends StatelessWidget {
-  const _Quote({required this.quote, required this.onBlue, required this.me});
+  const _Quote({required this.quote, required this.onBlue, required this.me, this.nameOf, this.onTap});
   final Map<String, Object?> quote;
   final bool onBlue;
   final String me;
+  final String? Function(String userId)? nameOf;
+  final VoidCallback? onTap; // jump to the quoted message
 
   @override
   Widget build(BuildContext context) {
     final t = context.sky;
-    final who = quote['author'] == me ? 'You' : ((quote['name'] as String?) ?? 'Message');
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-      decoration: BoxDecoration(
-        color: onBlue ? const Color(0x47080C16) : t.ground.withValues(alpha: 0.6),
-        border: Border(left: BorderSide(color: onBlue ? const Color(0xFFDDE5FC) : t.accentText, width: 3)),
-        borderRadius: BorderRadius.circular(10),
+    final author = quote['author'] as String?;
+    final who = author == me
+        ? 'You'
+        : ((author == null ? null : nameOf?.call(author)) ?? (quote['name'] as String?) ?? 'Message');
+    return Semantics(
+      button: onTap != null,
+      label: onTap == null ? null : 'Go to the message from $who',
+      child: GestureDetector(
+        key: ValueKey('quote-${quote['id']}'),
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(minWidth: 160),
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+          decoration: BoxDecoration(
+            color: onBlue ? const Color(0x47080C16) : t.ground.withValues(alpha: 0.6),
+            border: Border(left: BorderSide(color: onBlue ? const Color(0xFFDDE5FC) : t.accentText, width: 3)),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text(who,
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w700, color: onBlue ? const Color(0xFFDDE5FC) : t.accentText)),
+            Text((quote['preview'] as String?) ?? '',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12.5, color: onBlue ? const Color(0xFFDDE5FC) : t.textSecondary)),
+          ]),
+        ),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-        Text(who,
-            style: TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w700, color: onBlue ? const Color(0xFFDDE5FC) : t.accentText)),
-        Text((quote['preview'] as String?) ?? '',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12.5, color: onBlue ? const Color(0xFFDDE5FC) : t.textSecondary)),
-      ]),
     );
   }
 }
@@ -1318,7 +1393,8 @@ class _PinnedBar extends StatelessWidget {
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.fromLTRB(14, 9, 14, 9),
-          decoration: BoxDecoration(color: const Color(0xFF121A2A), border: Border(bottom: BorderSide(color: t.border))),
+          decoration:
+              BoxDecoration(color: const Color(0xFF121A2A), border: Border(bottom: BorderSide(color: t.border))),
           child: Row(children: [
             SizedBox(
               width: 3,
@@ -1342,7 +1418,8 @@ class _PinnedBar extends StatelessWidget {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('Pinned message ${index + 1} of ${pins.length}',
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: t.accentText)),
-                Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: t.textPrimary)),
+                Text(text,
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: t.textPrimary)),
               ]),
             ),
             SkyIcon(SkyIcons.pin, size: 16, color: t.textSecondary, stroke: 2),
@@ -1386,7 +1463,8 @@ class _ComposerBanner extends StatelessWidget {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
-            Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: t.textSecondary)),
+            Text(sub,
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: t.textSecondary)),
           ]),
         ),
         IconButton(
@@ -1410,7 +1488,8 @@ class _MentionPicker extends StatelessWidget {
     final t = context.sky;
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      decoration: BoxDecoration(color: t.surface, border: Border.all(color: t.border), borderRadius: BorderRadius.circular(14)),
+      decoration:
+          BoxDecoration(color: t.surface, border: Border.all(color: t.border), borderRadius: BorderRadius.circular(14)),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         for (final m in members)
           InkWell(
@@ -1426,7 +1505,8 @@ class _MentionPicker extends StatelessWidget {
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
-          child: Text(members.isEmpty ? 'Nobody in this group by that name.' : 'Only people in this group can be mentioned.',
+          child: Text(
+              members.isEmpty ? 'Nobody in this group by that name.' : 'Only people in this group can be mentioned.',
               style: TextStyle(fontSize: 11.5, color: t.textSecondary)),
         ),
       ]),

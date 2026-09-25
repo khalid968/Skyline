@@ -75,6 +75,7 @@ void main() {
     late Messenger alice;
     late Messenger bob;
     late Messenger carol;
+    late String bobsId;
     await tester.runAsync(() async {
       alice = await device(aliceCode, 'Alice test PC');
       bob = await device(bobCode, 'Bob test PC');
@@ -93,6 +94,7 @@ void main() {
       // Board 27's details: a pin, reactions, a reply with its quote, an edit
       // and a deleted message.
       final bobs = (await alice.store.messages(groupId)).firstWhere((m) => m.text.startsWith('Morning'));
+      bobsId = bobs.id;
       await alice.pin(bobs.id, true);
       await eventually(() => bob.store.message(mine.id));
       await bob.react(mine.id, '👍');
@@ -119,6 +121,30 @@ void main() {
     await _shot(tester, '28-message-actions');
     await _show(tester, alice, const GroupInfoScreen(groupId: groupId));
     await _shot(tester, '29-group-info');
+
+    // Tapping a quote jumps to the quoted message, even far above.
+    await tester.runAsync(() async {
+      for (var i = 0; i < 12; i++) {
+        await bob.sendText(groupId, 'Filler message $i so the original scrolls away.');
+      }
+      final last = (await bob.store.messages(groupId)).first;
+      await eventually(() => alice.store.message(last.id));
+    });
+    await _show(tester, alice, const ConversationScreen(peer: groupId));
+    final quote = find.byKey(ValueKey('quote-$bobsId'));
+    for (var i = 0; i < 20 && quote.evaluate().isEmpty; i++) {
+      await tester.drag(find.byType(ListView), const Offset(0, 250));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.ensureVisible(quote.first);
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(quote.first);
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 80));
+    }
+    expect(find.text('Morning all. The gate code changes Friday.'), findsWidgets);
+    expect(find.text('That message is no longer on this device.'), findsNothing);
+    await _shot(tester, '27-quote-jump');
 
     // Board 26: the chat list, with a muted group and a draft; board 30: search.
     await tester.runAsync(() async {

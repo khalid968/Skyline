@@ -98,6 +98,11 @@ class Messenger extends ChangeNotifier {
     ..sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
   Contact? contact(String userId) => _contacts[userId];
   Group? group(String groupId) => _groups[groupId];
+
+  /// A person's display name, if we know them (a contact or a fellow group member).
+  String? nameOf(String userId) =>
+      _contacts[userId]?.displayName ??
+      [for (final g in _groups.values) g.member(userId)?.displayName].whereType<String>().firstOrNull;
   List<Group> get groups => _groups.values.toList();
   bool isTyping(String peer) => (_typingUntil[peer]?.isAfter(DateTime.now())) ?? false;
 
@@ -1119,13 +1124,22 @@ class Messenger extends ChangeNotifier {
     for (final raw in (payload['envelopes'] as List<Object?>? ?? const [])) {
       final e = raw! as Map<String, Object?>;
       if (e['userId'] != me || e['deviceNumber'] != session.deviceNumber) continue;
-      // Only whisper messages on an existing session: a signal never sets one up.
-      if (e['kind'] != 'whisper') return;
+      // A signal never SETS UP a session. It may still arrive as a prekey
+      // message on a session we already have (the other device started it
+      // and we have not written to it directly yet): accepted then, with the
+      // directory's identity check as for any message.
+      final prekey = e['kind'] == 'prekey';
+      if (e['kind'] != 'whisper' && !prekey) return;
+      if (!await crypto.hasSession(userId: from, deviceNumber: device)) return;
       try {
         final plain = await crypto.decrypt(
           userId: from,
           deviceNumber: device,
-          envelope: Envelope(kind: EnvelopeKind.whisper, body: base64.decode(e['body']! as String)),
+          envelope: Envelope(
+            kind: prekey ? EnvelopeKind.preKey : EnvelopeKind.whisper,
+            body: base64.decode(e['body']! as String),
+          ),
+          directoryIdentityKey: prekey ? await _directoryIdentity(from, device) : null,
         );
         final c = jsonDecode(utf8.decode(plain)) as Map<String, Object?>;
         final groupId = payload['groupId'] as String?;
