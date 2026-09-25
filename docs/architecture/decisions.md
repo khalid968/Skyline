@@ -6,6 +6,46 @@ working around it.
 
 ---
 
+## 2026-09-25 (night) — Several files, view once, media gallery (boards 23-25 approved)
+
+**The owner approved** boards 23-25 ("looks great"). How they are built:
+
+- **Several files at once.**
+  - Up to 10 per send. Photos and videos become **one message** (an album) that claims all its files in
+    the same send transaction; the server already allowed 10 `attachmentIds`.
+  - Documents and voice messages go as their own messages. The caption rides on the album, or on the
+    first document if there is no album.
+  - Each file still has its own random key.
+  - Previews travel inside the encrypted message, and one device's copy is limited to 48 KB. So an album
+    carries small previews (under 6 KB each) for the four tiles it shows, and none for the rest; those
+    appear once downloaded.
+- **View once.**
+  - For a single photo or video. The message carries `once: true` and **no preview at all**: a preview
+    would outlive the one viewing.
+  - The sender's device forgets the key and deletes its copy as soon as the message is out. The sender's
+    other devices never keep a key either.
+  - The recipient's device downloads it (photos automatically, so it opens offline). When the viewer
+    closes, the device forgets the key and deletes the file.
+  - It then sends an encrypted `opened` notice to the sender and to its own other devices, which delete
+    their copies too.
+  - **The `opened` notice goes even with read receipts off**, because it is the only way the recipient's
+    other devices learn to delete it. So the sender sees "Opened" whatever the receipt setting. If the
+    notice cannot be sent (offline), it is queued and sent on reconnect.
+  - An `opened` notice is accepted only for a message in that same chat.
+  - While a view-once item is on screen: Android sets FLAG_SECURE; Windows excludes the window from
+    capture (`SetWindowDisplayAffinity`). iPhones cannot block screenshots, and the viewer says so.
+  - **The server copy is not deleted early.** It stays, encrypted, until the 30-day sweep. Once every
+    device has forgotten the key it cannot be decrypted by anyone. Deleting it early would need a new
+    "delete my upload" route, which is a possible follow-up.
+- **Media gallery.**
+  - `/chat/:peer/media`, from a new Media button in the chat header.
+  - It lists only what is on this device and still in the chat. Disappearing messages, view-once
+    messages, expired files and failed sends never appear.
+- **Found and fixed while building:** when an album's photos finished downloading together, their updates
+  of the one stored message could overwrite each other. Updates to a message are now serialised.
+
+---
+
 ## 2026-09-25 (later) — Media preparation before sending (within approved boards 20-22)
 
 Implementation choices, not owner decisions. They fill in what boards 21 and 22 already show.

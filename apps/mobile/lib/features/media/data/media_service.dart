@@ -302,6 +302,10 @@ class MediaService extends ChangeNotifier {
 
   // ------------------------------------------------------------ preparing
 
+  /// Re-encodes a base64 JPEG preview to at most [maxBytes] (album tiles).
+  static Future<String?> shrinkPreview(String b64, int maxBytes) =>
+      compute(_shrinkTo, (b64, maxBytes));
+
   /// Makes [source] ready to send (see [PreparedFile]). Anything that fails
   /// here falls back to sending the original as it is.
   Future<PreparedFile> prepare(String messageId, File source, MediaKind kind, String name) async {
@@ -448,6 +452,25 @@ String? _previewOf(img.Image image) {
       width: image.width,
       height: image.height,
     );
+  } on Object {
+    return null;
+  }
+}
+
+String? _shrinkTo((String, int) args) {
+  final (b64, maxBytes) = args;
+  try {
+    final image = img.decodeJpg(base64.decode(b64));
+    if (image == null) return null;
+    var small = image.width > 200 || image.height > 200
+        ? (image.width >= image.height ? img.copyResize(image, width: 200) : img.copyResize(image, height: 200))
+        : image;
+    for (var quality = 55; quality >= 15; quality -= 10) {
+      final jpg = img.encodeJpg(small, quality: quality);
+      if (jpg.length <= maxBytes) return base64.encode(jpg);
+      if (quality == 25) small = img.copyResize(small, width: (small.width * 0.7).round());
+    }
+    return null;
   } on Object {
     return null;
   }

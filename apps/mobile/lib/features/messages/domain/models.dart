@@ -24,8 +24,11 @@ class LocalMessage {
     this.timerSeconds,
     this.readAt,
     this.expiresAt,
-    this.media,
-  });
+    MediaInfo? media,
+    List<MediaInfo>? items,
+    this.viewOnce = false,
+    this.openedAt,
+  }) : items = items ?? [if (media != null) media];
 
   final String id;
   final String peerUserId;
@@ -40,10 +43,31 @@ class LocalMessage {
   final int? timerSeconds;
   DateTime? readAt;
   DateTime? expiresAt;
-  final MediaInfo? media;
+  /// The files this message carries: one, or an album of up to 10 photos
+  /// and videos (board 23).
+  final List<MediaInfo> items;
 
+  /// View once (board 24): opened one time, then deleted everywhere.
+  final bool viewOnce;
+
+  /// When a view-once message was opened (by them, if we sent it).
+  DateTime? openedAt;
+
+  MediaInfo? get media => items.isEmpty ? null : items.first;
   bool get isNotice => kind == MessageKind.notice;
-  bool get isMedia => kind == MessageKind.media && media != null;
+  bool get isMedia => kind == MessageKind.media && items.isNotEmpty;
+  bool get isAlbum => items.length > 1;
+
+  /// "Photo", "3 photos", "2 photos and videos", "Photo · view once".
+  String get mediaLabel {
+    if (items.isEmpty) return '';
+    if (items.length == 1) return viewOnce ? '${items.first.label} · view once' : items.first.label;
+    final photos = items.where((i) => i.kind == MediaKind.photo).length;
+    final videos = items.where((i) => i.kind == MediaKind.video).length;
+    if (videos == 0) return '$photos photos';
+    if (photos == 0) return '$videos videos';
+    return '${items.length} photos and videos';
+  }
 
   Map<String, Object?> toJson() => {
         'id': id,
@@ -59,7 +83,9 @@ class LocalMessage {
         'timer': timerSeconds,
         'readAt': readAt?.millisecondsSinceEpoch,
         'expiresAt': expiresAt?.millisecondsSinceEpoch,
-        if (media != null) 'media': media!.toJson(),
+        if (items.isNotEmpty) 'items': [for (final i in items) i.toJson()],
+        if (viewOnce) 'viewOnce': true,
+        'openedAt': openedAt?.millisecondsSinceEpoch,
       };
 
   static LocalMessage fromJson(Map<String, Object?> j) => LocalMessage(
@@ -76,7 +102,12 @@ class LocalMessage {
         timerSeconds: j['timer'] as int?,
         readAt: _time(j['readAt']),
         expiresAt: _time(j['expiresAt']),
-        media: j['media'] == null ? null : MediaInfo.fromJson(j['media']! as Map<String, Object?>),
+        items: [
+          for (final raw in (j['items'] as List<Object?>? ?? [if (j['media'] != null) j['media']]))
+            MediaInfo.fromJson(raw! as Map<String, Object?>),
+        ],
+        viewOnce: j['viewOnce'] == true,
+        openedAt: _time(j['openedAt']),
       );
 }
 
@@ -199,6 +230,17 @@ class MediaInfo {
       ..localFile = j['localFile'] as String?
       ..state = MediaState.values.byName((j['state'] as String?) ?? 'remote');
   }
+
+  /// After a view-once message is opened (or sent), nothing that could
+  /// decrypt it remains: no key, no local file, no preview.
+  void burn() {
+    key = '';
+    nonce = '';
+    thumb = null;
+    localFile = null;
+  }
+
+  bool get burned => key.isEmpty;
 
   /// A one-line description, for the chat list and message details.
   String get label => switch (kind) {

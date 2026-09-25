@@ -53,31 +53,38 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     await messenger.sendText(widget.peer, text);
   }
 
-  /// Board 20: attach, preview with a caption, send.
+  /// Boards 20, 23 and 24: attach one or several files, preview with a
+  /// caption (and view once), send.
   Future<void> _attach(String name) async {
     final picked = await showAttachSheet(context);
     if (picked == null || !mounted) return;
-    if (await picked.file.length() > MediaService.maxBytes) {
-      await picked.discard();
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Files can be up to 2 GB.')));
+    final kept = <PickedMedia>[];
+    var tooBig = false;
+    for (final p in picked) {
+      if (await p.file.length() > MediaService.maxBytes) {
+        tooBig = true;
+        await p.discard();
+      } else {
+        kept.add(p);
+      }
+    }
+    if (tooBig && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Files can be up to 2 GB; larger ones were left out.')));
+    }
+    if (kept.isEmpty || !mounted) return;
+    final r = await showMediaPreview(context, kept, peerName: name);
+    if (r == null) {
+      for (final p in kept) {
+        await p.discard();
       }
       return;
     }
-    if (!mounted) return;
-    final caption = await showMediaPreview(context, picked, peerName: name);
-    if (caption == null) {
-      await picked.discard();
-      return;
-    }
-    unawaited(messenger.sendMedia(
+    unawaited(messenger.sendFiles(
       widget.peer,
-      picked.file,
-      picked.kind,
-      caption: caption,
-      name: picked.name,
-      deleteSource: picked.temporary,
+      [for (final p in r.items) OutgoingFile(p.file, p.kind, name: p.name, temporary: p.temporary)],
+      caption: r.caption,
+      viewOnce: r.viewOnce,
     ));
   }
 
@@ -218,7 +225,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
             Text('Message details',
                 style: TextStyle(fontFamily: SkyFonts.display, fontSize: 18, fontWeight: FontWeight.w700, color: t.textPrimary)),
             const SizedBox(height: 4),
-            Text(m.isMedia ? (m.text.isEmpty ? m.media!.label : '${m.media!.label} · “${m.text}”') : '“${m.text}”',
+            Text(m.isMedia ? (m.text.isEmpty ? m.mediaLabel : '${m.mediaLabel} · “${m.text}”') : '“${m.text}”',
                 maxLines: 3, overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 13.5, height: 1.45, color: t.textSecondary)),
             const SizedBox(height: 14),
@@ -314,6 +321,11 @@ class _Header extends StatelessWidget {
               ]),
             ]),
           ),
+        ),
+        IconButton(
+          tooltip: 'Media',
+          onPressed: () => context.push('/chat/$peer/media'),
+          icon: SkyIcon(SkyIcons.photo, size: 21, color: t.textSecondary),
         ),
         if (onTimer != null)
           IconButton(

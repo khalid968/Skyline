@@ -10,6 +10,7 @@ import 'package:gal/gal.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../../core/platform/screen_protection.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../shared/widgets/sky_icon.dart';
 import '../../messages/data/messenger.dart';
@@ -17,8 +18,14 @@ import '../../messages/domain/models.dart';
 import '../data/media_service.dart';
 import 'media_format.dart';
 
-/// Board 21: a photo, video, document or voice message in a chat, with its
-/// upload or download progress. [meta] is the time-and-tick row.
+String _key(LocalMessage m, int i) => Messenger.transferKey(m.id, i);
+
+String _clock(DateTime d) =>
+    '${d.toLocal().hour.toString().padLeft(2, '0')}:${d.toLocal().minute.toString().padLeft(2, '0')}';
+
+/// Boards 21, 23 and 24: a photo, video, album, document, voice message or
+/// view-once message in a chat, with upload or download progress. [meta] is
+/// the time-and-tick row.
 class MediaBubble extends StatelessWidget {
   const MediaBubble({super.key, required this.m, required this.messenger, required this.meta, this.onDetails});
 
@@ -27,16 +34,18 @@ class MediaBubble extends StatelessWidget {
   final Widget meta;
   final VoidCallback? onDetails;
 
-  MediaInfo get info => m.media!;
-
   @override
   Widget build(BuildContext context) {
     final t = context.sky;
     return ListenableBuilder(
       listenable: messenger.media,
       builder: (context, _) {
-        final transfer = messenger.media.transfer(m.id);
-        _autoFetch();
+        for (var i = 0; i < m.items.length; i++) {
+          _autoFetch(i);
+        }
+        if (m.viewOnce) return _align(_ViewOnceBubble(m: m, messenger: messenger));
+        final info = m.items.first;
+        if (!m.isAlbum && info.state == MediaState.expired) return _align(_Expired(info: info));
         final failed = m.status == MessageStatus.failed;
         final bg = m.fromMe ? (failed ? const Color(0xFF5A1E26) : t.bubbleOutgoing) : t.bubbleIncoming;
         final radius = BorderRadius.only(
@@ -45,15 +54,17 @@ class MediaBubble extends StatelessWidget {
           bottomLeft: Radius.circular(m.fromMe ? 18 : 5),
           bottomRight: Radius.circular(m.fromMe ? 5 : 18),
         );
-        if (info.state == MediaState.expired) return _align(_Expired(info: info));
-        final body = switch (info.kind) {
-          MediaKind.photo || MediaKind.video => _visual(context, transfer),
-          MediaKind.file => _file(context, transfer),
-          MediaKind.voice => _VoiceRow(m: m, messenger: messenger, transfer: transfer),
-        };
+        final visual = info.kind == MediaKind.photo || info.kind == MediaKind.video;
+        final body = m.isAlbum
+            ? _Album(m: m, messenger: messenger, onDetails: onDetails)
+            : switch (info.kind) {
+                MediaKind.photo || MediaKind.video => _Visual(m: m, index: 0, messenger: messenger, onDetails: onDetails),
+                MediaKind.file => _FileRow(m: m, index: 0, messenger: messenger, onDetails: onDetails),
+                MediaKind.voice => VoiceRow(m: m, messenger: messenger),
+              };
         final fg = m.fromMe ? Colors.white : t.textPrimary;
         return _align(Container(
-          width: info.kind == MediaKind.photo || info.kind == MediaKind.video ? 240 : 260,
+          width: m.isAlbum ? 260 : (visual ? 240 : 260),
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: bg,
@@ -69,7 +80,7 @@ class MediaBubble extends StatelessWidget {
               ),
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
-              child: Align(alignment: Alignment.centerRight, child: meta),
+              child: Align(alignment: Alignment.centerRight, child: _albumStatus(fg) ?? meta),
             ),
             if (failed)
               const Padding(
@@ -83,6 +94,14 @@ class MediaBubble extends StatelessWidget {
     );
   }
 
+  /// Board 23: "Encrypting and sending · 2 of 4" while an album goes out.
+  Widget? _albumStatus(Color fg) {
+    if (!m.isAlbum || !m.fromMe || m.status != MessageStatus.sending) return null;
+    final done = m.items.where((i) => i.state == MediaState.ready).length;
+    return Text('Encrypting and sending · ${done + 1 > m.items.length ? m.items.length : done + 1} of ${m.items.length}',
+        style: const TextStyle(fontSize: 11, color: Color(0xFFDDE5FC)));
+  }
+
   Widget _align(Widget child) => Align(
         alignment: m.fromMe ? Alignment.centerRight : Alignment.centerLeft,
         child: GestureDetector(onTap: m.status == MessageStatus.failed ? onDetails : null, child: child),
@@ -92,100 +111,143 @@ class MediaBubble extends StatelessWidget {
   // is retried at most every 30 seconds, not on every repaint.
   static final Map<String, DateTime> _tried = {};
 
-  void _autoFetch() {
-    if (info.state != MediaState.remote) return;
+  void _autoFetch(int i) {
+    final info = m.items[i];
+    if (info.state != MediaState.remote || info.burned) return;
     if (info.kind != MediaKind.photo && info.kind != MediaKind.voice) return;
-    if (messenger.media.downloading(m.id)) return;
-    final last = _tried[m.id];
+    final k = _key(m, i);
+    if (messenger.media.downloading(k)) return;
+    final last = _tried[k];
     if (last != null && DateTime.now().difference(last) < const Duration(seconds: 30)) return;
-    _tried[m.id] = DateTime.now();
-    scheduleMicrotask(() => messenger.fetchMedia(m.id));
+    _tried[k] = DateTime.now();
+    scheduleMicrotask(() => messenger.fetchMedia(m.id, i));
   }
+}
 
-  // ------------------------------------------------------ photo and video
+/// Opens item [index] of [m]: the viewer for a photo, the player for a video,
+/// another app for a document. Not on this device yet: fetches it. Used by
+/// the chat and by the media gallery (board 25).
+Future<void> openMediaItem(BuildContext context, Messenger messenger, LocalMessage m, int index) async {
+  final info = m.items[index];
+  final ready = info.state == MediaState.ready && messenger.media.hasLocal(info);
+  if (!ready) {
+    if (info.state == MediaState.remote) unawaited(messenger.fetchMedia(m.id, index));
+    return;
+  }
+  final from = m.fromMe ? 'You' : (messenger.contact(m.peerUserId)?.displayName ?? '');
+  switch (info.kind) {
+    case MediaKind.photo:
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => PhotoViewerScreen(m: m, index: index, media: messenger.media, from: from),
+      ));
+    case MediaKind.video:
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => VideoScreen(info: info, media: messenger.media),
+      ));
+    case MediaKind.file:
+      await _openFile(context, messenger.media, info);
+    case MediaKind.voice:
+      break; // played in place
+  }
+}
 
-  Widget _visual(BuildContext context, Transfer? transfer) {
+/// Hands a decrypted copy to the app that opens this kind of file. That app
+/// then holds plaintext, which is why documents are opened only on request.
+Future<void> _openFile(BuildContext context, MediaService media, MediaInfo info) async {
+  final snack = ScaffoldMessenger.of(context);
+  try {
+    final plain = await media.plainCopy(info);
+    final r = await OpenFilex.open(plain.path, type: info.mime);
+    if (r.type != ResultType.done) {
+      snack.showSnackBar(const SnackBar(content: Text('No app on this device can open this file.')));
+      await media.discard(plain);
+    }
+    // Otherwise the copy is swept on the next start (the other app may still
+    // be reading it).
+  } on Object {
+    snack.showSnackBar(const SnackBar(content: Text('This file could not be opened.')));
+  }
+}
+
+// ------------------------------------------------------- photo and video
+
+class _Visual extends StatelessWidget {
+  const _Visual({required this.m, required this.index, required this.messenger, this.onDetails, this.height});
+  final LocalMessage m;
+  final int index;
+  final Messenger messenger;
+  final VoidCallback? onDetails;
+  final double? height; // an album tile: fixed height, cropped
+
+  MediaInfo get info => m.items[index];
+
+  @override
+  Widget build(BuildContext context) {
+    final transfer = messenger.media.transfer(_key(m, index));
     final ratio = (info.width != null && info.height != null && info.height! > 0)
         ? (info.width! / info.height!).clamp(0.6, 1.9)
         : (info.kind == MediaKind.video ? 16 / 9 : 4 / 3);
     final ready = info.state == MediaState.ready && messenger.media.hasLocal(info);
-    Widget picture;
-    if (info.kind == MediaKind.photo && ready) {
-      picture = _DecryptedImage(info: info, media: messenger.media, fallback: _thumbOrGradient());
-    } else {
-      picture = _thumbOrGradient();
-    }
+    final picture = info.kind == MediaKind.photo && ready
+        ? _DecryptedImage(info: info, media: messenger.media, fallback: _thumbOrGradient(info))
+        : _thumbOrGradient(info);
+    final tile = height != null;
     final overlay = transfer != null
-        ? _progressOverlay(transfer)
-        : info.kind == MediaKind.video
-            ? (ready ? _playBadge() : (info.state == MediaState.remote ? _downloadPill() : null))
-            : null;
+        ? (tile && m.fromMe ? null : _progressOverlay(transfer, small: tile))
+        : info.state == MediaState.expired
+            ? _expiredTile()
+            : info.kind == MediaKind.video
+                ? (ready ? _playBadge() : (info.state == MediaState.remote ? _downloadPill(small: tile) : null))
+                : null;
+    final stack = Stack(fit: StackFit.expand, children: [
+      picture,
+      if (overlay != null) overlay,
+      if (info.kind == MediaKind.video && info.durationMs != null)
+        Positioned(left: 8, bottom: 8, child: _chip(formatDuration(info.durationMs))),
+    ]);
     return GestureDetector(
-      onTap: () => _openVisual(context, ready),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: AspectRatio(
-          aspectRatio: ratio.toDouble(),
-          child: Stack(fit: StackFit.expand, children: [
-            picture,
-            if (overlay != null) overlay,
-            if (info.kind == MediaKind.video && info.durationMs != null)
-              Positioned(
-                left: 8,
-                bottom: 8,
-                child: _chip(formatDuration(info.durationMs)),
+      onTap: () {
+        if (m.status == MessageStatus.failed) return onDetails?.call();
+        unawaited(openMediaItem(context, messenger, m, index));
+      },
+      child: tile
+          ? SizedBox(height: height, child: stack)
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: AspectRatio(aspectRatio: ratio.toDouble(), child: stack),
+            ),
+    );
+  }
+
+  String get _progressText {
+    final tr = messenger.media.transfer(_key(m, index))!;
+    final pct = (tr.fraction * 100).round();
+    return tr.label ??
+        (m.fromMe && info.state == MediaState.uploading ? 'Encrypting and sending · $pct%' : 'Downloading · $pct%');
+  }
+
+  Widget _progressOverlay(Transfer tr, {bool small = false}) => ColoredBox(
+        color: const Color(0x73080C16),
+        child: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(
+              width: small ? 28 : 44,
+              height: small ? 28 : 44,
+              child: CircularProgressIndicator(
+                value: tr.encrypting && tr.total <= 0 ? null : tr.fraction,
+                strokeWidth: 3,
+                color: Colors.white,
+                backgroundColor: Colors.white24,
               ),
+            ),
+            if (!small) ...[
+              const SizedBox(height: 8),
+              Text(_progressText,
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.white)),
+            ],
           ]),
         ),
-      ),
-    );
-  }
-
-  Widget _thumbOrGradient() {
-    if (info.thumb != null) {
-      try {
-        return Image.memory(base64.decode(info.thumb!), fit: BoxFit.cover, gaplessPlayback: true);
-      } on FormatException {
-        // fall through
-      }
-    }
-    return const DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1F3A4F), Color(0xFF3D6E86)],
-        ),
-      ),
-    );
-  }
-
-  Widget _progressOverlay(Transfer tr) {
-    final pct = (tr.fraction * 100).round();
-    final text = tr.label ??
-        (m.fromMe && info.state == MediaState.uploading
-            ? 'Encrypting and sending · $pct%'
-            : 'Downloading · $pct%');
-    return ColoredBox(
-      color: const Color(0x73080C16),
-      child: Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(
-            width: 44,
-            height: 44,
-            child: CircularProgressIndicator(
-              value: tr.encrypting && tr.total <= 0 ? null : tr.fraction,
-              strokeWidth: 3,
-              color: Colors.white,
-              backgroundColor: Colors.white24,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(text, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.white)),
-        ]),
-      ),
-    );
-  }
+      );
 
   Widget _playBadge() => Center(
         child: Container(
@@ -197,51 +259,215 @@ class MediaBubble extends StatelessWidget {
         ),
       );
 
-  Widget _downloadPill() => Center(
+  Widget _downloadPill({bool small = false}) => Center(
         child: Semantics(
           button: true,
           label: 'Download video, ${formatBytes(info.size)}',
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            padding: EdgeInsets.symmetric(horizontal: small ? 9 : 14, vertical: small ? 7 : 9),
             decoration: BoxDecoration(color: const Color(0xB3080C16), borderRadius: BorderRadius.circular(999)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const SkyIcon(SkyIcons.download, size: 16, color: Colors.white, stroke: 2.2),
-              const SizedBox(width: 8),
-              Text('Video · ${formatBytes(info.size)}',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+              if (!small) ...[
+                const SizedBox(width: 8),
+                Text('Video · ${formatBytes(info.size)}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+              ],
             ]),
           ),
         ),
       );
 
-  Widget _chip(String text) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(color: const Color(0x99080C16), borderRadius: BorderRadius.circular(999)),
-        child: Text(text, style: const TextStyle(fontSize: 11.5, color: Color(0xFFE3E8F2))),
+  Widget _expiredTile() => const ColoredBox(
+        color: Color(0xCC161E2F),
+        child: Center(child: SkyIcon(SkyIcons.clock, size: 20, color: Color(0xFF8E9BB4))),
       );
+}
 
-  Future<void> _openVisual(BuildContext context, bool ready) async {
-    if (m.status == MessageStatus.failed) return onDetails?.call();
-    if (!ready) {
+Widget _thumbOrGradient(MediaInfo info) {
+  if (info.thumb != null) {
+    try {
+      return Image.memory(base64.decode(info.thumb!), fit: BoxFit.cover, gaplessPlayback: true);
+    } on FormatException {
+      // fall through
+    }
+  }
+  return const DecoratedBox(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF1F3A4F), Color(0xFF3D6E86)],
+      ),
+    ),
+  );
+}
+
+Widget _chip(String text) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: const Color(0x99080C16), borderRadius: BorderRadius.circular(999)),
+      child: Text(text, style: const TextStyle(fontSize: 11.5, color: Color(0xFFE3E8F2))),
+    );
+
+/// Board 23: an album of 2 to 10 photos and videos. Four tiles at most; the
+/// fourth says how many more there are.
+class _Album extends StatelessWidget {
+  const _Album({required this.m, required this.messenger, this.onDetails});
+  final LocalMessage m;
+  final Messenger messenger;
+  final VoidCallback? onDetails;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = m.items.length;
+    Widget tile(int i, double h) => _Visual(m: m, index: i, messenger: messenger, onDetails: onDetails, height: h);
+    Widget row(List<Widget> tiles) => Row(children: [
+          for (var i = 0; i < tiles.length; i++) ...[
+            if (i > 0) const SizedBox(width: 3),
+            Expanded(child: tiles[i]),
+          ],
+        ]);
+    final more = n - 4;
+    final Widget grid = switch (n) {
+      2 => row([tile(0, 160), tile(1, 160)]),
+      3 => Column(children: [row([tile(0, 118), tile(1, 118)]), const SizedBox(height: 3), tile(2, 140)]),
+      _ => Column(children: [
+          row([tile(0, 118), tile(1, 118)]),
+          const SizedBox(height: 3),
+          row([
+            tile(2, 118),
+            Stack(fit: StackFit.passthrough, children: [
+              tile(3, 118),
+              if (more > 0)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ColoredBox(
+                      color: const Color(0x80080C16),
+                      child: Center(
+                        child: Text('+$more',
+                            style: const TextStyle(
+                                fontFamily: SkyFonts.display,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white)),
+                      ),
+                    ),
+                  ),
+                ),
+            ]),
+          ]),
+        ]),
+    };
+    return ClipRRect(borderRadius: BorderRadius.circular(14), child: grid);
+  }
+}
+
+// ------------------------------------------------------------- view once
+
+/// Board 24: a view-once photo or video. No preview, ever. The recipient
+/// opens it once; the sender sees Delivered, then Opened.
+class _ViewOnceBubble extends StatelessWidget {
+  const _ViewOnceBubble({required this.m, required this.messenger});
+  final LocalMessage m;
+  final Messenger messenger;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.sky;
+    final info = m.items.first;
+    final opened = m.openedAt != null || (!m.fromMe && info.burned);
+    final tr = messenger.media.transfer(_key(m, 0));
+    final gone = !m.fromMe && info.state == MediaState.expired;
+    final title = opened ? 'Opened' : (gone ? '${info.label} no longer available' : '${info.label} · view once');
+    final String sub;
+    if (tr != null) {
+      sub = tr.label ?? '${m.fromMe ? 'Sending' : 'Downloading'} · ${(tr.fraction * 100).round()}%';
+    } else if (m.fromMe) {
+      sub = opened
+          ? 'Opened · ${_clock(m.openedAt ?? m.sentAt)}'
+          : '${switch (m.status) {
+              MessageStatus.sending => 'Sending',
+              MessageStatus.waiting => 'Waiting to send',
+              MessageStatus.failed => 'Not sent',
+              MessageStatus.sent => 'Sent',
+              _ => 'Delivered',
+            }} · ${_clock(m.sentAt)}';
+    } else if (opened || gone) {
+      sub = _clock(m.sentAt);
+    } else {
+      sub = info.state == MediaState.ready ? 'Tap to open · ${_clock(m.sentAt)}' : 'Tap to download · ${_clock(m.sentAt)}';
+    }
+    final ring = m.fromMe ? const Color(0xFFDDE5FC) : (opened || gone ? const Color(0xFF55637D) : t.caution);
+    final bubble = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: m.fromMe ? t.bubbleOutgoing : (opened ? t.surface : t.bubbleIncoming),
+        border: !m.fromMe && opened ? Border.all(color: t.border) : null,
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(18),
+          topRight: const Radius.circular(18),
+          bottomLeft: Radius.circular(m.fromMe ? 18 : 5),
+          bottomRight: Radius.circular(m.fromMe ? 5 : 18),
+        ),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 26,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: ring, width: 2)),
+          child: Text('1', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: ring)),
+        ),
+        const SizedBox(width: 10),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Text(title,
+              style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: m.fromMe ? Colors.white : (opened ? t.textSecondary : t.textPrimary))),
+          const SizedBox(height: 2),
+          Text(sub, style: TextStyle(fontSize: 11.5, color: m.fromMe ? const Color(0xFFDDE5FC) : t.textSecondary)),
+        ]),
+      ]),
+    );
+    if (m.fromMe || opened || gone) return bubble;
+    return Semantics(
+      button: true,
+      label: 'View once ${info.label.toLowerCase()}. Opens one time.',
+      child: GestureDetector(onTap: () => _open(context, info), child: bubble),
+    );
+  }
+
+  Future<void> _open(BuildContext context, MediaInfo info) async {
+    if (info.state != MediaState.ready || !messenger.media.hasLocal(info)) {
       if (info.state == MediaState.remote) unawaited(messenger.fetchMedia(m.id));
       return;
     }
-    final name = m.fromMe ? 'You' : (messenger.contact(m.peerUserId)?.displayName ?? '');
-    if (info.kind == MediaKind.photo) {
-      await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => PhotoViewerScreen(m: m, media: messenger.media, from: name),
-      ));
-    } else {
-      await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => VideoScreen(info: info, media: messenger.media),
-      ));
-    }
+    final from = messenger.contact(m.peerUserId)?.displayName ?? '';
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => info.kind == MediaKind.video
+          ? VideoScreen(info: info, media: messenger.media, viewOnce: true, from: from)
+          : PhotoViewerScreen(m: m, index: 0, media: messenger.media, from: from, viewOnce: true),
+    ));
+    // Closed: gone from this device, and from our other devices.
+    await messenger.viewOnceOpened(m.id);
   }
+}
 
-  // ---------------------------------------------------------- documents
+// -------------------------------------------------------------- documents
 
-  Widget _file(BuildContext context, Transfer? tr) {
+class _FileRow extends StatelessWidget {
+  const _FileRow({required this.m, required this.index, required this.messenger, this.onDetails});
+  final LocalMessage m;
+  final int index;
+  final Messenger messenger;
+  final VoidCallback? onDetails;
+
+  @override
+  Widget build(BuildContext context) {
     final t = context.sky;
+    final info = m.items[index];
+    final tr = messenger.media.transfer(_key(m, index));
     final fg = m.fromMe ? Colors.white : t.textPrimary;
     final sub = m.fromMe ? const Color(0xFFDDE5FC) : t.textSecondary;
     final ready = info.state == MediaState.ready && messenger.media.hasLocal(info);
@@ -253,13 +479,14 @@ class MediaBubble extends StatelessWidget {
             ? '${formatBytes(info.size)} · $ext'
             : info.state == MediaState.remote
                 ? '${formatBytes(info.size)} · tap to download'
-                : formatBytes(info.size);
+                : info.state == MediaState.expired
+                    ? 'No longer available'
+                    : formatBytes(info.size);
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: () async {
         if (m.status == MessageStatus.failed) return onDetails?.call();
-        if (ready) return _openFile(context);
-        if (info.state == MediaState.remote) unawaited(messenger.fetchMedia(m.id));
+        await openMediaItem(context, messenger, m, index);
       },
       child: Padding(
         padding: const EdgeInsets.fromLTRB(9, 7, 9, 3),
@@ -290,7 +517,7 @@ class MediaBubble extends StatelessWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(999),
                   child: LinearProgressIndicator(
-                    value: tr.encrypting ? null : tr.fraction,
+                    value: tr.encrypting && tr.total <= 0 ? null : tr.fraction,
                     minHeight: 4,
                     color: m.fromMe ? Colors.white : t.accentText,
                     backgroundColor: m.fromMe ? const Color(0x33FFFFFF) : const Color(0xFF2A3550),
@@ -304,24 +531,6 @@ class MediaBubble extends StatelessWidget {
         ]),
       ),
     );
-  }
-
-  /// Hands a decrypted copy to the app that opens this kind of file. That
-  /// app then holds plaintext, which is why documents are opened on request.
-  Future<void> _openFile(BuildContext context) async {
-    final messengerState = ScaffoldMessenger.of(context);
-    try {
-      final plain = await messenger.media.plainCopy(info);
-      final r = await OpenFilex.open(plain.path, type: info.mime);
-      if (r.type != ResultType.done) {
-        messengerState.showSnackBar(const SnackBar(content: Text('No app on this device can open this file.')));
-        await messenger.media.discard(plain);
-      }
-      // Otherwise the copy is swept on the next start (the other app may
-      // still be reading it).
-    } on Object {
-      messengerState.showSnackBar(const SnackBar(content: Text('This file could not be opened.')));
-    }
   }
 }
 
@@ -356,6 +565,18 @@ class _DecryptedImageState extends State<_DecryptedImage> {
           : widget.fallback,
     );
   }
+}
+
+/// A photo, decrypted into memory, for the gallery grid (board 25).
+class MediaThumbnail extends StatelessWidget {
+  const MediaThumbnail({super.key, required this.info, required this.media});
+  final MediaInfo info;
+  final MediaService media;
+
+  @override
+  Widget build(BuildContext context) => info.kind == MediaKind.photo && info.state == MediaState.ready && media.hasLocal(info)
+      ? _DecryptedImage(info: info, media: media, fallback: _thumbOrGradient(info))
+      : _thumbOrGradient(info);
 }
 
 class _Expired extends StatelessWidget {
@@ -394,24 +615,26 @@ class _Expired extends StatelessWidget {
 
 // ------------------------------------------------------------------ voice
 
-class _VoiceRow extends StatefulWidget {
-  const _VoiceRow({required this.m, required this.messenger, required this.transfer});
+/// A voice message: play/pause, the loudness outline, the length. Used in a
+/// chat bubble and in the gallery (board 25, [onSurface] true).
+class VoiceRow extends StatefulWidget {
+  const VoiceRow({super.key, required this.m, required this.messenger, this.onSurface = false});
   final LocalMessage m;
   final Messenger messenger;
-  final Transfer? transfer;
+  final bool onSurface;
 
   @override
-  State<_VoiceRow> createState() => _VoiceRowState();
+  State<VoiceRow> createState() => _VoiceRowState();
 }
 
-class _VoiceRowState extends State<_VoiceRow> {
+class _VoiceRowState extends State<VoiceRow> {
   AudioPlayer? _player;
   File? _plain;
   double _position = 0; // 0..1
   bool _playing = false;
   StreamSubscription<Duration>? _posSub;
 
-  MediaInfo get info => widget.m.media!;
+  MediaInfo get info => widget.m.items.first;
 
   @override
   void dispose() {
@@ -469,13 +692,15 @@ class _VoiceRowState extends State<_VoiceRow> {
 
   @override
   Widget build(BuildContext context) {
-    final fromMe = widget.m.fromMe;
     final t = context.sky;
-    final bars = info.wave.isNotEmpty ? info.wave : const [8, 14, 20, 12, 22, 26, 16, 10, 18, 24, 14, 8, 12, 20, 26, 18, 10, 14, 22, 16, 8, 12, 18, 24];
+    final light = widget.m.fromMe && !widget.onSurface; // on the blue bubble
+    final bars = info.wave.isNotEmpty
+        ? info.wave
+        : const [8, 14, 20, 12, 22, 26, 16, 10, 18, 24, 14, 8, 12, 20, 26, 18, 10, 14, 22, 16, 8, 12, 18, 24];
     final played = (bars.length * _position).round();
-    final on = fromMe ? Colors.white : t.accentText;
-    final off = fromMe ? Colors.white54 : const Color(0xFF45526E);
-    final busy = widget.transfer != null;
+    final on = light ? Colors.white : t.accentText;
+    final off = light ? Colors.white54 : const Color(0xFF45526E);
+    final transfer = widget.messenger.media.transfer(_key(widget.m, 0));
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
       child: Row(children: [
@@ -484,26 +709,26 @@ class _VoiceRowState extends State<_VoiceRow> {
           label: '${_playing ? 'Pause' : 'Play'} voice message, ${formatDuration(info.durationMs)}',
           child: InkWell(
             customBorder: const CircleBorder(),
-            onTap: busy ? null : _toggle,
+            onTap: transfer != null ? null : _toggle,
             child: Container(
               width: 36,
               height: 36,
               alignment: Alignment.center,
-              decoration: BoxDecoration(color: fromMe ? Colors.white : t.accentFill, shape: BoxShape.circle),
-              child: busy
+              decoration: BoxDecoration(color: light ? Colors.white : t.accentFill, shape: BoxShape.circle),
+              child: transfer != null
                   ? SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.4,
-                        value: widget.transfer!.encrypting ? null : widget.transfer!.fraction,
-                        color: fromMe ? const Color(0xFF2A4FB8) : Colors.white,
+                        value: transfer.encrypting && transfer.total <= 0 ? null : transfer.fraction,
+                        color: light ? const Color(0xFF2A4FB8) : Colors.white,
                       ),
                     )
                   : SkyIcon(
                       _playing ? SkyIcons.pause : SkyIcons.play,
                       size: 14,
-                      color: fromMe ? const Color(0xFF2A4FB8) : Colors.white,
+                      color: light ? const Color(0xFF2A4FB8) : Colors.white,
                       stroke: 2.6,
                       filled: !_playing,
                     ),
@@ -533,7 +758,7 @@ class _VoiceRowState extends State<_VoiceRow> {
         ),
         const SizedBox(width: 8),
         Text(formatDuration(info.durationMs),
-            style: TextStyle(fontSize: 11, color: fromMe ? const Color(0xFFDDE5FC) : t.textSecondary)),
+            style: TextStyle(fontSize: 11, color: light ? const Color(0xFFDDE5FC) : t.textSecondary)),
       ]),
     );
   }
@@ -541,19 +766,54 @@ class _VoiceRowState extends State<_VoiceRow> {
 
 // ----------------------------------------------------------------- viewer
 
-/// Board 22: the photo viewer. Decrypted only while shown; saving a normal,
-/// unencrypted copy asks first.
-class PhotoViewerScreen extends StatelessWidget {
-  const PhotoViewerScreen({super.key, required this.m, required this.media, required this.from});
+/// Board 22 (and 24 in view-once mode): the photo viewer. Decrypted only
+/// while shown. Saving a normal, unencrypted copy asks first; a view-once
+/// photo cannot be saved, and the screen is kept out of screenshots where
+/// the device allows it.
+class PhotoViewerScreen extends StatefulWidget {
+  const PhotoViewerScreen({
+    super.key,
+    required this.m,
+    required this.media,
+    required this.from,
+    this.index = 0,
+    this.viewOnce = false,
+  });
   final LocalMessage m;
+  final int index;
   final MediaService media;
   final String from;
+  final bool viewOnce;
+
+  @override
+  State<PhotoViewerScreen> createState() => _PhotoViewerScreenState();
+}
+
+class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
+  late final Future<Uint8List> _bytes = widget.media.bytes(widget.m.items[widget.index]);
+  bool? _protected;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.viewOnce) {
+      ScreenProtection.protect(true).then((ok) {
+        if (mounted) setState(() => _protected = ok);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    if (widget.viewOnce) unawaited(ScreenProtection.protect(false));
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final t = context.sky;
+    final m = widget.m;
     final when = m.sentAt.toLocal();
-    final time = '${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')}';
     return Scaffold(
       backgroundColor: const Color(0xFF05070C),
       body: SafeArea(
@@ -568,26 +828,37 @@ class PhotoViewerScreen extends StatelessWidget {
               ),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(from, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: t.textPrimary)),
-                  Text(_day(when) + time, style: TextStyle(fontSize: 12, color: t.textSecondary)),
+                  Text(widget.from,
+                      style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: t.textPrimary)),
+                  Text(_day(when) + _clock(when), style: TextStyle(fontSize: 12, color: t.textSecondary)),
                 ]),
               ),
-              IconButton(
-                tooltip: 'Save to this device',
-                onPressed: () => _save(context),
-                icon: const SkyIcon(SkyIcons.download, size: 20, color: Color(0xFFE3E8F2), stroke: 2),
-              ),
+              if (widget.viewOnce)
+                Container(
+                  margin: const EdgeInsets.only(right: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: t.caution),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text('View once', style: TextStyle(fontSize: 12, color: t.caution)),
+                )
+              else
+                IconButton(
+                  tooltip: 'Save to this device',
+                  onPressed: () => _save(context),
+                  icon: const SkyIcon(SkyIcons.download, size: 20, color: Color(0xFFE3E8F2), stroke: 2),
+                ),
             ]),
           ),
           Expanded(
             child: FutureBuilder<Uint8List>(
-              future: media.bytes(m.media!),
+              future: _bytes,
               builder: (context, snap) => snap.hasData
                   ? InteractiveViewer(maxScale: 6, child: Center(child: Image.memory(snap.data!)))
                   : snap.hasError
                       ? Center(
-                          child: Text('This photo could not be opened.',
-                              style: TextStyle(color: t.textSecondary)))
+                          child: Text('This photo could not be opened.', style: TextStyle(color: t.textSecondary)))
                       : const Center(child: CircularProgressIndicator()),
             ),
           ),
@@ -599,8 +870,11 @@ class PhotoViewerScreen extends StatelessWidget {
                 const SizedBox(height: 10),
               ],
               Text(
-                'Decrypted only while you look at it. “Save to this device” puts a normal, unencrypted copy '
-                'on this device; Skyline asks first.',
+                widget.viewOnce
+                    ? 'No save button, no forwarding. When you close this, it is deleted from this device and your '
+                        'other devices.${_protected == false ? ' This device cannot block screenshots.' : ''}'
+                    : 'Decrypted only while you look at it. “Save to this device” puts a normal, unencrypted copy '
+                        'on this device; Skyline asks first.',
                 style: TextStyle(fontSize: 12, height: 1.5, color: t.textSecondary),
               ),
             ]),
@@ -619,6 +893,7 @@ class PhotoViewerScreen extends StatelessWidget {
   Future<void> _save(BuildContext context) async {
     final t = context.sky;
     final snack = ScaffoldMessenger.of(context);
+    final info = widget.m.items[widget.index];
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -637,18 +912,18 @@ class PhotoViewerScreen extends StatelessWidget {
     );
     if (ok != true) return;
     try {
-      final bytes = await media.bytes(m.media!);
+      final bytes = await widget.media.bytes(info);
       if (Platform.isAndroid || Platform.isIOS) {
         // Into the gallery (board 22). The OS asks for permission the first time.
         if (!await Gal.hasAccess() && !await Gal.requestAccess()) {
           snack.showSnackBar(const SnackBar(content: Text('Skyline was not allowed to add to your photos.')));
           return;
         }
-        await Gal.putImageBytes(bytes, name: MediaService.safeName(m.media!.name));
+        await Gal.putImageBytes(bytes, name: MediaService.safeName(info.name));
         snack.showSnackBar(const SnackBar(content: Text('Saved to your photos.')));
         return;
       }
-      final path = await FilePicker.saveFile(fileName: MediaService.safeName(m.media!.name), bytes: bytes);
+      final path = await FilePicker.saveFile(fileName: MediaService.safeName(info.name), bytes: bytes);
       if (path != null && Platform.isWindows) await File(path).writeAsBytes(bytes);
       if (path != null) snack.showSnackBar(const SnackBar(content: Text('Saved.')));
     } on Object {
@@ -657,11 +932,15 @@ class PhotoViewerScreen extends StatelessWidget {
   }
 }
 
-/// Plays a video from a short-lived decrypted copy, deleted on close.
+/// Plays a video from a short-lived decrypted copy, deleted on close. In
+/// view-once mode (board 24) the screen is kept out of screenshots where the
+/// device allows it.
 class VideoScreen extends StatefulWidget {
-  const VideoScreen({super.key, required this.info, required this.media});
+  const VideoScreen({super.key, required this.info, required this.media, this.viewOnce = false, this.from = ''});
   final MediaInfo info;
   final MediaService media;
+  final bool viewOnce;
+  final String from;
 
   @override
   State<VideoScreen> createState() => _VideoScreenState();
@@ -671,10 +950,16 @@ class _VideoScreenState extends State<VideoScreen> {
   File? _plain;
   VideoPlayerController? _video;
   Object? _error;
+  bool? _protected;
 
   @override
   void initState() {
     super.initState();
+    if (widget.viewOnce) {
+      ScreenProtection.protect(true).then((ok) {
+        if (mounted) setState(() => _protected = ok);
+      });
+    }
     unawaited(_open());
   }
 
@@ -703,6 +988,7 @@ class _VideoScreenState extends State<VideoScreen> {
       await c?.dispose();
       if (f != null) await widget.media.discard(f);
     }());
+    if (widget.viewOnce) unawaited(ScreenProtection.protect(false));
     super.dispose();
   }
 
@@ -727,18 +1013,45 @@ class _VideoScreenState extends State<VideoScreen> {
           Positioned(
             left: 4,
             top: 8,
-            child: IconButton(
-              tooltip: 'Close',
-              onPressed: () => Navigator.pop(context),
-              icon: const SkyIcon(SkyIcons.close, size: 20, color: Color(0xFFE3E8F2), stroke: 2.2),
-            ),
+            right: 12,
+            child: Row(children: [
+              IconButton(
+                tooltip: 'Close',
+                onPressed: () => Navigator.pop(context),
+                icon: const SkyIcon(SkyIcons.close, size: 20, color: Color(0xFFE3E8F2), stroke: 2.2),
+              ),
+              Expanded(
+                child: Text(widget.from,
+                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: t.textPrimary)),
+              ),
+              if (widget.viewOnce)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: t.caution),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text('View once', style: TextStyle(fontSize: 12, color: t.caution)),
+                ),
+            ]),
           ),
           if (c != null)
             Positioned(
               left: 16,
               right: 16,
-              bottom: 20,
+              bottom: widget.viewOnce ? 56 : 20,
               child: VideoProgressIndicator(c, allowScrubbing: true),
+            ),
+          if (widget.viewOnce)
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 12,
+              child: Text(
+                'When you close this, it is deleted from this device and your other devices.'
+                '${_protected == false ? ' This device cannot block screenshots.' : ''}',
+                style: TextStyle(fontSize: 12, height: 1.5, color: t.textSecondary),
+              ),
             ),
         ]),
       ),

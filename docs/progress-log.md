@@ -8,6 +8,48 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-25 (night) — Several files at once, view once and the media gallery BUILT (boards 23-25)
+
+The owner approved boards 23-25 ("looks great"). Design notes are in `decisions.md`, 2026-09-25 (night).
+
+**Built (app only; the server needed no change)**
+
+- **Model:** a message now carries a list of files (`items`). Messages stored before this change still load.
+- **Sending:** `Messenger.sendFiles` handles albums and documents; `viewOnceOpened` and the `opened`
+  notice handle view-once.
+- **Screens:**
+  - picking up to 10 files, with the preview strip (✕ to remove, + to add) and the view-once toggle;
+  - album bubbles (2, 3, or 4 tiles with "+N");
+  - view-once bubbles, with the viewers in view-once mode: no save button, and screen protection on;
+  - the gallery (`media_gallery_screen.dart`, route `/chat/:peer/media`).
+- **Screen protection:** a native `skyline/screen` channel, in `MainActivity.kt` (FLAG_SECURE) and in
+  `flutter_window.cpp` (excluded from capture).
+
+**Verified**
+
+- Windows `messaging_test` (two devices, real server):
+  - a 3-photo album plus a PDF go out as two messages, and each photo decrypts correctly;
+  - a view-once photo: the sender's copy is burned at once, and the recipient gets no preview. After one
+    opening the file leaves the recipient's disk, and the sender sees Opened.
+- Windows `media_ui_test`: screenshots of the preview with several files, the view-once preview, the
+  album and view-once bubbles on both sides, and the gallery. They match boards 23-25.
+  - Known difference: the view-once ring is solid, not dashed.
+- `screen_protection_test` passes on Windows and on the Android emulator.
+- `flutter analyze` is clean, 12 unit tests pass, and the Android debug APK builds.
+- **Found and fixed:** album downloads finishing together could overwrite each other's progress. Updates to
+  one message are now serialised.
+
+**Not done**
+
+- The server copy of a view-once file is not deleted early. It is useless without the key, and goes at 30
+  days.
+- Not tried on iPhone.
+
+**Next agent should:** report to the owner. Then Phase 8b, **prototypes first**. Nothing is pushed yet;
+ask the owner before pushing.
+
+---
+
 ## 2026-09-25 (evening) — One-click dev environment; media gaps closed; boards 23-25 for approval
 
 The owner asked for:

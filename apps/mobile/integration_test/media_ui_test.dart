@@ -21,6 +21,8 @@ import 'package:integration_test/integration_test.dart';
 import 'package:skyline/core/app/app_controller.dart';
 import 'package:skyline/core/realtime/realtime_client.dart';
 import 'package:skyline/core/theme/app_theme.dart';
+import 'package:skyline/features/media/presentation/attach.dart';
+import 'package:skyline/features/media/presentation/media_gallery_screen.dart';
 import 'package:skyline/features/messages/data/messenger.dart';
 import 'package:skyline/features/messages/domain/models.dart';
 import 'package:skyline/features/messages/presentation/conversation_screen.dart';
@@ -36,7 +38,7 @@ const shots = String.fromEnvironment('SHOTS');
 
 final _frame = GlobalKey();
 
-Future<void> _show(WidgetTester tester, Messenger me, String peer) async {
+Future<void> _show(WidgetTester tester, Messenger me, String peer, {Widget? screen}) async {
   // Unmount the previous screen: the frame's GlobalKey would otherwise
   // carry its state (and its messenger) over.
   await tester.pumpWidget(const SizedBox.shrink());
@@ -60,7 +62,7 @@ Future<void> _show(WidgetTester tester, Messenger me, String peer) async {
           ),
         ),
       ),
-      home: ConversationScreen(peer: peer),
+      home: screen ?? ConversationScreen(peer: peer),
     ),
   ));
   await _settle(tester);
@@ -154,11 +156,30 @@ void main() {
           wave: const [8, 14, 20, 12, 22, 26, 16, 10, 18, 24, 14, 8, 12, 20, 26, 18, 10, 14, 22, 16, 8, 12, 18, 24],
           name: 'Voice message.wav');
 
-      // Bob's photo and voice message fetch themselves; the others wait.
+      // Board 23: five photos at once, as one album.
+      final album = <OutgoingFile>[];
+      for (var n = 0; n < 5; n++) {
+        final pic = img.Image(width: 600, height: 450);
+        for (var y = 0; y < 450; y += 3) {
+          for (var x = 0; x < 600; x += 3) {
+            img.fillRect(pic, x1: x, y1: y, x2: x + 3, y2: y + 3,
+                color: img.ColorRgb8(60 + n * 35, 80 + y * 90 ~/ 450, 120 + x * 80 ~/ 600));
+          }
+        }
+        final f = File(p('visit-$n.jpg'))..writeAsBytesSync(img.encodeJpg(pic, quality: 80));
+        album.add(OutgoingFile(f, MediaKind.photo));
+      }
+      await alice.sendFiles(bobId, album, caption: 'Site visit, north side');
+
+      // Board 24: a view-once photo.
+      File(p('secret.jpg')).writeAsBytesSync(img.encodeJpg(photo, quality: 80));
+      await alice.sendMedia(bobId, File(p('secret.jpg')), MediaKind.photo, viewOnce: true);
+
+      // Bob's photos and voice message fetch themselves; the others wait.
       await eventually(() async {
         final ms = await bob.store.messages(aliceId);
-        final ready = ms.where((m) => m.isMedia && m.media!.state == MediaState.ready).length;
-        return ready >= 2 ? true : null;
+        final ready = [for (final m in ms) ...m.items].where((i) => i.state == MediaState.ready).length;
+        return ready >= 8 ? true : null;
       });
     });
 
@@ -172,6 +193,49 @@ void main() {
     await tester.tap(find.byTooltip('Attach'));
     await _settle(tester);
     await _shot(tester, '20-attach-sheet');
+
+    // Board 25: Bob's gallery.
+    await _show(tester, bob, aliceId, screen: const MediaGalleryScreen(peer: aliceId));
+    await _shot(tester, '25-gallery-media');
+    await tester.tap(find.text('Files'));
+    await _settle(tester);
+    await _shot(tester, '25-gallery-files');
+
+    // Board 23: the preview with several files picked; board 24: one photo,
+    // view once switched on.
+    late List<PickedMedia> picks;
+    await tester.runAsync(() async {
+      final dir = await Directory.systemTemp.createTemp('skyline-pick-');
+      picks = [
+        for (var n = 0; n < 4; n++)
+          PickedMedia(
+            File('${dir.path}${Platform.pathSeparator}pick-$n.jpg')
+              ..writeAsBytesSync(img.encodeJpg(img.Image(width: 300, height: 220)..clear(img.ColorRgb8(50 + n * 40, 100, 170)))),
+            MediaKind.photo,
+            'pick-$n.jpg',
+          ),
+      ];
+    });
+    await _show(tester, alice, bobId, screen: Builder(builder: (context) {
+      return Scaffold(body: Center(child: FilledButton(
+        onPressed: () => showMediaPreview(context, picks, peerName: 'Bob Example'),
+        child: const Text('open preview'),
+      )));
+    }));
+    await tester.tap(find.text('open preview'));
+    await _settle(tester);
+    await _shot(tester, '23-preview-several');
+    await _show(tester, alice, bobId, screen: Builder(builder: (context) {
+      return Scaffold(body: Center(child: FilledButton(
+        onPressed: () => showMediaPreview(context, [picks.first], peerName: 'Bob Example'),
+        child: const Text('open preview'),
+      )));
+    }));
+    await tester.tap(find.text('open preview'));
+    await _settle(tester);
+    await tester.tap(find.text('1').last); // the view-once toggle
+    await _settle(tester);
+    await _shot(tester, '24-preview-view-once');
 
     await tester.runAsync(() async {
       alice.dispose();

@@ -47,9 +47,12 @@ class DirectoryDevice {
 ///
 /// Plaintext inside every envelope is a small JSON document:
 ///   {"v":1,"type":"text","id","peer","body","sentAt","timer"}
-///   {"v":1,"type":"media","id","peer","body","sentAt","timer","media":{...}}
-///       body is the caption; media holds the file's key, nonce, hash, name,
-///       type and thumbnail (MediaInfo.toWire). The server has only the blob.
+///   {"v":1,"type":"media","id","peer","body","sentAt","timer","once","items":[{...}]}
+///       body is the caption; each item holds one file's key, nonce, hash,
+///       name, type and preview (MediaInfo.toWire); several items make an
+///       album (board 23); once marks view-once (board 24). The server has
+///       only the blobs.
+///   {"v":1,"type":"opened","peer","ids":[...]}     a view-once was opened
 ///   {"v":1,"type":"read","peer","ids":[...]}      read receipt
 ///   {"v":1,"type":"timer","id","peer","seconds","sentAt"}
 ///   {"v":1,"type":"typing","peer","on"}            (live signals only)
@@ -246,11 +249,7 @@ class Messenger extends ChangeNotifier {
     return m;
   }
 
-  /// Sends a file (boards 20-22): shown at once with its progress, encrypted
-  /// on this device, uploaded in resumable parts, then announced to every
-  /// device in one encrypted message that carries its key. [deleteSource]
-  /// removes a plaintext file we created ourselves (a recording, a camera
-  /// shot) once it is encrypted.
+  /// Sends one file (boards 20-22). See [sendFiles].
   Future<LocalMessage> sendMedia(
     String peer,
     File source,
@@ -261,107 +260,208 @@ class Messenger extends ChangeNotifier {
     int? durationMs,
     List<int> wave = const [],
     bool deleteSource = false,
+    bool viewOnce = false,
+  }) async =>
+      (await sendFiles(
+        peer,
+        [
+          OutgoingFile(source, kind,
+              name: name, mime: mime, durationMs: durationMs, wave: wave, temporary: deleteSource),
+        ],
+        caption: caption,
+        viewOnce: viewOnce,
+      ))
+          .single;
+
+  /// Sends several files at once (board 23). Photos and videos go together
+  /// as one album (up to 10) carrying the caption; documents and voice
+  /// messages each go as their own message. Every file has its own key.
+  /// [viewOnce] (board 24) applies to a single photo or video.
+  ///
+  /// Each message shows at once with its progress; files are prepared
+  /// (compressed), encrypted on this device, uploaded in resumable parts,
+  /// then announced in one encrypted message that carries their keys.
+  Future<List<LocalMessage>> sendFiles(
+    String peer,
+    List<OutgoingFile> files, {
+    String caption = '',
+    bool viewOnce = false,
   }) async {
-    final size = await source.length();
-    if (size > MediaService.maxBytes) throw ArgumentError('Files can be up to 2 GB.');
+    if (files.isEmpty) return const [];
+    if (files.length > maxFilesPerSend) throw ArgumentError('Up to $maxFilesPerSend files at a time.');
+    for (final f in files) {
+      if (await f.file.length() > MediaService.maxBytes) throw ArgumentError('Files can be up to 2 GB.');
+    }
+    final visual = [for (final f in files) if (f.kind == MediaKind.photo || f.kind == MediaKind.video) f];
+    final others = [for (final f in files) if (f.kind != MediaKind.photo && f.kind != MediaKind.video) f];
+    final once = viewOnce && visual.length == 1 && others.isEmpty;
+    final groups = <(List<OutgoingFile>, String)>[
+      if (visual.isNotEmpty) (visual, caption),
+      for (var i = 0; i < others.length; i++) ([others[i]], visual.isEmpty && i == 0 ? caption : ''),
+    ];
     final chat = await _chatForSending(peer);
-    final now = DateTime.now();
-    final fileName = name ?? source.uri.pathSegments.last;
-    final info = MediaInfo(
-      kind: kind,
-      name: fileName,
-      mime: mime ?? mimeFor(fileName, kind),
-      size: size,
-      durationMs: durationMs,
-      wave: wave,
-      state: MediaState.uploading,
-    );
-    final m = LocalMessage(
-      id: _uuid.v4(),
-      peerUserId: peer,
-      fromMe: true,
-      sentAt: now,
-      kind: MessageKind.media,
-      text: caption,
-      status: MessageStatus.sending,
-      senderDevice: session.deviceNumber,
-      timerSeconds: chat.timerSeconds,
-      expiresAt: chat.timerSeconds == null ? null : now.add(Duration(seconds: chat.timerSeconds!)),
-      media: info,
-    );
-    await store.putMessage(m);
-    await _touchChat(chat, _preview(m), now, unread: false);
+    final messages = <LocalMessage>[];
+    // All of them appear at once, in order; the work then runs one by one.
+    for (final (group, text) in groups) {
+      final now = DateTime.now();
+      final m = LocalMessage(
+        id: _uuid.v4(),
+        peerUserId: peer,
+        fromMe: true,
+        sentAt: now,
+        kind: MessageKind.media,
+        text: text,
+        status: MessageStatus.sending,
+        senderDevice: session.deviceNumber,
+        timerSeconds: chat.timerSeconds,
+        expiresAt: chat.timerSeconds == null ? null : now.add(Duration(seconds: chat.timerSeconds!)),
+        viewOnce: once,
+        items: [
+          for (final f in group)
+            MediaInfo(
+              kind: f.kind,
+              name: f.name ?? f.file.uri.pathSegments.last,
+              mime: f.mime ?? mimeFor(f.name ?? f.file.uri.pathSegments.last, f.kind),
+              size: await f.file.length(),
+              durationMs: f.durationMs,
+              wave: f.wave,
+              state: MediaState.uploading,
+            ),
+        ],
+      );
+      await store.putMessage(m);
+      await _touchChat(chat, _preview(m), now, unread: false);
+      messages.add(m);
+    }
     notifyListeners();
-    PreparedFile? prepared;
+    for (var g = 0; g < groups.length; g++) {
+      await _prepareAndSend(messages[g], groups[g].$1);
+    }
+    return messages;
+  }
+
+  static const maxFilesPerSend = 10;
+
+  Future<void> _prepareAndSend(LocalMessage m, List<OutgoingFile> files) async {
     try {
-      // Shown at once; compressing, then encrypting, happen with progress.
-      prepared = await media.prepare(m.id, source, kind, fileName);
-      info
-        ..name = prepared.name
-        ..mime = mime ?? mimeFor(prepared.name, kind)
-        ..size = await prepared.file.length()
-        ..thumb = prepared.thumb ?? info.thumb
-        ..width = prepared.width ?? info.width
-        ..height = prepared.height ?? info.height
-        ..durationMs = durationMs ?? prepared.durationMs;
-      if (info.size > MediaService.maxBytes) throw ArgumentError('Files can be up to 2 GB.');
-      await store.putMessage(m);
-      notifyListeners();
-      await media.encrypt(m.id, prepared.file, info);
-    } on Object {
-      info.state = MediaState.failed;
-      m.status = MessageStatus.failed;
-      await store.putMessage(m);
-      media.finished(m.id);
-      notifyListeners();
-      return m;
-    } finally {
-      for (final f in [
-        if (deleteSource) source,
-        if (prepared != null && prepared.temporary && prepared.file.path != source.path) prepared.file,
-      ]) {
+      for (var i = 0; i < files.length; i++) {
+        final f = files[i];
+        final info = m.items[i];
+        PreparedFile? prepared;
         try {
-          await f.delete();
-        } on FileSystemException {
-          // already gone
+          prepared = await media.prepare(transferKey(m.id, i), f.file, f.kind, info.name);
+          info
+            ..name = prepared.name
+            ..mime = f.mime ?? mimeFor(prepared.name, f.kind)
+            ..size = await prepared.file.length()
+            ..thumb = prepared.thumb ?? info.thumb
+            ..width = prepared.width ?? info.width
+            ..height = prepared.height ?? info.height
+            ..durationMs = f.durationMs ?? prepared.durationMs;
+          if (info.size > MediaService.maxBytes) throw ArgumentError('Files can be up to 2 GB.');
+          await store.putMessage(m);
+          notifyListeners();
+          await media.encrypt(transferKey(m.id, i), prepared.file, info);
+        } finally {
+          for (final gone in [
+            if (f.temporary) f.file,
+            if (prepared != null && prepared.temporary && prepared.file.path != f.file.path) prepared.file,
+          ]) {
+            try {
+              await gone.delete();
+            } on FileSystemException {
+              // already gone
+            }
+          }
         }
       }
+      await _fitPreviews(m);
+    } on Object {
+      for (final info in m.items) {
+        if (info.state == MediaState.uploading && info.key.isEmpty) info.state = MediaState.failed;
+      }
+      m.status = MessageStatus.failed;
+      await store.putMessage(m);
+      for (var i = 0; i < m.items.length; i++) {
+        media.finished(transferKey(m.id, i));
+      }
+      notifyListeners();
+      return;
     }
     await store.putMessage(m);
     await _uploadAndDeliver(m);
-    return m;
   }
 
-  /// Uploads (or resumes uploading) a message's file, then sends the message.
+  /// Progress is tracked per file: message id plus position in the album.
+  static String transferKey(String messageId, int index) => '$messageId:$index';
+
+  /// Previews travel inside the encrypted message, which has to stay small
+  /// (the server takes 48 KB per copy). A view-once message carries none at
+  /// all: a preview would outlive the one viewing. An album keeps small
+  /// previews for the four tiles it shows.
+  Future<void> _fitPreviews(LocalMessage m) async {
+    if (m.viewOnce) {
+      for (final i in m.items) {
+        i.thumb = null;
+      }
+      return;
+    }
+    if (!m.isAlbum) return;
+    for (var i = 0; i < m.items.length; i++) {
+      final item = m.items[i];
+      if (item.thumb == null) continue;
+      item.thumb = i < 4 ? await MediaService.shrinkPreview(item.thumb!, 6000) : null;
+    }
+  }
+
+  /// Uploads (or resumes uploading) a message's files, then sends the message.
   Future<void> _uploadAndDeliver(LocalMessage m) async {
-    final info = m.media!;
-    if (info.state == MediaState.uploading) {
+    for (var i = 0; i < m.items.length; i++) {
+      final info = m.items[i];
+      if (info.state != MediaState.uploading) continue;
       try {
-        await media.upload(m.id, info, onStarted: () => store.putMessage(m));
+        await media.upload(transferKey(m.id, i), info, onStarted: () => store.putMessage(m));
         info.state = MediaState.ready;
         await store.putMessage(m);
       } on Object catch (e) {
         if (e is SignedOutException) signedOut = true;
         m.status = e is ApiException && e.offline ? MessageStatus.waiting : MessageStatus.failed;
         await store.putMessage(m);
-        media.finished(m.id);
+        for (var j = 0; j < m.items.length; j++) {
+          media.finished(transferKey(m.id, j));
+        }
         notifyListeners();
         return;
+      } finally {
+        media.finished(transferKey(m.id, i));
       }
     }
-    media.finished(m.id);
     await _deliver(m, _contentFor(m));
+    // A view-once message we sent: once it is out, we cannot open it either.
+    if (m.viewOnce && m.fromMe && m.status == MessageStatus.sent) await _burn(m);
+  }
+
+  /// Forgets everything that could decrypt a view-once message on this
+  /// device: the key, the preview and the downloaded ciphertext.
+  Future<void> _burn(LocalMessage m) async {
+    for (final info in m.items) {
+      await media.delete(info);
+      info.burn();
+    }
+    await store.putMessage(m);
+    notifyListeners();
   }
 
   /// Fetches a received file's ciphertext. Photos and voice messages do this
   /// by themselves; videos and documents when tapped.
-  Future<void> fetchMedia(String messageId) async {
+  Future<void> fetchMedia(String messageId, [int index = 0]) async {
     final m = await store.message(messageId);
-    final info = m?.media;
-    if (m == null || info == null || info.state != MediaState.remote || info.attachmentId == null) return;
+    if (m == null || index >= m.items.length) return;
+    final info = m.items[index];
+    if (info.state != MediaState.remote || info.attachmentId == null || info.burned) return;
     MediaState? next;
     try {
-      await media.download(m.id, info);
+      await media.download(transferKey(m.id, index), info);
       next = MediaState.ready;
     } on MediaExpiredException {
       next = MediaState.expired;
@@ -371,17 +471,73 @@ class Messenger extends ChangeNotifier {
       // Offline or interrupted: the partial file stays and the next try resumes.
     }
     if (next != null) {
-      final fresh = await store.message(messageId);
-      if (fresh == null) {
-        await media.delete(info); // it disappeared meanwhile
-      } else {
-        fresh.media!
-          ..localFile = next == MediaState.ready ? '${info.attachmentId}.enc' : null
-          ..state = next;
-        await store.putMessage(fresh);
-      }
+      final state = next;
+      // Several files of one album can finish together: each update reads
+      // and writes the message in turn, so none is lost.
+      await _serially(messageId, () async {
+        final fresh = await store.message(messageId);
+        if (fresh == null || fresh.items.length <= index || fresh.items[index].burned) {
+          await media.delete(info); // it disappeared, or was opened elsewhere, meanwhile
+        } else {
+          fresh.items[index]
+            ..localFile = state == MediaState.ready ? '${info.attachmentId}.enc' : null
+            ..state = state;
+          await store.putMessage(fresh);
+        }
+      });
     }
     notifyListeners();
+  }
+
+  final Map<String, Future<void>> _messageLocks = {};
+
+  /// Runs [update] after any other update of the same message has finished.
+  Future<void> _serially(String messageId, Future<void> Function() update) {
+    final previous = _messageLocks[messageId] ?? Future<void>.value();
+    final next = previous.then((_) => update());
+    final settled = next.catchError((Object _) {});
+    _messageLocks[messageId] = settled;
+    unawaited(settled.whenComplete(() {
+      if (identical(_messageLocks[messageId], settled)) _messageLocks.remove(messageId);
+    }));
+    return next;
+  }
+
+  /// A view-once message was opened here and closed (board 24): it is gone
+  /// from this device, and we tell the sender and our own other devices,
+  /// which delete their copies too. This notice goes even with read receipts
+  /// off, because it is what removes the message from our other devices.
+  Future<void> viewOnceOpened(String messageId) async {
+    final m = await store.message(messageId);
+    if (m == null || !m.viewOnce || m.fromMe) return;
+    m.openedAt ??= DateTime.now();
+    await _burn(m);
+    if (!await _sendOpened(m.peerUserId, [m.id])) {
+      // Offline: queued, and sent on reconnect (see _flushOutbox).
+      final queue = [...?(await store.setting('openedOutbox') as List<Object?>?)];
+      queue.add({'peer': m.peerUserId, 'id': m.id});
+      await store.putSetting('openedOutbox', queue);
+    }
+  }
+
+  Future<bool> _sendOpened(String peer, List<String> ids) async {
+    try {
+      await _post(peer, _uuid.v4(), {'v': 1, 'type': 'opened', 'peer': peer, 'ids': ids});
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<void> _flushOpened() async {
+    final queue = (await store.setting('openedOutbox') as List<Object?>?) ?? const [];
+    if (queue.isEmpty) return;
+    final left = <Object?>[];
+    for (final raw in queue) {
+      final e = raw! as Map<String, Object?>;
+      if (!await _sendOpened(e['peer']! as String, [e['id']! as String])) left.add(e);
+    }
+    await store.putSetting('openedOutbox', left);
   }
 
   /// Sets the disappearing-message timer for a chat (board 15). The change is
@@ -416,7 +572,7 @@ class Messenger extends ChangeNotifier {
   Future<void> retry(String messageId) async {
     final m = await store.message(messageId);
     if (m == null || m.status != MessageStatus.failed) return;
-    if (m.media?.state == MediaState.failed) return; // never encrypted: nothing to send
+    if (m.items.any((i) => i.state == MediaState.failed)) return; // never encrypted: nothing to send
     m.status = MessageStatus.sending;
     await store.putMessage(m);
     notifyListeners();
@@ -432,7 +588,8 @@ class Messenger extends ChangeNotifier {
           'body': m.text,
           'sentAt': m.sentAt.millisecondsSinceEpoch,
           'timer': m.timerSeconds,
-          'media': m.media!.toWire(),
+          if (m.viewOnce) 'once': true,
+          'items': [for (final i in m.items) i.toWire()],
         }
       : m.isNotice
       ? {
@@ -459,7 +616,7 @@ class Messenger extends ChangeNotifier {
   Future<void> _deliver(LocalMessage m, Map<String, Object?> content) async {
     try {
       await _post(m.peerUserId, m.id, content,
-          attachmentIds: m.isMedia ? [m.media!.attachmentId!] : null);
+          attachmentIds: m.isMedia ? [for (final i in m.items) i.attachmentId!] : null);
       m.status = MessageStatus.sent;
     } on ApiException catch (e) {
       m.status = e.offline ? MessageStatus.waiting : MessageStatus.failed;
@@ -577,6 +734,7 @@ class Messenger extends ChangeNotifier {
   }
 
   Future<void> _flushOutbox() async {
+    await _flushOpened();
     for (final chat in await store.chats()) {
       for (final m in await store.messages(chat.peerUserId, limit: 200)) {
         if (m.fromMe && m.status == MessageStatus.waiting) {
@@ -677,8 +835,13 @@ class Messenger extends ChangeNotifier {
         final id = content['id']! as String;
         if (await store.message(id) != null) return; // already have it
         final timer = content['timer'] as int?;
-        final info = content['type'] == 'media' ? MediaInfo.fromWire(content['media']) : null;
-        if (content['type'] == 'media' && info == null) return;
+        final isMedia = content['type'] == 'media';
+        final items = [
+          for (final raw in (content['items'] as List<Object?>? ?? [if (content['media'] != null) content['media']]))
+            MediaInfo.fromWire(raw),
+        ];
+        if (isMedia && (items.isEmpty || items.length > maxFilesPerSend || items.contains(null))) return;
+        final viewOnce = isMedia && content['once'] == true && items.length == 1;
         final m = LocalMessage(
           id: id,
           peerUserId: peer,
@@ -690,16 +853,27 @@ class Messenger extends ChangeNotifier {
           timerSeconds: timer,
           // Our own copies start their timer when sent; received ones when read.
           expiresAt: fromMe && timer != null ? sentAt.add(Duration(seconds: timer)) : null,
-          kind: info == null ? MessageKind.text : MessageKind.media,
-          media: info,
+          kind: isMedia ? MessageKind.media : MessageKind.text,
+          items: [for (final i in items) i!],
+          viewOnce: viewOnce,
         );
+        // Our own view-once, sent from another of our devices: we cannot
+        // open it here either.
+        if (viewOnce && fromMe) {
+          for (final i in m.items) {
+            i.burn();
+          }
+        }
         await store.putMessage(m);
         final chat = await _ensureChat(peer);
         await _touchChat(chat, _preview(m), sentAt, unread: !fromMe && openChat != peer);
         if (!fromMe) _typingUntil.remove(peer);
         if (!fromMe && openChat == peer) unawaited(markRead(peer));
-        if (info != null && (info.kind == MediaKind.photo || info.kind == MediaKind.voice)) {
-          unawaited(fetchMedia(m.id));
+        for (var i = 0; i < m.items.length; i++) {
+          final item = m.items[i];
+          if (!item.burned && (item.kind == MediaKind.photo || item.kind == MediaKind.voice)) {
+            unawaited(fetchMedia(m.id, i));
+          }
         }
       case 'timer':
         final seconds = content['seconds'] as int?;
@@ -716,6 +890,17 @@ class Messenger extends ChangeNotifier {
           noticeData: {'seconds': seconds, 'byMe': fromMe},
           status: MessageStatus.delivered,
         ));
+      case 'opened':
+        // A view-once was opened: by them (we sent it), or on one of our
+        // other devices (it was sent to us). Either way it is gone here.
+        for (final raw in (content['ids'] as List<Object?>? ?? const [])) {
+          if (raw is! String) continue;
+          final m = await store.message(raw);
+          if (m == null || !m.viewOnce || m.peerUserId != peer) continue; // only this chat's
+          if (m.fromMe == fromMe) continue; // only the other side's opening counts
+          m.openedAt ??= DateTime.now();
+          await _burn(m);
+        }
       case 'read':
         // A read receipt: from the contact (their device read our messages),
         // or from our own other device (we read theirs there).
@@ -940,7 +1125,7 @@ class Messenger extends ChangeNotifier {
 
   /// The chat list's one-line summary of a message.
   String _preview(LocalMessage m) =>
-      !m.isMedia ? m.text : (m.text.isEmpty ? m.media!.label : '${m.media!.label} · ${m.text}');
+      !m.isMedia ? m.text : (m.text.isEmpty ? m.mediaLabel : '${m.mediaLabel} · ${m.text}');
 
   Future<void> _notice(String peer, NoticeType type, Map<String, Object?> data) async {
     await _ensureChat(peer);
@@ -965,7 +1150,9 @@ class Messenger extends ChangeNotifier {
     for (final chat in await store.chats()) {
       for (final m in await store.messages(chat.peerUserId, limit: 500)) {
         if (m.expiresAt != null && m.expiresAt!.isBefore(now)) {
-          if (m.media != null) await media.delete(m.media!);
+          for (final i in m.items) {
+            await media.delete(i);
+          }
           await store.deleteMessage(m.id);
           removed = true;
         }
@@ -985,6 +1172,21 @@ class Messenger extends ChangeNotifier {
       _lastTopUp = DateTime.fromMillisecondsSinceEpoch(0); // try again next sync
     }
   }
+}
+
+/// A file to send (board 23). [temporary] files are plaintext copies we made
+/// (a recording, a camera shot, a phone picker's copy), deleted once
+/// encrypted.
+class OutgoingFile {
+  OutgoingFile(this.file, this.kind,
+      {this.name, this.mime, this.durationMs, this.wave = const [], this.temporary = false});
+  final File file;
+  final MediaKind kind;
+  final String? name;
+  final String? mime;
+  final int? durationMs;
+  final List<int> wave;
+  final bool temporary;
 }
 
 /// A reasonable content type from a file name, for the receiving app.

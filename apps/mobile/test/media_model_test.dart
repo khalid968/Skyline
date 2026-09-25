@@ -75,6 +75,57 @@ void main() {
     });
   });
 
+  group('albums and view once', () {
+    MediaInfo item(MediaKind k) =>
+        MediaInfo(kind: k, name: 'x', mime: 'm', size: 1, attachmentId: 'a', key: 'k', nonce: 'n', thumb: 't')
+          ..localFile = 'f.enc'
+          ..state = MediaState.ready;
+
+    LocalMessage msg(List<MediaInfo> items, {bool once = false}) => LocalMessage(
+          id: 'm',
+          peerUserId: 'p',
+          fromMe: false,
+          sentAt: DateTime.fromMillisecondsSinceEpoch(0),
+          kind: MessageKind.media,
+          items: items,
+          viewOnce: once,
+        );
+
+    test('labels say what is inside', () {
+      expect(msg([item(MediaKind.photo)]).mediaLabel, 'Photo');
+      expect(msg([item(MediaKind.photo)], once: true).mediaLabel, 'Photo · view once');
+      expect(msg([item(MediaKind.photo), item(MediaKind.photo), item(MediaKind.photo)]).mediaLabel, '3 photos');
+      expect(msg([item(MediaKind.video), item(MediaKind.video)]).mediaLabel, '2 videos');
+      expect(msg([item(MediaKind.photo), item(MediaKind.video)]).mediaLabel, '2 photos and videos');
+    });
+
+    test('an album and its view-once flag survive the vault round trip', () {
+      final m = msg([item(MediaKind.photo), item(MediaKind.video)], once: true)..openedAt = DateTime(2026);
+      final back = LocalMessage.fromJson(m.toJson());
+      expect(back.items.map((i) => i.kind), [MediaKind.photo, MediaKind.video]);
+      expect(back.viewOnce, isTrue);
+      expect(back.openedAt, DateTime(2026));
+    });
+
+    test('messages stored before albums (one "media" entry) still load', () {
+      final old = msg([item(MediaKind.photo)]).toJson()
+        ..remove('items')
+        ..['media'] = item(MediaKind.voice).toJson();
+      final back = LocalMessage.fromJson(old);
+      expect(back.items.single.kind, MediaKind.voice);
+    });
+
+    test('burning a view-once item leaves nothing that could decrypt it', () {
+      final i = item(MediaKind.photo)..burn();
+      expect(i.burned, isTrue);
+      expect(i.key, isEmpty);
+      expect(i.nonce, isEmpty);
+      expect(i.thumb, isNull);
+      expect(i.localFile, isNull);
+      expect(MediaInfo.fromJson(i.toJson()).burned, isTrue);
+    });
+  });
+
   test('file names from a sender cannot escape the viewing folder', () {
     expect(MediaService.safeName('../../etc/passwd'), '.._.._etc_passwd');
     expect(MediaService.safeName(r'C:\Windows\x.dll'), 'C__Windows_x.dll');

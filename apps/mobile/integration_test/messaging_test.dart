@@ -158,6 +158,59 @@ void main() {
     expect(kept.length, docBytes.length + 16);
     expect(kept.sublist(0, 64), isNot(docBytes.sublist(0, 64)));
 
+    // Several at once (board 23): three photos and a PDF make an album of
+    // three (one message, one caption) and a separate document message.
+    final albumFiles = [
+      for (var i = 0; i < 3; i++)
+        File('${dir.path}${Platform.pathSeparator}album-$i.png')
+          ..writeAsBytesSync(img.encodePng(img.Image(width: 400, height: 300)..clear(img.ColorRgb8(40 * i, 90, 160)))),
+    ];
+    final pdf = File('${dir.path}${Platform.pathSeparator}notes.pdf')..writeAsBytesSync(List<int>.filled(5000, 1));
+    final sent2 = await alice.sendFiles(
+      bobId,
+      [for (final f in albumFiles) OutgoingFile(f, MediaKind.photo), OutgoingFile(pdf, MediaKind.file)],
+      caption: 'Site visit, north side',
+    );
+    expect(sent2, hasLength(2));
+    expect(sent2.first.items, hasLength(3));
+    expect(sent2.first.text, 'Site visit, north side');
+    expect(sent2.last.items.single.name, 'notes.pdf');
+    expect(sent2.every((m) => m.status == MessageStatus.sent), isTrue);
+    final album = await eventually(() async {
+      final m = await bob.store.message(sent2.first.id);
+      return m != null && m.items.every((i) => i.state == MediaState.ready) ? m : null;
+    });
+    expect(album.items, hasLength(3));
+    for (var i = 0; i < 3; i++) {
+      final px = img.decodePng(await bob.media.bytes(album.items[i]))!.getPixel(5, 5);
+      expect(px.r, closeTo(40 * i, 2));
+    }
+    expect((await bob.store.chat(aliceId))!.lastText, isNot(contains('view once')));
+
+    // View once (board 24): no preview travels; Alice cannot reopen it; Bob
+    // opens it once, then it is gone on his side and Alice sees Opened.
+    final secret = File('${dir.path}${Platform.pathSeparator}secret.png')
+      ..writeAsBytesSync(img.encodePng(img.Image(width: 300, height: 300)..clear(img.ColorRgb8(200, 10, 10))));
+    final once = await alice.sendMedia(bobId, secret, MediaKind.photo, viewOnce: true);
+    expect(once.status, MessageStatus.sent);
+    final aliceCopy = (await alice.store.message(once.id))!;
+    expect(aliceCopy.viewOnce, isTrue);
+    expect(aliceCopy.items.single.burned, isTrue, reason: 'the sender cannot reopen it');
+    final bobOnce = await eventually(() async {
+      final m = await bob.store.message(once.id);
+      return m?.items.single.state == MediaState.ready ? m : null;
+    });
+    expect(bobOnce.viewOnce, isTrue);
+    expect(bobOnce.items.single.thumb, isNull, reason: 'no preview outlives the viewing');
+    expect(img.decodePng(await bob.media.bytes(bobOnce.items.single)), isNotNull);
+    final onDisk = bob.media.fileOf(bobOnce.items.single);
+    await bob.viewOnceOpened(once.id);
+    final after = (await bob.store.message(once.id))!;
+    expect(after.items.single.burned, isTrue);
+    expect(after.openedAt, isNotNull);
+    expect(onDisk.existsSync(), isFalse);
+    await eventually(() async => (await alice.store.message(once.id))!.openedAt != null ? true : null);
+
     // A disappearing-message timer is announced on both sides.
     await alice.setTimer(bobId, 3600);
     await eventually(() async => (await bob.store.chat(aliceId))!.timerSeconds == 3600 ? true : null);

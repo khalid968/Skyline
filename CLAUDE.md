@@ -48,7 +48,8 @@ the current state of play.
   - Photos, videos, documents and voice messages, up to 2 GB, encrypted on the device.
   - Resumable 8 MB uploads through the server to MinIO (pinned). Downloads are graph-checked.
   - The server deletes every file at 30 days (`modules/media`, migration 013; app: `lib/features/media`).
-  - Not built: a gallery, compression, video thumbnails.
+  - Also built: several files at once (albums), view once (screenshots blocked on Android and Windows) and
+    the media gallery (boards 23-25). Photos are re-encoded with EXIF stripped; `Start Skyline.cmd` starts everything.
   - **Next: Phase 8b, prototypes first.**
   - Firebase secrets stay OUT of git: `google-services.json` is gitignored, and the service account lives in
     `C:\Users\kkhal\Skyline-secrets\`.

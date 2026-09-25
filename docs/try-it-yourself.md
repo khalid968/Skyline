@@ -283,7 +283,14 @@ to MinIO.
    - Videos and documents say "tap to download". Tap, watch the progress, then tap again to play or
      open.
    - Open a photo: the viewer's download button asks before saving an unencrypted copy.
-5. **Worth trying:**
+5. **Several at once:** in Photos (or Video, or File), pick up to 10. The preview shows them in a strip:
+   tap one to look at it, the small x to drop it, + to add more. Photos and videos arrive as one album.
+6. **View once:** pick a single photo, tap the round **1** next to the caption (it turns amber), and send.
+   The other side taps it, looks, closes: it is gone on their devices, and you see "Opened". Try taking a
+   screenshot while it is open on Android or Windows: the screenshot comes out blank.
+7. **Media gallery:** the picture icon at the top of a chat lists that chat's photos, videos, files and
+   voice messages.
+8. **Worth trying:**
    - Send a big video (hundreds of MB) and switch the phone to airplane mode halfway. Turn it back on:
      the upload carries on where it stopped.
    - Set a disappearing timer, send a photo, and wait. The photo's file goes with the message.

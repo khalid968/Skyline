@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/media/presentation/media_gallery_screen.dart';
 import '../../features/auth/presentation/activation_screen.dart';
 import '../../features/chats/presentation/chat_list_screen.dart';
 import '../../features/messages/presentation/conversation_screen.dart';
@@ -39,6 +40,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'verify',
             builder: (context, s) => SafetyNumberScreen(peer: s.pathParameters['peer']!),
+          ),
+          GoRoute(
+            path: 'media',
+            builder: (context, s) => MediaGalleryScreen(peer: s.pathParameters['peer']!),
           ),
         ],
       ),

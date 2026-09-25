@@ -131,3 +131,16 @@ opens in another app (a PDF reader, Office), which needs a normal file.
 - The other app may also keep its own copy (recent files, caches). Skyline cannot control that.
 - The same applies to "Save to this device" on the photo viewer, which says so and asks first.
 - **Mitigation for later:** an in-app viewer for PDFs and images, so common documents never leave Skyline.
+
+## View once is a courtesy, not a guarantee (media, 2026-09-25)
+
+A view-once photo or video is deleted after one viewing, and screenshots are blocked on Android and Windows.
+It still is not a guarantee:
+
+- On iPhone, screenshots cannot be blocked at all.
+- On any device, a second camera can photograph the screen.
+- A modified app could ignore the rule entirely: the recipient's device holds the key while the photo is on
+  screen.
+
+The composer and the viewer say this in plain words. Tell users to send nothing by view-once that they
+could not bear to have kept.

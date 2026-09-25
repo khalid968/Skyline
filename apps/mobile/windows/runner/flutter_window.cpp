@@ -4,6 +4,12 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
+#include <flutter/standard_method_codec.h>
+
+#ifndef WDA_EXCLUDEFROMCAPTURE
+#define WDA_EXCLUDEFROMCAPTURE 0x00000011
+#endif
+
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
@@ -25,6 +31,24 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+
+  // View-once media (board 24): while it is on screen, the window is left out
+  // of screenshots, screen recording and screen sharing (Windows 10 2004+).
+  screen_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      flutter_controller_->engine()->messenger(), "skyline/screen",
+      &flutter::StandardMethodCodec::GetInstance());
+  screen_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+        if (call.method_name() != "protect") {
+          result->NotImplemented();
+          return;
+        }
+        const auto* on = std::get_if<bool>(call.arguments());
+        const BOOL ok = SetWindowDisplayAffinity(
+            GetHandle(), (on != nullptr && *on) ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE);
+        result->Success(flutter::EncodableValue(ok != FALSE));
+      });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -40,6 +64,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  screen_channel_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
