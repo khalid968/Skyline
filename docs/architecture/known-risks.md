@@ -119,3 +119,15 @@ consider moving push into an Android-only plugin, or excluding the Windows plugi
 
 The server's transport has an `apns` slot that currently answers "error". Build it together with the first
 iOS build.
+
+## Opening a document hands plaintext to another app (media, 2026-09-25)
+
+Skyline keeps files encrypted and decrypts them only while they are viewed. A PDF or spreadsheet, though,
+opens in another app (a PDF reader, Office), which needs a normal file.
+
+- Skyline writes a decrypted copy to its own temporary folder, passes it to that app, and deletes the
+  folder at the next start.
+- Until then, the copy is readable by anything that can read the app's temporary folder.
+- The other app may also keep its own copy (recent files, caches). Skyline cannot control that.
+- The same applies to "Save to this device" on the photo viewer, which says so and asks first.
+- **Mitigation for later:** an in-app viewer for PDFs and images, so common documents never leave Skyline.

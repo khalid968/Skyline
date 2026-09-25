@@ -42,7 +42,8 @@ See `design.md` for the standing design-review rule.
    receipts, pinned messages, search, reactions, mentions, drafts, archive/mute, disappearing messages.
    Forwarding and "new chat" are constrained by the contact graph, not by user search.
 
-9. **Media** — image/video/audio/document sharing, voice messages, media gallery, client-side
+9. **Media** — ✅ built 2026-09-25 (brought forward before 8b), awaiting review; gallery and compression not
+   built. Image/video/audio/document sharing, voice messages, media gallery, client-side
    encryption before upload, MinIO storage, compression and lazy loading.
 
 10. **Calls** — WebRTC voice/video calls and screen sharing, E2EE call signaling and media.

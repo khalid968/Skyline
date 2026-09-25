@@ -9,6 +9,7 @@
 //   flutter test integration_test/push_test.dart -d emulator-5554 \
 //     --dart-define=SKYLINE_API=http://10.0.2.2:3078 --dart-define=BOB_CODE=...
 import 'dart:async';
+import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,6 +21,7 @@ import 'package:skyline/core/crypto/device_crypto.dart';
 import 'package:skyline/core/push/push.dart';
 import 'package:skyline/core/realtime/realtime_client.dart';
 import 'package:skyline/features/auth/data/activation_service.dart';
+import 'package:skyline/features/media/data/media_service.dart';
 import 'package:skyline/features/messages/data/local_store.dart';
 import 'package:skyline/features/messages/data/messenger.dart';
 import 'package:skyline/src/rust/frb_generated.dart';
@@ -46,6 +48,11 @@ void main() {
       store: LocalStore(crypto),
       realtime: RealtimeClient(api: api, uri: AppConfig.socketUri),
       session: session,
+      media: MediaService(
+        api: api,
+        dir: Directory('${Directory.systemTemp.path}/skyline-push-media'),
+        viewDir: Directory('${Directory.systemTemp.path}/skyline-push-view'),
+      ),
     );
 
     final got = Completer<RemoteMessage>();

@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -41,6 +43,7 @@ class ApiClient {
   Future<Session>? _refreshing;
 
   static const _timeout = Duration(seconds: 20);
+  static const _slow = Duration(minutes: 3);
 
   Future<Session> session() async {
     final s = await sessions.read();
@@ -51,6 +54,69 @@ class ApiClient {
   Future<Object?> get(String path) => _call('GET', path);
   Future<Object?> post(String path, [Object? body]) => _call('POST', path, body);
   Future<Object?> put(String path, [Object? body]) => _call('PUT', path, body);
+
+  /// PUTs raw bytes (one part of an encrypted upload). 8 MB can take a while
+  /// on a slow link, so the timeout is generous.
+  Future<void> putBytes(String path, Uint8List bytes) async {
+    var s = await session();
+    var res = await _send('PUT', path, null, s.accessToken, raw: bytes, timeout: _slow);
+    if (res.statusCode == 401) {
+      s = await _refresh(s);
+      res = await _send('PUT', path, null, s.accessToken, raw: bytes, timeout: _slow);
+      if (res.statusCode == 401) throw SignedOutException();
+    }
+    _decode(res);
+  }
+
+  /// Streams a download into [out], resuming from however much of it is
+  /// already there (HTTP Range). [onProgress] gets (bytes so far, total).
+  Future<void> download(String path, File out, {void Function(int got, int total)? onProgress}) async {
+    Future<http.StreamedResponse> open(String token, int from) async {
+      final req = http.Request('GET', base.resolve(path))..headers['authorization'] = 'Bearer $token';
+      if (from > 0) req.headers['range'] = 'bytes=$from-';
+      try {
+        return await _http.send(req).timeout(_timeout);
+      } on Exception {
+        throw ApiException(0);
+      }
+    }
+
+    var from = await out.exists() ? await out.length() : 0;
+    var s = await session();
+    var res = await open(s.accessToken, from);
+    if (res.statusCode == 401) {
+      await res.stream.drain<void>();
+      s = await _refresh(s);
+      res = await open(s.accessToken, from);
+      if (res.statusCode == 401) throw SignedOutException();
+    }
+    if (res.statusCode == 416) {
+      // Nothing past what we hold: the file is complete. (Decryption checks
+      // the hash and the tag, so a bad file is caught there.)
+      await res.stream.drain<void>();
+      onProgress?.call(from, from);
+      return;
+    }
+    if (res.statusCode != 200 && res.statusCode != 206) {
+      await res.stream.drain<void>();
+      throw ApiException(res.statusCode);
+    }
+    if (res.statusCode == 200) from = 0; // the server sent it all
+    final total = from + (res.contentLength ?? 0);
+    final sink = out.openWrite(mode: from == 0 ? FileMode.write : FileMode.append);
+    var got = from;
+    try {
+      await for (final chunk in res.stream.timeout(_timeout)) {
+        sink.add(chunk);
+        got += chunk.length;
+        onProgress?.call(got, total);
+      }
+    } on Exception {
+      throw ApiException(0); // resumable: the bytes so far are kept
+    } finally {
+      await sink.close();
+    }
+  }
 
   /// Unauthenticated POST (activation).
   Future<Object?> postPublic(String path, Object body) async {
@@ -73,15 +139,19 @@ class ApiClient {
     return _decode(res);
   }
 
-  Future<http.Response> _send(String method, String path, Object? body, String? token) async {
+  Future<http.Response> _send(String method, String path, Object? body, String? token,
+      {Uint8List? raw, Duration timeout = _timeout}) async {
     final req = http.Request(method, base.resolve(path));
     if (token != null) req.headers['authorization'] = 'Bearer $token';
     if (body != null) {
       req.headers['content-type'] = 'application/json';
       req.body = jsonEncode(body);
+    } else if (raw != null) {
+      req.headers['content-type'] = 'application/octet-stream';
+      req.bodyBytes = raw;
     }
     try {
-      return await http.Response.fromStream(await _http.send(req).timeout(_timeout));
+      return await http.Response.fromStream(await _http.send(req).timeout(timeout));
     } on TimeoutException {
       throw ApiException(0);
     } on http.ClientException {

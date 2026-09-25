@@ -23,24 +23,36 @@ enum SkyIcons {
   wifiOff('<path d="M2.5 8.8a15 15 0 0 1 19 0"/><path d="M5.8 12.4a10 10 0 0 1 12.4 0"/><path d="M9.2 15.9a5 5 0 0 1 5.6 0"/><path d="M12 19.5h.01"/><path d="m3 3 18 18"/>'),
   refresh('<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4.5v4.2h-4.2"/>'),
   graph('<circle cx="5.5" cy="6" r="2.5"/><circle cx="18.5" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 6h8" stroke-dasharray="1.5 2.2"/><path d="M6.6 8.2 11 15.8" stroke-dasharray="1.5 2.2"/><path d="M17.4 8.2 13 15.8" stroke-dasharray="1.5 2.2"/>'),
-  chevron('<path d="m9.5 5 6.5 7-6.5 7"/>');
+  chevron('<path d="m9.5 5 6.5 7-6.5 7"/>'),
+  // Media (boards 20-22).
+  plus('<path d="M12 5.5v13M5.5 12h13"/>'),
+  mic('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/>'),
+  photo('<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-8 8.5"/>'),
+  camera('<path d="M4 8.5h3l1.8-2.5h6.4L17 8.5h3v10H4Z"/><circle cx="12" cy="13.5" r="3.4"/>'),
+  video('<rect x="2.8" y="6.5" width="12.5" height="11" rx="2.6"/><path d="m15.3 11.3 5.9-3.3v8l-5.9-3.3Z"/>'),
+  file('<path d="M13.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5Z"/><path d="M13.5 3v5.5H19"/>'),
+  download('<path d="M12 4v11"/><path d="m7 10.5 5 5 5-5"/><path d="M5 19.5h14"/>'),
+  play('<path d="M7 4.5v15l12-7.5Z"/>'),
+  pause('<path d="M8 5v14"/><path d="M16 5v14"/>'),
+  close('<path d="M6 6l12 12M18 6 6 18"/>');
 
   const SkyIcons(this.paths);
   final String paths;
 }
 
 class SkyIcon extends StatelessWidget {
-  const SkyIcon(this.icon, {super.key, this.size = 20, required this.color, this.stroke = 1.9});
+  const SkyIcon(this.icon, {super.key, this.size = 20, required this.color, this.stroke = 1.9, this.filled = false});
 
   final SkyIcons icon;
   final double size;
   final Color color;
   final double stroke;
+  final bool filled; // solid shapes (the play triangle)
 
   @override
   Widget build(BuildContext context) {
     final hex = '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
-    final svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
+    final svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${filled ? hex : 'none'}" '
         'stroke="$hex" stroke-opacity="${color.a}" stroke-width="$stroke" '
         'stroke-linecap="round" stroke-linejoin="round">${icon.paths}</svg>';
     return ExcludeSemantics(child: SvgPicture.string(svg, width: size, height: size));

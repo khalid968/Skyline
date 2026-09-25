@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
@@ -9,6 +10,7 @@ import '../../../core/api/session.dart';
 import '../../../core/crypto/device_crypto.dart';
 import '../../../core/realtime/realtime_client.dart';
 import '../../auth/data/prekeys.dart';
+import '../../media/data/media_service.dart';
 import '../domain/models.dart';
 import 'local_store.dart';
 
@@ -45,6 +47,9 @@ class DirectoryDevice {
 ///
 /// Plaintext inside every envelope is a small JSON document:
 ///   {"v":1,"type":"text","id","peer","body","sentAt","timer"}
+///   {"v":1,"type":"media","id","peer","body","sentAt","timer","media":{...}}
+///       body is the caption; media holds the file's key, nonce, hash, name,
+///       type and thumbnail (MediaInfo.toWire). The server has only the blob.
 ///   {"v":1,"type":"read","peer","ids":[...]}      read receipt
 ///   {"v":1,"type":"timer","id","peer","seconds","sentAt"}
 ///   {"v":1,"type":"typing","peer","on"}            (live signals only)
@@ -57,6 +62,7 @@ class Messenger extends ChangeNotifier {
     required this.store,
     required this.realtime,
     required this.session,
+    required this.media,
   });
 
   final ApiClient api;
@@ -64,6 +70,7 @@ class Messenger extends ChangeNotifier {
   final LocalStore store;
   final RealtimeClient realtime;
   final Session session;
+  final MediaService media;
 
   final _uuid = const Uuid();
   final Map<String, Contact> _contacts = {};
@@ -96,6 +103,7 @@ class Messenger extends ChangeNotifier {
     _sweeper = Timer.periodic(const Duration(seconds: 15), (_) => sweepExpired());
     unawaited(refreshContacts().catchError((Object _) {}));
     unawaited(_topUpKeys());
+    unawaited(media.sweepViewCache());
     realtime.start();
   }
 
@@ -196,16 +204,21 @@ class Messenger extends ChangeNotifier {
 
   // ----------------------------------------------------------- sending
 
-  Future<LocalMessage> sendText(String peer, String text) async {
-    // The first message in a new chat carries this person's default timer
-    // (board 13), announced like any timer change.
+  /// The chat a new message goes into. The first message in a new chat
+  /// carries this person's default timer (board 13), announced like any
+  /// timer change.
+  Future<ChatSummary> _chatForSending(String peer) async {
     final isNew = await store.chat(peer) == null ||
         (await store.messages(peer, limit: 1)).isEmpty;
     final fallback = await defaultTimer();
     if (isNew && fallback != null && (await store.chat(peer))?.timerSeconds == null) {
       await setTimer(peer, fallback);
     }
-    final chat = await _ensureChat(peer);
+    return _ensureChat(peer);
+  }
+
+  Future<LocalMessage> sendText(String peer, String text) async {
+    final chat = await _chatForSending(peer);
     final now = DateTime.now();
     final m = LocalMessage(
       id: _uuid.v4(),
@@ -231,6 +244,133 @@ class Messenger extends ChangeNotifier {
       'timer': chat.timerSeconds,
     });
     return m;
+  }
+
+  /// Sends a file (boards 20-22): shown at once with its progress, encrypted
+  /// on this device, uploaded in resumable parts, then announced to every
+  /// device in one encrypted message that carries its key. [deleteSource]
+  /// removes a plaintext file we created ourselves (a recording, a camera
+  /// shot) once it is encrypted.
+  Future<LocalMessage> sendMedia(
+    String peer,
+    File source,
+    MediaKind kind, {
+    String caption = '',
+    String? name,
+    String? mime,
+    int? durationMs,
+    List<int> wave = const [],
+    bool deleteSource = false,
+  }) async {
+    final size = await source.length();
+    if (size > MediaService.maxBytes) throw ArgumentError('Files can be up to 2 GB.');
+    final preview = kind == MediaKind.photo
+        ? await MediaService.photoPreview(source.path)
+        : (thumb: null, width: null, height: null);
+    final chat = await _chatForSending(peer);
+    final now = DateTime.now();
+    final fileName = name ?? source.uri.pathSegments.last;
+    final info = MediaInfo(
+      kind: kind,
+      name: fileName,
+      mime: mime ?? mimeFor(fileName, kind),
+      size: size,
+      thumb: preview.thumb,
+      width: preview.width,
+      height: preview.height,
+      durationMs: durationMs,
+      wave: wave,
+      state: MediaState.uploading,
+    );
+    final m = LocalMessage(
+      id: _uuid.v4(),
+      peerUserId: peer,
+      fromMe: true,
+      sentAt: now,
+      kind: MessageKind.media,
+      text: caption,
+      status: MessageStatus.sending,
+      senderDevice: session.deviceNumber,
+      timerSeconds: chat.timerSeconds,
+      expiresAt: chat.timerSeconds == null ? null : now.add(Duration(seconds: chat.timerSeconds!)),
+      media: info,
+    );
+    await store.putMessage(m);
+    await _touchChat(chat, _preview(m), now, unread: false);
+    notifyListeners();
+    try {
+      await media.encrypt(m.id, source, info);
+    } on Object {
+      info.state = MediaState.failed;
+      m.status = MessageStatus.failed;
+      await store.putMessage(m);
+      media.finished(m.id);
+      notifyListeners();
+      return m;
+    } finally {
+      if (deleteSource) {
+        try {
+          await source.delete();
+        } on FileSystemException {
+          // already gone
+        }
+      }
+    }
+    await store.putMessage(m);
+    await _uploadAndDeliver(m);
+    return m;
+  }
+
+  /// Uploads (or resumes uploading) a message's file, then sends the message.
+  Future<void> _uploadAndDeliver(LocalMessage m) async {
+    final info = m.media!;
+    if (info.state == MediaState.uploading) {
+      try {
+        await media.upload(m.id, info, onStarted: () => store.putMessage(m));
+        info.state = MediaState.ready;
+        await store.putMessage(m);
+      } on Object catch (e) {
+        if (e is SignedOutException) signedOut = true;
+        m.status = e is ApiException && e.offline ? MessageStatus.waiting : MessageStatus.failed;
+        await store.putMessage(m);
+        media.finished(m.id);
+        notifyListeners();
+        return;
+      }
+    }
+    media.finished(m.id);
+    await _deliver(m, _contentFor(m));
+  }
+
+  /// Fetches a received file's ciphertext. Photos and voice messages do this
+  /// by themselves; videos and documents when tapped.
+  Future<void> fetchMedia(String messageId) async {
+    final m = await store.message(messageId);
+    final info = m?.media;
+    if (m == null || info == null || info.state != MediaState.remote || info.attachmentId == null) return;
+    MediaState? next;
+    try {
+      await media.download(m.id, info);
+      next = MediaState.ready;
+    } on MediaExpiredException {
+      next = MediaState.expired;
+    } on SignedOutException {
+      signedOut = true;
+    } on Object {
+      // Offline or interrupted: the partial file stays and the next try resumes.
+    }
+    if (next != null) {
+      final fresh = await store.message(messageId);
+      if (fresh == null) {
+        await media.delete(info); // it disappeared meanwhile
+      } else {
+        fresh.media!
+          ..localFile = next == MediaState.ready ? '${info.attachmentId}.enc' : null
+          ..state = next;
+        await store.putMessage(fresh);
+      }
+    }
+    notifyListeners();
   }
 
   /// Sets the disappearing-message timer for a chat (board 15). The change is
@@ -265,13 +405,25 @@ class Messenger extends ChangeNotifier {
   Future<void> retry(String messageId) async {
     final m = await store.message(messageId);
     if (m == null || m.status != MessageStatus.failed) return;
+    if (m.media?.state == MediaState.failed) return; // never encrypted: nothing to send
     m.status = MessageStatus.sending;
     await store.putMessage(m);
     notifyListeners();
-    await _deliver(m, _contentFor(m));
+    await (m.isMedia ? _uploadAndDeliver(m) : _deliver(m, _contentFor(m)));
   }
 
-  Map<String, Object?> _contentFor(LocalMessage m) => m.isNotice
+  Map<String, Object?> _contentFor(LocalMessage m) => m.isMedia
+      ? {
+          'v': 1,
+          'type': 'media',
+          'id': m.id,
+          'peer': m.peerUserId,
+          'body': m.text,
+          'sentAt': m.sentAt.millisecondsSinceEpoch,
+          'timer': m.timerSeconds,
+          'media': m.media!.toWire(),
+        }
+      : m.isNotice
       ? {
           'v': 1,
           'type': 'timer',
@@ -295,7 +447,8 @@ class Messenger extends ChangeNotifier {
   /// (e.g. a changed identity): it fails, visibly.
   Future<void> _deliver(LocalMessage m, Map<String, Object?> content) async {
     try {
-      await _post(m.peerUserId, m.id, content);
+      await _post(m.peerUserId, m.id, content,
+          attachmentIds: m.isMedia ? [m.media!.attachmentId!] : null);
       m.status = MessageStatus.sent;
     } on ApiException catch (e) {
       m.status = e.offline ? MessageStatus.waiting : MessageStatus.failed;
@@ -311,7 +464,8 @@ class Messenger extends ChangeNotifier {
 
   /// Posts [content] to [peer] and our own other devices, fixing the device
   /// list when the server says it is stale.
-  Future<void> _post(String peer, String messageId, Map<String, Object?> content) async {
+  Future<void> _post(String peer, String messageId, Map<String, Object?> content,
+      {List<String>? attachmentIds}) async {
     final bytes = utf8.encode(jsonEncode(content));
     var targets = await _targets(peer);
     for (var attempt = 0; attempt < 3; attempt++) {
@@ -327,7 +481,11 @@ class Messenger extends ChangeNotifier {
         });
       }
       try {
-        await api.post('/users/$peer/messages', {'messageId': messageId, 'envelopes': envelopes});
+        await api.post('/users/$peer/messages', {
+          'messageId': messageId,
+          'envelopes': envelopes,
+          if (attachmentIds != null) 'attachmentIds': attachmentIds,
+        });
         return;
       } on ApiException catch (e) {
         if (e.status != 409 || e.body is! Map) rethrow;
@@ -412,7 +570,7 @@ class Messenger extends ChangeNotifier {
       for (final m in await store.messages(chat.peerUserId, limit: 200)) {
         if (m.fromMe && m.status == MessageStatus.waiting) {
           m.status = MessageStatus.sending;
-          await _deliver(m, _contentFor(m));
+          await (m.isMedia ? _uploadAndDeliver(m) : _deliver(m, _contentFor(m)));
         }
       }
     }
@@ -504,10 +662,12 @@ class Messenger extends ChangeNotifier {
     );
 
     switch (content['type']) {
-      case 'text':
+      case 'text' || 'media':
         final id = content['id']! as String;
         if (await store.message(id) != null) return; // already have it
         final timer = content['timer'] as int?;
+        final info = content['type'] == 'media' ? MediaInfo.fromWire(content['media']) : null;
+        if (content['type'] == 'media' && info == null) return;
         final m = LocalMessage(
           id: id,
           peerUserId: peer,
@@ -519,12 +679,17 @@ class Messenger extends ChangeNotifier {
           timerSeconds: timer,
           // Our own copies start their timer when sent; received ones when read.
           expiresAt: fromMe && timer != null ? sentAt.add(Duration(seconds: timer)) : null,
+          kind: info == null ? MessageKind.text : MessageKind.media,
+          media: info,
         );
         await store.putMessage(m);
         final chat = await _ensureChat(peer);
-        await _touchChat(chat, m.text, sentAt, unread: !fromMe && openChat != peer);
+        await _touchChat(chat, _preview(m), sentAt, unread: !fromMe && openChat != peer);
         if (!fromMe) _typingUntil.remove(peer);
         if (!fromMe && openChat == peer) unawaited(markRead(peer));
+        if (info != null && (info.kind == MediaKind.photo || info.kind == MediaKind.voice)) {
+          unawaited(fetchMedia(m.id));
+        }
       case 'timer':
         final seconds = content['seconds'] as int?;
         final chat = await _ensureChat(peer);
@@ -762,6 +927,10 @@ class Messenger extends ChangeNotifier {
     await store.putChat(chat);
   }
 
+  /// The chat list's one-line summary of a message.
+  String _preview(LocalMessage m) =>
+      !m.isMedia ? m.text : (m.text.isEmpty ? m.media!.label : '${m.media!.label} · ${m.text}');
+
   Future<void> _notice(String peer, NoticeType type, Map<String, Object?> data) async {
     await _ensureChat(peer);
     await store.putMessage(LocalMessage(
@@ -785,6 +954,7 @@ class Messenger extends ChangeNotifier {
     for (final chat in await store.chats()) {
       for (final m in await store.messages(chat.peerUserId, limit: 500)) {
         if (m.expiresAt != null && m.expiresAt!.isBefore(now)) {
+          if (m.media != null) await media.delete(m.media!);
           await store.deleteMessage(m.id);
           removed = true;
         }
@@ -804,4 +974,35 @@ class Messenger extends ChangeNotifier {
       _lastTopUp = DateTime.fromMillisecondsSinceEpoch(0); // try again next sync
     }
   }
+}
+
+/// A reasonable content type from a file name, for the receiving app.
+String mimeFor(String name, MediaKind kind) {
+  final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+  return switch (ext) {
+    'jpg' || 'jpeg' => 'image/jpeg',
+    'png' => 'image/png',
+    'gif' => 'image/gif',
+    'webp' => 'image/webp',
+    'heic' => 'image/heic',
+    'mp4' => 'video/mp4',
+    'mov' => 'video/quicktime',
+    'webm' => 'video/webm',
+    'm4a' => 'audio/mp4',
+    'aac' => 'audio/aac',
+    'wav' => 'audio/wav',
+    'pdf' => 'application/pdf',
+    'txt' => 'text/plain',
+    'doc' => 'application/msword',
+    'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls' => 'application/vnd.ms-excel',
+    'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'zip' => 'application/zip',
+    _ => switch (kind) {
+        MediaKind.photo => 'image/jpeg',
+        MediaKind.video => 'video/mp4',
+        MediaKind.voice => 'audio/mp4',
+        MediaKind.file => 'application/octet-stream',
+      },
+  };
 }

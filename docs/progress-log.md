@@ -8,6 +8,65 @@ rewrite history in this file — append.
 
 ---
 
+## 2026-09-25 (later) — Media (Phase 9) BUILT: photos, videos, documents, voice messages
+
+The owner asked for media before Phase 8b and approved boards 20-22. Their decisions (MinIO pinned for now,
+photos/videos/voice/documents, 2 GB, deleted after 30 days) are in `decisions.md`, 2026-09-25.
+
+**What was built**
+
+- **Crypto core** (commit e7d12d5): streaming file encryption with libsignal's AES-256-GCM
+  (`crypto-core/core/src/media.rs`). Each file gets a fresh key and nonce; decryption writes nothing
+  until the tag verifies.
+- **Server** (commit 4d97d86): migration 013, `modules/media`.
+  - Routes: `POST /attachments`, then upload progress, parts and complete (the uploader's own), then
+    `GET /attachments/:id` (graph-checked, with byte ranges).
+  - Uploads are resumable, in 8 MB S3 multipart parts, through the server. MinIO is never exposed.
+  - A message claims its files (`attachmentIds`) inside the send transaction.
+  - An hourly sweep deletes every file at 30 days.
+  - Database guards: a file belongs to one message, for good; its identity never changes; rows are
+    never deleted; a deletion is never undone.
+- **App** (`lib/features/media`, plus the messenger and the conversation screen):
+  - attach menu, preview with caption, media bubbles with progress;
+  - photo viewer (saving an unencrypted copy asks first), video player, documents opened in another
+    app on request;
+  - hold-to-record voice messages, slide left to cancel.
+  - Photos and voice download by themselves; videos and documents on tap.
+  - Files stay encrypted on the device and are decrypted only while viewed (photos in memory, the
+    rest as a short-lived copy swept at start).
+  - Disappearing messages delete their files.
+
+**Verified**
+
+- Backend: 112 unit, 102 db and 239 app tests pass.
+  - The app tests run against the real MinIO, in a separate `skyline-test` bucket.
+  - Migration 013 goes down and up cleanly on a throwaway database.
+  - Nine mutation checks were all caught. Two missed at first, and the tests were fixed so they now
+    catch them.
+- App: 8 unit tests pass (`test/media_model_test.dart`).
+- Windows `messaging_test` passes: a photo downloads by itself and decrypts to the exact bytes; a 9 MB
+  document goes up in two parts and is stored on the receiving device as ciphertext.
+- Windows `media_ui_test` renders the real screens on both sides. The screenshots match boards 20-21.
+- The Android debug APK builds.
+- Not run on a phone yet. iOS is untested (no Mac).
+
+**Not built (say so if asked)**
+
+- A media gallery.
+- Photo and video compression: files are sent as they are.
+- Video thumbnails, and the duration of picked videos: the bubble shows a plain tile.
+- Saving on Android uses the system "save as" dialog, not the gallery.
+
+**Also fixed on the way**
+
+- Migration 013 re-created an index that migration 007 already had; the first test run caught it.
+- Three test databases leaked from that failed run. They were dropped; all are `skyline_test_*` names.
+
+**Next agent should:** report media to the owner for review. Then Phase 8b (groups, replies, edit/delete,
+reactions, mentions, pins, search, drafts, archive/mute): **prototypes first, owner approval, then build.**
+
+---
+
 ## 2026-09-25 — Phase 8a BUILT: one-to-one messaging, app lock, safety-number scanning, push
 
 The owner set up Firebase (project `skyline-a090f`; `google-services.json` in `apps/mobile/android/app`, and

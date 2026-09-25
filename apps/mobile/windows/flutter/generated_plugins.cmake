@@ -3,11 +3,14 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  audioplayers_windows
   file_selector_windows
   firebase_core
   flutter_secure_storage_windows
   local_auth_windows
+  record_windows
   sqlite3_flutter_libs
+  video_player_win
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

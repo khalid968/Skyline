@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../features/auth/data/activation_service.dart';
+import '../../features/media/data/media_service.dart';
 import '../../features/messages/data/local_store.dart';
 import '../../features/messages/data/messenger.dart';
 import '../../features/settings/data/app_lock.dart';
@@ -28,6 +29,7 @@ class AppController extends ChangeNotifier {
   final SessionStore sessions;
   final StorageKeyStore keys;
   final String? vaultPath;
+  Directory? _dataDir;
 
   AppPhase phase = AppPhase.loading;
   CryptoDevice? crypto;
@@ -41,6 +43,7 @@ class AppController extends ChangeNotifier {
   Future<void> boot() async {
     try {
       final path = vaultPath ?? await _defaultVaultPath();
+      _dataDir = File(path).parent;
       crypto = await openDeviceCrypto(vaultPath: path, keys: keys);
       api = ApiClient(base: AppConfig.apiBase, sessions: sessions, crypto: crypto!);
       store = LocalStore(crypto!);
@@ -74,6 +77,13 @@ class AppController extends ChangeNotifier {
       store: store!,
       realtime: RealtimeClient(api: api!, uri: AppConfig.socketUri),
       session: session,
+      // Encrypted media next to the vault; plaintext viewing copies in the
+      // OS temp folder, swept at every start.
+      media: MediaService(
+        api: api!,
+        dir: Directory('${_dataDir!.path}${Platform.pathSeparator}media'),
+        viewDir: Directory('${(await getTemporaryDirectory()).path}${Platform.pathSeparator}skyline-view'),
+      ),
     );
     m.addListener(_watchSignedOut);
     messenger = m;

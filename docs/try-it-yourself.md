@@ -245,6 +245,31 @@ Android emulator.
    - Stop the server: the app shows "You are offline", and messages you write wait with a clock, then send
      when the server is back.
 
+## Media: photos, videos, documents and voice messages
+
+Same setup as Phase 8a. Run `npm run migrate:up` once for the new tables, and keep Docker running: files go
+to MinIO.
+
+1. **Update and restart the server:** `npm run migrate:up`, then `npm run start`.
+2. **Restart both apps** (`flutter run -d windows` and `flutter run -d emulator-5554`). The new plugins
+   need a full rebuild, not a hot reload.
+3. **Send things.** In a chat:
+   - Tap **+** to open the attach menu (Photos, Camera on the phone, Video, File). Pick a file, add a
+     caption, and send. The bubble shows "Encrypting and sending" with a percentage.
+   - **Hold the microphone** to record a voice message. Release to send; slide left before releasing to
+     cancel. The first time, the phone asks for microphone access.
+4. **Receive things.** On the other device:
+   - Photos and voice messages download by themselves.
+   - Videos and documents say "tap to download". Tap, watch the progress, then tap again to play or
+     open.
+   - Open a photo: the viewer's download button asks before saving an unencrypted copy.
+5. **Worth trying:**
+   - Send a big video (hundreds of MB) and switch the phone to airplane mode halfway. Turn it back on:
+     the upload carries on where it stopped.
+   - Set a disappearing timer, send a photo, and wait. The photo's file goes with the message.
+   - Files are kept on the server for 30 days. After that, a device that never downloaded one shows
+     "no longer available".
+
 ## Starting over
 
 Your development accounts live in the Docker volume. To wipe everything and start clean:

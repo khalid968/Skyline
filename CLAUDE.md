@@ -44,6 +44,12 @@ the current state of play.
   - Local history lives in the vault's encrypted records.
   - Proven between two devices through a real server, and push on a real device.
   - **8b needs explicit approval.** Design notes are in `decisions.md` ("How messages move").
+- **Media (Phase 9, brought forward) — ✅ built 2026-09-25**, awaiting the owner's review.
+  - Photos, videos, documents and voice messages, up to 2 GB, encrypted on the device.
+  - Resumable 8 MB uploads through the server to MinIO (pinned). Downloads are graph-checked.
+  - The server deletes every file at 30 days (`modules/media`, migration 013; app: `lib/features/media`).
+  - Not built: a gallery, compression, video thumbnails.
+  - **Next: Phase 8b, prototypes first.**
   - Firebase secrets stay OUT of git: `google-services.json` is gitignored, and the service account lives in
     `C:\Users\kkhal\Skyline-secrets\`.
 - **Owner decisions 2026-09-21** (`decisions.md`): admins never see message content in v1 (a *disclosed*
@@ -172,8 +178,8 @@ npm run format             # prettier --write "**/*.js"
 
 # Migrations (apps/backend) — plain SQL via node-pg-migrate; needs DATABASE_URL in .env
 npm run migrate:up                       # apply; migrate:down rolls back one; migrate:redo redoes the last
-npm run test:db                          # 95 schema-invariant tests against a throwaway database
-npm run test:app                         # 232 tests: guards, auth, admin API, keys, messaging, push, crypto e2e, WebSocket, rate limits, CLI, route inventory
+npm run test:db                          # 102 schema-invariant tests against a throwaway database
+npm run test:app                         # 239 tests: guards, auth, admin API, keys, messaging, media (real MinIO), push, crypto e2e, WebSocket, rate limits, CLI, route inventory
                                          #   (needs the dev Postgres AND Redis up; each suite drops its own DB)
 npm run migrate:create -- add-something  # scaffold a new .sql migration
 

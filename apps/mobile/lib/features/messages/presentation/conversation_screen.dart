@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,11 +10,15 @@ import '../../../core/theme/tokens.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/connection_banner.dart';
 import '../../../shared/widgets/sky_icon.dart';
+import '../../media/data/media_service.dart';
+import '../../media/presentation/attach.dart';
+import '../../media/presentation/media_bubble.dart';
+import '../../media/presentation/voice_recorder.dart';
 import '../data/messenger.dart';
 import '../domain/models.dart';
 import 'timer_sheet.dart';
 
-/// Boards 3, 16, 17 and 19: one conversation.
+/// Boards 3, 16, 17, 19 and 20-22: one conversation.
 class ConversationScreen extends ConsumerStatefulWidget {
   const ConversationScreen({super.key, required this.peer});
   final String peer;
@@ -47,6 +52,44 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     setState(() {});
     await messenger.sendText(widget.peer, text);
   }
+
+  /// Board 20: attach, preview with a caption, send.
+  Future<void> _attach(String name) async {
+    final picked = await showAttachSheet(context);
+    if (picked == null || !mounted) return;
+    if (await picked.file.length() > MediaService.maxBytes) {
+      await picked.discard();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Files can be up to 2 GB.')));
+      }
+      return;
+    }
+    if (!mounted) return;
+    final caption = await showMediaPreview(context, picked, peerName: name);
+    if (caption == null) {
+      await picked.discard();
+      return;
+    }
+    unawaited(messenger.sendMedia(
+      widget.peer,
+      picked.file,
+      picked.kind,
+      caption: caption,
+      name: picked.name,
+      deleteSource: picked.temporary,
+    ));
+  }
+
+  Future<void> _sendVoice(VoiceClip clip) => messenger.sendMedia(
+        widget.peer,
+        clip.file,
+        MediaKind.voice,
+        name: 'Voice message.${clip.file.path.split('.').last}',
+        durationMs: clip.durationMs,
+        wave: clip.wave,
+        deleteSource: true,
+      );
 
   Future<void> _timer(ChatSummary? chat, String name) async {
     final r = await showTimerSheet(context, current: chat?.timerSeconds, peerName: name);
@@ -102,7 +145,14 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                           padding: const EdgeInsets.only(top: 10),
                           child: m.isNotice
                               ? _Notice(m: m, name: name, onVerify: () => context.push('/chat/${widget.peer}/verify'))
-                              : _Bubble(m: m, onTap: m.fromMe ? () => _details(m) : null),
+                              : m.isMedia
+                                  ? MediaBubble(
+                                      m: m,
+                                      messenger: messenger,
+                                      meta: _Meta(m: m),
+                                      onDetails: m.fromMe ? () => _details(m) : null,
+                                    )
+                                  : _Bubble(m: m, onTap: m.fromMe ? () => _details(m) : null),
                         );
                       },
                     ),
@@ -113,6 +163,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                       name: name,
                       onSend: _send,
                       onTyping: () => messenger.typing(widget.peer),
+                      onAttach: () => _attach(name),
+                      onVoice: _sendVoice,
+                      recordingDir: messenger.media.viewDir,
                     )
                   else
                     Padding(
@@ -165,7 +218,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
             Text('Message details',
                 style: TextStyle(fontFamily: SkyFonts.display, fontSize: 18, fontWeight: FontWeight.w700, color: t.textPrimary)),
             const SizedBox(height: 4),
-            Text('“${m.text}”', maxLines: 3, overflow: TextOverflow.ellipsis,
+            Text(m.isMedia ? (m.text.isEmpty ? m.media!.label : '${m.media!.label} · “${m.text}”') : '“${m.text}”',
+                maxLines: 3, overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 13.5, height: 1.45, color: t.textSecondary)),
             const SizedBox(height: 14),
             Container(
@@ -318,7 +372,6 @@ class _Bubble extends StatelessWidget {
                 ? const Color(0xFF26365E)
                 : t.bubbleOutgoing;
     final fg = m.fromMe ? Colors.white : t.textPrimary;
-    final meta = m.fromMe ? const Color(0xFFDDE5FC) : t.textSecondary;
     final time =
         '${m.sentAt.toLocal().hour.toString().padLeft(2, '0')}:${m.sentAt.toLocal().minute.toString().padLeft(2, '0')}';
     final statusWord = switch (m.status) {
@@ -348,15 +401,7 @@ class _Bubble extends StatelessWidget {
           child: SelectableText(m.text, style: TextStyle(fontSize: 14.5, height: 1.45, color: fg)),
         ),
         const SizedBox(height: 5),
-        Row(mainAxisSize: MainAxisSize.min, children: [
-          if (m.timerSeconds != null) ...[
-            SkyIcon(SkyIcons.clock, size: 11, color: meta, stroke: 2.2),
-            const SizedBox(width: 4),
-          ],
-          Text(m.status == MessageStatus.waiting ? 'Waiting to send' : time,
-              style: TextStyle(fontSize: 11, color: meta)),
-          if (m.fromMe) ...[const SizedBox(width: 5), _Tick(status: m.status)],
-        ]),
+        _Meta(m: m),
         if (failed)
           const Padding(
             padding: EdgeInsets.only(top: 6),
@@ -373,6 +418,35 @@ class _Bubble extends StatelessWidget {
         child: GestureDetector(onTap: onTap, child: bubble),
       ),
     );
+  }
+}
+
+/// Time, disappearing-timer clock and status mark under a message.
+class _Meta extends StatelessWidget {
+  const _Meta({required this.m});
+  final LocalMessage m;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.sky;
+    final meta = m.fromMe ? const Color(0xFFDDE5FC) : t.textSecondary;
+    final time =
+        '${m.sentAt.toLocal().hour.toString().padLeft(2, '0')}:${m.sentAt.toLocal().minute.toString().padLeft(2, '0')}';
+    final remote = m.isMedia &&
+        !m.fromMe &&
+        m.media!.state == MediaState.remote &&
+        m.media!.kind == MediaKind.video; // documents say it on their own line
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      if (m.timerSeconds != null) ...[
+        SkyIcon(SkyIcons.clock, size: 11, color: meta, stroke: 2.2),
+        const SizedBox(width: 4),
+      ],
+      Text(
+        m.status == MessageStatus.waiting ? 'Waiting to send' : (remote ? '$time · tap to download' : time),
+        style: TextStyle(fontSize: 11, color: meta),
+      ),
+      if (m.fromMe) ...[const SizedBox(width: 5), _Tick(status: m.status)],
+    ]);
   }
 }
 
@@ -556,49 +630,188 @@ class _Typing extends StatelessWidget {
   }
 }
 
-class _Composer extends StatelessWidget {
-  const _Composer({required this.controller, required this.name, required this.onSend, required this.onTyping});
+/// The message bar: attach, text, and send (or hold the microphone to
+/// record, board 22; slide left to cancel).
+class _Composer extends StatefulWidget {
+  const _Composer({
+    required this.controller,
+    required this.name,
+    required this.onSend,
+    required this.onTyping,
+    required this.onAttach,
+    required this.onVoice,
+    required this.recordingDir,
+  });
   final TextEditingController controller;
   final String name;
   final VoidCallback onSend;
   final VoidCallback onTyping;
+  final VoidCallback onAttach;
+  final Future<void> Function(VoiceClip clip) onVoice;
+  final Directory recordingDir;
+
+  @override
+  State<_Composer> createState() => _ComposerState();
+}
+
+class _ComposerState extends State<_Composer> {
+  late final _recorder = VoiceRecorder(widget.recordingDir);
+  Timer? _tick;
+  bool _recording = false;
+  bool _cancelArmed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_changed);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_changed);
+    _tick?.cancel();
+    unawaited(_recorder.dispose());
+    super.dispose();
+  }
+
+  void _changed() => setState(() {});
+
+  Future<void> _startRecording() async {
+    if (_recording) return;
+    final ok = await _recorder.start();
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Skyline needs the microphone to record. Allow it in your device settings.')));
+      return;
+    }
+    setState(() {
+      _recording = true;
+      _cancelArmed = false;
+    });
+    _tick = Timer.periodic(const Duration(milliseconds: 250), (_) => setState(() {}));
+  }
+
+  Future<void> _stopRecording({required bool send}) async {
+    if (!_recording) return;
+    _tick?.cancel();
+    setState(() => _recording = false);
+    if (!send || _cancelArmed) {
+      await _recorder.cancel();
+      return;
+    }
+    final clip = await _recorder.stop();
+    if (clip == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Hold the microphone to record.')));
+      }
+      return;
+    }
+    await widget.onVoice(clip);
+  }
 
   @override
   Widget build(BuildContext context) {
     final t = context.sky;
+    final hasText = widget.controller.text.trim().isNotEmpty;
+    final e = _recorder.elapsed;
+    final clock = '${e.inMinutes}:${(e.inSeconds % 60).toString().padLeft(2, '0')}';
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+      padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
       decoration: BoxDecoration(border: Border(top: BorderSide(color: t.border))),
       child: Row(children: [
-        Expanded(
-          child: TextField(
-            controller: controller,
-            minLines: 1,
-            maxLines: 5,
-            textInputAction: TextInputAction.newline,
-            onChanged: (_) => onTyping(),
-            decoration: InputDecoration(
-              hintText: 'Message',
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(22),
-                borderSide: BorderSide(color: t.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(22),
-                borderSide: BorderSide(color: t.border),
+        if (_recording) ...[
+          const SizedBox(width: 8),
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: _cancelArmed ? const Color(0xFF33405C) : const Color(0xFFE5484D),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(clock, style: TextStyle(fontFamily: SkyFonts.mono, fontSize: 15, color: t.textPrimary)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Semantics(
+              liveRegion: true,
+              child: Text(
+                _cancelArmed ? 'Release to cancel' : 'Recording · slide left to cancel',
+                style: TextStyle(fontSize: 13, color: _cancelArmed ? t.caution : t.textSecondary),
               ),
             ),
-            style: TextStyle(fontSize: 14.5, color: t.textPrimary),
           ),
-        ),
+        ] else ...[
+          IconButton(
+            tooltip: 'Attach',
+            onPressed: widget.onAttach,
+            style: IconButton.styleFrom(backgroundColor: t.surfaceRaised),
+            icon: SkyIcon(SkyIcons.plus, size: 20, color: t.textSecondary, stroke: 2),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: TextField(
+              controller: widget.controller,
+              minLines: 1,
+              maxLines: 5,
+              textInputAction: TextInputAction.newline,
+              onChanged: (_) => widget.onTyping(),
+              decoration: InputDecoration(
+                hintText: 'Message',
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(22),
+                  borderSide: BorderSide(color: t.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(22),
+                  borderSide: BorderSide(color: t.border),
+                ),
+              ),
+              style: TextStyle(fontSize: 14.5, color: t.textPrimary),
+            ),
+          ),
+        ],
         const SizedBox(width: 6),
-        IconButton.filled(
-          tooltip: 'Send to $name',
-          onPressed: onSend,
-          icon: const SkyIcon(SkyIcons.send, size: 19, color: Colors.white, stroke: 2),
-        ),
+        if (hasText && !_recording)
+          IconButton.filled(
+            tooltip: 'Send to ${widget.name}',
+            onPressed: widget.onSend,
+            icon: const SkyIcon(SkyIcons.send, size: 19, color: Colors.white, stroke: 2),
+          )
+        else
+          // The same widget throughout a recording, so the press is not lost.
+          Semantics(
+            key: const ValueKey('mic'),
+            button: true,
+            label: _recording ? 'Release to send' : 'Hold to record a voice message',
+            child: GestureDetector(
+              onLongPressStart: (_) => _startRecording(),
+              onLongPressMoveUpdate: (d) {
+                final armed = d.offsetFromOrigin.dx < -80;
+                if (armed != _cancelArmed) setState(() => _cancelArmed = armed);
+              },
+              onLongPressEnd: (_) => _stopRecording(send: true),
+              onLongPressCancel: () => _stopRecording(send: false),
+              onTap: () => ScaffoldMessenger.of(context)
+                  .showSnackBar(const SnackBar(content: Text('Hold the microphone to record.'))),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: _recording ? 56 : 40,
+                height: _recording ? 56 : 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _recording ? const Color(0xFFD04545) : t.surfaceRaised,
+                  shape: BoxShape.circle,
+                ),
+                child: SkyIcon(SkyIcons.mic,
+                    size: _recording ? 22 : 19, color: _recording ? Colors.white : t.textSecondary, stroke: 2),
+              ),
+            ),
+          ),
       ]),
     );
   }

@@ -4,7 +4,7 @@ library;
 
 enum MessageStatus { sending, waiting, sent, delivered, read, failed }
 
-enum MessageKind { text, notice }
+enum MessageKind { text, notice, media }
 
 /// The kinds of notice shown inline in a chat (boards 15-17).
 enum NoticeType { newDevice, renamed, blocked, undecryptable, timerChanged }
@@ -24,6 +24,7 @@ class LocalMessage {
     this.timerSeconds,
     this.readAt,
     this.expiresAt,
+    this.media,
   });
 
   final String id;
@@ -39,8 +40,10 @@ class LocalMessage {
   final int? timerSeconds;
   DateTime? readAt;
   DateTime? expiresAt;
+  final MediaInfo? media;
 
   bool get isNotice => kind == MessageKind.notice;
+  bool get isMedia => kind == MessageKind.media && media != null;
 
   Map<String, Object?> toJson() => {
         'id': id,
@@ -56,6 +59,7 @@ class LocalMessage {
         'timer': timerSeconds,
         'readAt': readAt?.millisecondsSinceEpoch,
         'expiresAt': expiresAt?.millisecondsSinceEpoch,
+        if (media != null) 'media': media!.toJson(),
       };
 
   static LocalMessage fromJson(Map<String, Object?> j) => LocalMessage(
@@ -72,7 +76,137 @@ class LocalMessage {
         timerSeconds: j['timer'] as int?,
         readAt: _time(j['readAt']),
         expiresAt: _time(j['expiresAt']),
+        media: j['media'] == null ? null : MediaInfo.fromJson(j['media']! as Map<String, Object?>),
       );
+}
+
+enum MediaKind { photo, video, voice, file }
+
+/// Where a file stands on THIS device.
+///  uploading: ours, not yet fully on the server (resumable).
+///  remote:    on the server only; photos and voice fetch themselves, the rest on tap.
+///  ready:     its ciphertext is on this device (decrypted only while viewed).
+///  expired:   the server deleted it (30 days) before this device fetched it.
+///  failed:    the upload was refused.
+enum MediaState { uploading, remote, ready, expired, failed }
+
+/// One encrypted file riding on a message (decisions.md 2026-09-25). The key,
+/// nonce, name, type and thumbnail travel only inside the encrypted message;
+/// the server stores an opaque blob under [attachmentId].
+class MediaInfo {
+  MediaInfo({
+    required this.kind,
+    required this.name,
+    required this.mime,
+    required this.size,
+    this.attachmentId,
+    this.cipherSize = 0,
+    this.key = '',
+    this.nonce = '',
+    this.sha256 = '',
+    this.thumb,
+    this.width,
+    this.height,
+    this.durationMs,
+    this.wave = const [],
+    this.localFile,
+    this.state = MediaState.remote,
+  });
+
+  final MediaKind kind;
+  final String name;
+  final String mime;
+  final int size; // plaintext bytes
+  String? attachmentId;
+  int cipherSize;
+  String key; // base64
+  String nonce; // base64
+  String sha256; // base64, of the ciphertext
+  final String? thumb; // base64 JPEG, a few KB
+  final int? width;
+  final int? height;
+  final int? durationMs;
+  final List<int> wave; // voice: 0..31 per bar
+  String? localFile; // file name of the ciphertext in the media folder
+  MediaState state;
+
+  /// What travels inside the encrypted message.
+  Map<String, Object?> toWire() => {
+        'id': attachmentId,
+        'kind': kind.name,
+        'name': name,
+        'mime': mime,
+        'size': size,
+        'cipherSize': cipherSize,
+        'key': key,
+        'nonce': nonce,
+        'sha256': sha256,
+        if (thumb != null) 'thumb': thumb,
+        if (width != null) 'w': width,
+        if (height != null) 'h': height,
+        if (durationMs != null) 'ms': durationMs,
+        if (wave.isNotEmpty) 'wave': wave,
+      };
+
+  /// A received file; returns null if the sender's JSON is not usable.
+  static MediaInfo? fromWire(Object? raw) {
+    if (raw is! Map<String, Object?>) return null;
+    final kind = MediaKind.values.where((k) => k.name == raw['kind']).firstOrNull;
+    final id = raw['id'];
+    if (kind == null || id is! String || raw['key'] is! String || raw['nonce'] is! String) return null;
+    return MediaInfo(
+      kind: kind,
+      name: (raw['name'] as String?) ?? 'file',
+      mime: (raw['mime'] as String?) ?? 'application/octet-stream',
+      size: (raw['size'] as int?) ?? 0,
+      attachmentId: id,
+      cipherSize: (raw['cipherSize'] as int?) ?? 0,
+      key: raw['key']! as String,
+      nonce: raw['nonce']! as String,
+      sha256: (raw['sha256'] as String?) ?? '',
+      thumb: raw['thumb'] as String?,
+      width: raw['w'] as int?,
+      height: raw['h'] as int?,
+      durationMs: raw['ms'] as int?,
+      wave: [for (final x in (raw['wave'] as List<Object?>? ?? const [])) if (x is int) x.clamp(0, 31)],
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+        ...toWire(),
+        'localFile': localFile,
+        'state': state.name,
+      };
+
+  static MediaInfo fromJson(Map<String, Object?> j) {
+    final m = MediaInfo.fromWire(j) ??
+        MediaInfo(
+          kind: MediaKind.values.byName(j['kind']! as String),
+          name: (j['name'] as String?) ?? 'file',
+          mime: (j['mime'] as String?) ?? 'application/octet-stream',
+          size: (j['size'] as int?) ?? 0,
+          cipherSize: (j['cipherSize'] as int?) ?? 0,
+          key: (j['key'] as String?) ?? '',
+          nonce: (j['nonce'] as String?) ?? '',
+          sha256: (j['sha256'] as String?) ?? '',
+          thumb: j['thumb'] as String?,
+          width: j['w'] as int?,
+          height: j['h'] as int?,
+          durationMs: j['ms'] as int?,
+          wave: [for (final x in (j['wave'] as List<Object?>? ?? const [])) if (x is int) x],
+        );
+    return m
+      ..localFile = j['localFile'] as String?
+      ..state = MediaState.values.byName((j['state'] as String?) ?? 'remote');
+  }
+
+  /// A one-line description, for the chat list and message details.
+  String get label => switch (kind) {
+        MediaKind.photo => 'Photo',
+        MediaKind.video => 'Video',
+        MediaKind.voice => 'Voice message',
+        MediaKind.file => name,
+      };
 }
 
 class ChatSummary {
