@@ -116,6 +116,17 @@ receive messages while Skyline is open.
 ./deploy.sh
 ```
 
+**On a small server (1 CPU, 2 GB)**, don't build on the server: building compiles MinIO from source
+and can run out of memory. Build on your computer instead, and send the images and code over SSH.
+From a checkout on your computer (Git Bash on Windows):
+
+```sh
+SSH=/c/Windows/System32/OpenSSH/ssh.exe infra/production/ship.sh root@chat.example.org
+```
+
+`ship.sh` puts the code in `/opt/skyline` and never touches the server's `.env` or `secrets/`. Then it
+runs `./deploy.sh --no-build` there. Use the same command for every update.
+
 This builds the images on the server (the first time takes 10-20 minutes), applies the database
 migrations, starts everything and waits until the API reports healthy. Until the real certificate
 exists (the next step), Nginx serves a temporary self-signed one, so browsers will warn you.
