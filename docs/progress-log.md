@@ -1230,3 +1230,40 @@ The owner approved prototypes 41 and 42 and started the phase.
   - how the new screens look (widget tests only);
   - the Android installer hand-off;
   - the Windows installer launch (it needs a real release with a checksum).
+
+## 2026-09-26 — Production server live: https://chat.secline.fyi
+
+- **Server:** Hetzner CPX12, `skyline-1`: 1 vCPU, 2 GB RAM, 38 GB disk, Ubuntu 26.04. IPv4
+  188.245.18.45, IPv6 2a01:4f8:1c1c:a2a5::1.
+  - DNS: Cloudflare, A and AAAA records, DNS only (grey cloud).
+  - The owner chose CPX12 after measuring the stack: about 280 MB for the containers, about 0.8–1 GB
+    with the OS.
+- **Hardening:** updates plus unattended upgrades, 2 GB swap, SSH keys only (root key-only), ufw on
+  22, 80, 443, 3478 and 49160-49200/udp. Docker comes from Ubuntu's own packages (29.1), with container
+  logs capped.
+- **Deploy:** `infra/production/ship.sh` builds the images on the owner's PC and streams the code and
+  images over SSH to `/opt/skyline`, then runs `deploy.sh --no-build`. The key lives in the Windows
+  ssh-agent, so use `SSH=/c/Windows/System32/OpenSSH/ssh.exe`.
+- **Secrets:** generated on the server (`.env`, mode 600).
+  - The Firebase service account is in `secrets/`, owned by uid 1000.
+  - The backup age key pair was made on the owner's PC. The private key is at
+    `C:\Users\kkhal\Skyline-secrets\skyline-backup.key`, and only the public key is on the server.
+- **Found on the real deploy, all fixed and committed:**
+  - `git archive` on Windows sent CRLF files, so no secret was generated;
+  - the certbot command was split by a YAML line break;
+  - `tls.sh` waited 12 h to pick up the first certificate (now 5 min; the running web image still has
+    the old loop until the next ship);
+  - newer coturn rejects `--no-loopback-peers`;
+  - the Let's Encrypt email is now optional, since they no longer send expiry mail.
+- **Verified:**
+  - the Let's Encrypt certificate (valid until 2026-12-25) and the HTTP redirect;
+  - the security headers;
+  - `/admin/` answers 200 and `/downloads/` answers 403;
+  - health: the database and Redis are up;
+  - every service is healthy, and coturn listens on the public IP;
+  - the first backup is age-encrypted, fetched with `fetch-backup.sh`, and decrypted with the owner's
+    key.
+- **Next, needs the owner:**
+  - create the owner account (`admin-create`, a password only they type) and turn on 2FA;
+  - the app build for the real domain, and the Android release key;
+  - push the commits (not pushed: 9348fe8 through 84fe98c).
