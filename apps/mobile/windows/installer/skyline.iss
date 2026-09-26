@@ -12,6 +12,13 @@
   #define AppVersion "0.0.0"
 #endif
 #define BuildDir "..\..\build\windows\x64\runner\Release"
+; Microsoft's C++ runtime, placed next to skyline.exe (app-local deployment),
+; so a fresh Windows needs no separate "Visual C++ Redistributable".
+#ifndef VCRuntimeDir
+  ; Sysnative: the 64-bit System32 as the 32-bit compiler sees it (System32
+  ; itself would be redirected to the 32-bit DLLs).
+  #define VCRuntimeDir "C:\Windows\Sysnative"
+#endif
 
 [Setup]
 ; Never change AppId: it is how Windows knows a new version replaces the old.
@@ -43,7 +50,10 @@ RestartApplications=no
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
 
 [Files]
-Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#BuildDir}\*"; DestDir: "{app}"; Excludes: "*.lib,*.exp"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#VCRuntimeDir}\msvcp140.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#VCRuntimeDir}\vcruntime140.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#VCRuntimeDir}\vcruntime140_1.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Skyline"; Filename: "{app}\skyline.exe"

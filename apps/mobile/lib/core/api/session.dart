@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../config.dart';
+
 /// Who this device is on the server, and its current tokens. Kept in the OS
 /// keystore beside the vault key, never in plain app storage.
 class Session {
@@ -73,7 +75,7 @@ class SecureSessionStore implements SessionStore {
               ),
             );
 
-  static const _name = 'skyline.session.v1';
+  static final _name = AppConfig.tagged('skyline.session.v1');
   final FlutterSecureStorage _storage;
 
   @override

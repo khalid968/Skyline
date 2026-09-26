@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../config.dart';
+
 import '../../src/rust/api/crypto.dart';
 
 export '../../src/rust/api/crypto.dart'
@@ -39,7 +41,7 @@ class SecureStorageKeyStore implements StorageKeyStore {
               ),
             );
 
-  static const _name = 'skyline.vault.storage-key.v1';
+  static final _name = AppConfig.tagged('skyline.vault.storage-key.v1');
   final FlutterSecureStorage _storage;
 
   @override

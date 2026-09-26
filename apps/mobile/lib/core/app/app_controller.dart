@@ -98,7 +98,8 @@ class AppController extends ChangeNotifier {
       media: MediaService(
         api: api!,
         dir: Directory('${_dataDir!.path}${Platform.pathSeparator}media'),
-        viewDir: Directory('${(await getTemporaryDirectory()).path}${Platform.pathSeparator}skyline-view'),
+        viewDir: Directory('${(await getTemporaryDirectory()).path}${Platform.pathSeparator}'
+            '${AppConfig.tagged('skyline-view')}'),
       ),
     );
     m.addListener(_watchSignedOut);
@@ -129,9 +130,13 @@ class AppController extends ChangeNotifier {
   }
 
   static Future<String> _defaultVaultPath() async {
-    final dir = await getApplicationSupportDirectory();
-    await Directory(dir.path).create(recursive: true);
-    return '${dir.path}${Platform.pathSeparator}skyline-vault.db';
+    // A build for a named server keeps its vault (and media) in a folder of
+    // its own; the development build stays where it always was.
+    final base = (await getApplicationSupportDirectory()).path;
+    final tag = AppConfig.storageTag;
+    final dir = tag.isEmpty ? base : '$base${Platform.pathSeparator}$tag';
+    await Directory(dir).create(recursive: true);
+    return '$dir${Platform.pathSeparator}skyline-vault.db';
   }
 }
 

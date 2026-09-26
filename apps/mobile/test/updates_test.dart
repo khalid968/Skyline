@@ -31,6 +31,12 @@ void main() {
     });
   });
 
+  test('the development build keeps its original storage names (existing vaults stay found)', () {
+    expect(AppConfig.storageTag, '');
+    expect(AppConfig.tagged('skyline.session.v1'), 'skyline.session.v1');
+    expect(AppConfig.tagged('skyline.vault.storage-key.v1'), 'skyline.vault.storage-key.v1');
+  });
+
   group('ReleaseService.parse', () {
     Map<String, Object?> latest(String version) => {
           'version': version,

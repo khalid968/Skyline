@@ -12,6 +12,22 @@ import 'package:flutter/foundation.dart';
 abstract final class AppConfig {
   static const _fromDefine = String.fromEnvironment('SKYLINE_API');
 
+  /// Which server this build belongs to, for keeping its data apart on a
+  /// desktop: empty for the development build (whose vault and stored keys
+  /// keep their original names), otherwise the server's host
+  /// ("chat.example.org"). A PC with both a development and a production
+  /// Skyline then has two separate vaults, sessions and keys, never one mixed
+  /// identity. Phones don't need it (each app is sandboxed, and one package
+  /// can't be installed twice), and must not change it: Android 1.0.0 shipped
+  /// with the untagged names, and an update that renamed them would lose the
+  /// vault.
+  static String get storageTag => _fromDefine.isEmpty || Platform.isAndroid || Platform.isIOS
+      ? ''
+      : Uri.parse(_fromDefine).host;
+
+  /// [name] for this build's stored items: unchanged for development.
+  static String tagged(String name) => storageTag.isEmpty ? name : '$name@$storageTag';
+
   static Uri get apiBase {
     final base = _fromDefine.isNotEmpty
         ? Uri.parse(_fromDefine)
