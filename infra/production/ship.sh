@@ -19,7 +19,7 @@ sha=$(git rev-parse --short HEAD)
 echo "== building the images here ($sha)"
 # Compose checks every setting even to build; these placeholders never leave
 # this computer and are not in the images.
-tmp=$(mktemp)
+tmp=.ship-build.env   # here, not mktemp: Docker on Windows can't see Git Bash's /tmp
 trap 'rm -f "$tmp"' EXIT
 cat > "$tmp" <<EOF
 SKYLINE_DOMAIN=build.invalid
