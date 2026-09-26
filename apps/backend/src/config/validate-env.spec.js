@@ -38,6 +38,11 @@ describe('validateEnv', () => {
     );
   });
 
+  it('rejects a malformed minimum app version, anywhere', () => {
+    expect(() => validateEnv({ APP_MIN_VERSION: 'one' })).toThrow(/APP_MIN_VERSION/);
+    expect(() => validateEnv({ APP_MIN_VERSION: '1.2.3' })).not.toThrow();
+  });
+
   describe('production refuses development placeholders', () => {
     const good = {
       NODE_ENV: 'production',
@@ -49,6 +54,8 @@ describe('validateEnv', () => {
       AUTH_TOTP_KEY: 'Zp7w1-a-genuinely-random-totp-key-value-4Rt6',
       TURN_SECRET: 'Qm3v8-a-genuinely-random-relay-secret-9Kd2',
       TURN_URLS: 'turn:relay.example.org:3478?transport=udp',
+      TRUST_PROXY: '1',
+      REDIS_PASSWORD: 'a-long-random-redis-password',
     };
 
     it('accepts properly configured production settings', () => {
@@ -79,6 +86,9 @@ describe('validateEnv', () => {
       ],
       ['a missing 2FA key', { AUTH_TOTP_KEY: undefined }],
       ['a missing relay secret', { TURN_SECRET: undefined }],
+      ['no reverse proxy named', { TRUST_PROXY: undefined }],
+      ['believing any proxy', { TRUST_PROXY: 'true' }],
+      ['no Redis password', { REDIS_PASSWORD: undefined }],
       ['the development relay secret', { TURN_SECRET: 'dev-only-turn-secret' }],
       ['no relay address', { TURN_URLS: undefined }],
       ['a scaled-up rate limit', { RATE_LIMIT_SCALE: '100' }],

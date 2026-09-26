@@ -55,8 +55,8 @@ Private to the owner. Current boards:
 | 38 · Admin · Audit log | Approved 2026-09-26: owner and admins only, filters, details, CSV |
 | 39 · Admin · Sessions | Approved 2026-09-26: dashboard sessions, sign out one or everyone but me |
 | 40 · A contact whose account is unavailable (mobile) | Approved 2026-09-26 (Phase 12): history stays, no composer or calls, nothing says why |
-| 41 · Get Skyline (download page, web) | Approved 2026-09-27 (Phase 13): Android / iPhone / Windows tabs, install steps, checksum, no cookies |
-| 42 · Update available / required (mobile) | Approved 2026-09-27 (Phase 13): banner and what's-new sheet; full-screen "Please update" below the minimum version |
+| 41 · Get Skyline (download page, web) | Approved 2026-09-26 (Phase 13): Android / iPhone / Windows tabs, install steps, checksum, no cookies |
+| 42 · Update available / required (mobile) | Approved 2026-09-26 (Phase 13): banner and what's-new sheet; full-screen "Please update" below the minimum version |
 
 Boards 2–7 are clickable in Play mode. Board 7 has working toggles.
 

@@ -1,0 +1,11 @@
+# Build context for infra/production/web (the repository root): only the
+# dashboard, the download page and the production config are needed.
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+.git
+apps/mobile
+apps/backend
+crypto-core
+docs

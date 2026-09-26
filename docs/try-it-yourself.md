@@ -405,6 +405,38 @@ Moderators see Overview and Sessions (their own), but not Alerts or the Audit lo
 The first **Start Skyline** after this update builds MinIO from source (a few minutes, once). Your stored
 files are kept.
 
+## Phase 13: the production stack on your PC (the dress rehearsal)
+
+This runs exactly what the rented server will run, on ports 8080/8443, with a self-signed certificate
+and without the call relay. Docker Desktop must be running. In Git Bash, from `infra/production`:
+
+```sh
+./generate-secrets.sh                      # creates .env here (gitignored) with random secrets
+age-keygen -o ~/rehearsal.key              # winget install FiloSottile.age, if you don't have it
+# in .env: SKYLINE_DOMAIN=localhost, SKYLINE_ADMIN_EMAIL=you@example.org,
+#          BACKUP_AGE_RECIPIENT=<the age1... key it printed>
+R="-f docker-compose.yml -f docker-compose.rehearsal.yml -p skyline-rehearsal"
+docker compose $R build
+docker compose $R run --rm migrate
+docker compose $R up -d
+docker compose $R exec backend node dist/cli/admin-create.js --username you --display-name "You"
+```
+
+Then, accepting the browser's certificate warning:
+
+1. **https://localhost:8443/** shows the download page (board 41). "No release has been published yet" is
+   correct at this point.
+2. **https://localhost:8443/admin/** shows the dashboard. Sign in with the account you just created.
+3. Take a backup and look at it:
+   `docker compose $R exec backup backup.sh --now`, then `docker compose $R exec backup ls -l /backups/latest`.
+   The files are encrypted: only `~/rehearsal.key` opens them.
+
+To finish, remove everything, including its data:
+`docker compose $R down -v`, and delete `.env` (it was only for the rehearsal).
+
+The update banner and "Please update" screen (board 42) are covered by `flutter test` (`update_gate_test.dart`).
+They appear in the app once a release is published (see `docs/deployment/operator-guide.md`, section 10).
+
 ## Starting over
 
 Your development accounts live in the Docker volume. To wipe everything and start clean:

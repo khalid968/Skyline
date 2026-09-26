@@ -4,8 +4,8 @@ Phase 12, 2026-09-26. This is the one place that says what Skyline defends again
 proves it. It also says plainly what Skyline does **not** defend against. Update it whenever a
 protection, a test, or an accepted risk changes.
 
-Rows marked **Phase 12** were found while writing this document and are fixed in this phase. Rows marked
-**Phase 13** belong to deployment.
+Rows marked **Phase 12** were found while writing this document and are fixed in this phase. The
+deployment items (Phase 13) are built and proven in the production dress rehearsal (2026-09-26).
 
 ---
 
@@ -53,18 +53,19 @@ holds.
 | Learn which usernames are operators | An unknown username still pays a full Argon2 verification, and the answer is the same 401 | `admin-api`, `timing.e2e-spec` |
 | Call member routes without a session | Global guards, default deny, 401 | `authorization.e2e-spec`, route inventory, `authorization-matrix.e2e-spec` |
 | Flood the server | Rate limits that fail closed (Redis down means 503, not unlimited). Body size limits. | `rate-limit-and-cli`, `http-behaviour` |
+| Dodge per-address limits by forging `X-Forwarded-For` | Nginx *sets* the header to the connecting address (never appends), and the API trusts exactly one proxy hop (`TRUST_PROXY=1`, required in production, `true` refused) | `releases.e2e-spec` (limits per client through a proxy); dress rehearsal: a forged header was ignored and the address was blocked after 8 wrong codes |
 | Probe the stack | No `x-powered-by`. Health says only up or down. Errors are uniform and generic. | `http-behaviour` (security headers on every response) |
-| Use the call relay as an open proxy | Short-lived HMAC credentials that require a device session | `calls.e2e-spec`; denying private ranges in production: **Phase 13** |
+| Use the call relay as an open proxy | Short-lived HMAC credentials that require a device session | `calls.e2e-spec`. In production coturn denies every private and loopback range, so the relay cannot reach inside (`infra/production/docker-compose.yml`). |
 
 ### A2 · Network attacker
 
 | Threat | Protection | Proof |
 | --- | --- | --- |
-| Read or alter traffic | TLS to Nginx (**Phase 13**). Content is end-to-end encrypted regardless, so the network sees only ciphertext. | `crypto-e2e`; `untrusted_input.rs` (tampered messages never decrypt to anything else) |
+| Read or alter traffic | TLS 1.2/1.3 at Nginx with a Let's Encrypt certificate, HTTP redirected to HTTPS, HSTS; release builds of the app refuse a non-https server. Content is end-to-end encrypted regardless, so the network sees only ciphertext. | `crypto-e2e`; `untrusted_input.rs` (tampered messages never decrypt to anything else) |
 | Swap keys in transit (man in the middle) | Strict identity trust: a changed identity is blocked, never silently accepted. Safety numbers with QR verification. | Rust `core` tests (identity trust), `key-directory` |
 | Read call media | DTLS-SRTP. The fingerprints travel inside Signal-encrypted messages, so the relay or the network cannot sit in the middle. | `calls_test` (relay only, both directions) |
 | Forge dashboard actions (CSRF) | The session cookie is SameSite=Strict. Every cookie-authenticated change needs `x-skyline-client`. There is no CORS. | `admin-api` |
-| Clickjack the dashboard | The API sends `frame-ancestors 'none'` and `X-Frame-Options: DENY`. The dashboard build carries a strict CSP; Nginx adds frame-ancestors for the dashboard (**Phase 13**). | `http-behaviour`, CI (the built page is self-contained) |
+| Clickjack the dashboard | The API sends `frame-ancestors 'none'` and `X-Frame-Options: DENY`. The dashboard build carries a strict CSP; Nginx sends a CSP with `frame-ancestors 'none'` for the dashboard and the download page. | `http-behaviour`, CI (the built page is self-contained), dress rehearsal (headers checked) |
 
 ### A3 · Member
 
@@ -103,7 +104,8 @@ compromise.
 | Relabel the sender of a session-starting message | Fixed in Phase 7: the sender is bound to the directory identity | `key-directory` (see known-risks, closed) |
 | Learn who talks to whom, and when | Nothing: the server routes messages, so it knows | **Residual.** Sealed sender is not implemented. Written up in known-risks. |
 | Change the code to exfiltrate keys | Out of scope for the server: keys never leave the device. A tampered **app** is a supply-chain risk (A9). | — |
-| Bypass the database triggers | The application's database role must not own the tables or be a superuser | **Phase 13** (deployment: a separate migration role) |
+| Bypass the database triggers | The API connects as `skyline_app`, which owns nothing: no TRUNCATE, no DDL, cannot disable triggers. Only migrations use the owner role. | `infra/production/postgres/10-app-role.sh`; dress rehearsal: TRUNCATE, DROP, CREATE and disabling triggers denied, audit-log DELETE blocked. **Residual:** root on the host can still use the owner role. |
+| Read backups | Encrypted with `age` to the owner's public key; the private key never touches the server | Dress rehearsal (restore drill). **Residual:** backups live on the same server (known-risks). |
 
 ### A6 · Relay operator
 
@@ -133,6 +135,8 @@ compromise.
 | --- | --- | --- |
 | A vulnerable dependency | Lockfiles are committed. CI fails on any moderate or worse npm advisory, and runs `cargo audit`. Fixed on 2026-09-26: multer, qs and @babel/core. | CI `security` job |
 | A tampered container image | coturn is pinned by digest. MinIO is built from source at a checked commit. GitHub Actions are pinned to commits. | `infra/docker/minio/Dockerfile`, `ci.yml` |
+| A tampered app update | Android APKs are signed with the organization's key (Android refuses a differently signed update); the Windows program and installer are Authenticode-signed; iPhone goes through TestFlight. The release workflow publishes nothing unsigned, and `publish-release.sh` checks every checksum. The download page shows each file's SHA-256. | `release.yml` (signature checks), `publish-release.sh` |
+| Keep members on a version with a known hole | The server's minimum version: older apps get 426 and "Please update" | `releases.e2e-spec`, `update_gate_test.dart` |
 | A committed secret | `.env` and Firebase files are gitignored. gitleaks scans the whole history on every push (the history is clean). | CI `security` job |
 | Third-party requests that leak users' or operators' addresses | No analytics or trackers. The app bundles its fonts. The dashboard's fonts are served by the dashboard itself (they had come from Google). | CI (the built page is self-contained), CSP `font-src 'self'` |
 
@@ -147,6 +151,14 @@ compromise.
 5. Dependency audits and secret scanning in CI. MinIO is built from source at a pinned commit.
 6. Found while building: sends to a suspended person used to be queued. They are now refused (board 40).
 
+## Phase 13 actions found here: all done (2026-09-26)
+
+1. TLS at Nginx, with `trust proxy` set to exactly one hop.
+2. The relay denies private ranges.
+3. Separate database roles: migrations own the schema, and the API owns nothing.
+4. MinIO built from source and reachable only inside the stack.
+5. `DATABASE_POOL_MAX=20`, as measured by the load test.
+
 ## Accepted residual risks (written up in `known-risks.md`)
 
 - A compromised server can add a ghost device (above).
@@ -157,3 +169,7 @@ compromise.
 - A closed app does not ring.
 - A shared address (an office NAT) that guesses codes is blocked as a whole for an hour. An operator can
   lift the block.
+- Backups live on the same server (owner decision). The operator guide's `fetch-backup.sh` copies them
+  off.
+- Calls fail on networks that allow only HTTPS: TURN over TLS is not enabled yet.
+- A locked-out owner cannot be recovered.

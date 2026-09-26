@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Get Skyline</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/get.css" />
+  <script src="/get.js" defer></script>
+</head>
+<body>
+  <!-- Board 41. Served by the organization's own Skyline server: no cookies,
+       no analytics, nothing recorded. The release comes from /api/app/releases. -->
+  <main class="page">
+    <div class="brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4B7BF5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 4.5 5.8v5.4c0 4.6 3.1 8.4 7.5 9.8 4.4-1.4 7.5-5.2 7.5-9.8V5.8Z"/><path d="M7.6 12.6h8.8"/><path d="M9.9 12.6 12 9.4l2.1 3.2"/></svg>
+      <span>SKYLINE</span>
+    </div>
+    <h1>Get the Skyline app</h1>
+    <p class="lead">You'll also need the one-time activation code your administrator gave you. Without it, the app does nothing.</p>
+
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-android" aria-controls="panel-android">Android</button>
+      <button role="tab" id="tab-ios" aria-controls="panel-ios">iPhone</button>
+      <button role="tab" id="tab-windows" aria-controls="panel-windows">Windows</button>
+    </div>
+
+    <section id="panel-android" role="tabpanel" aria-labelledby="tab-android" hidden>
+      <a class="primary" id="android-link" href="#">Download for Android</a>
+      <p class="meta" id="android-meta">Android 8 or newer</p>
+      <div class="card">
+        <strong>Installing, the first time</strong>
+        <ol>
+          <li>Tap Download, then open the file when it finishes.</li>
+          <li>Android asks whether your browser may install apps. Allow it once; you can turn it off afterwards.</li>
+          <li>Open Skyline and enter your activation code.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="panel-ios" role="tabpanel" aria-labelledby="tab-ios" hidden>
+      <a class="primary" id="ios-link" href="#">Open in TestFlight</a>
+      <p class="meta">iOS 15 or newer · installs through Apple's TestFlight app</p>
+      <div class="card">Install TestFlight from the App Store first, then come back and tap the button. Once Skyline is in the App Store, this button will take you there instead.</div>
+    </section>
+
+    <section id="panel-windows" role="tabpanel" aria-labelledby="tab-windows" hidden>
+      <a class="primary" id="windows-link" href="#">Download for Windows</a>
+      <p class="meta" id="windows-meta">Windows 10 or 11 · signed installer</p>
+      <div class="card">The installer is signed, so Windows shows the publisher's name when you run it. If Windows says the publisher is unknown, don't install it: tell your administrator.</div>
+    </section>
+
+    <p class="unavailable" id="unavailable" hidden>No release has been published yet. Ask your administrator.</p>
+
+    <div class="checksum">
+      <span>CHECK THE DOWNLOAD (OPTIONAL)</span>
+      <code id="checksum">—</code>
+    </div>
+    <p class="foot">This page is served by your organization's own Skyline server. It sets no cookies and records nothing about you.</p>
+  </main>
+</body>
+</html>

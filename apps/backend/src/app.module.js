@@ -15,6 +15,7 @@ import { ChatsModule } from './modules/chats/chats.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { CallsModule } from './modules/calls/calls.module';
+import { ReleasesModule } from './modules/releases/releases.module';
 import { MediaModule } from './modules/media/media.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
@@ -54,6 +55,7 @@ import {
     MessagesModule,
     GroupsModule,
     CallsModule,
+    ReleasesModule,
     MediaModule,
     NotificationsModule,
     AdminModule,

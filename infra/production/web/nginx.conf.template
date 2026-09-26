@@ -1,0 +1,91 @@
+# Skyline's public front door. ${SKYLINE_DOMAIN} is filled in by the nginx
+# image at start. Privacy: no access log (it would record every member's
+# address and timing); errors only.
+server_tokens off;
+access_log off;
+client_max_body_size 9m;   # one 8 MB encrypted media part, plus headers
+
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  ''      close;
+}
+
+# Plain HTTP: only the Let's Encrypt challenge; everything else to HTTPS.
+server {
+  listen 80;
+  listen [::]:80;
+  server_name ${SKYLINE_DOMAIN};
+  location /.well-known/acme-challenge/ { root /var/www/certbot; }
+  location / { return 301 https://$host$request_uri; }
+}
+
+server {
+  listen 443 ssl;
+  listen [::]:443 ssl;
+  http2 on;
+  server_name ${SKYLINE_DOMAIN};
+
+  ssl_certificate     /etc/nginx/tls/fullchain.pem;
+  ssl_certificate_key /etc/nginx/tls/privkey.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_prefer_server_ciphers off;
+  ssl_session_timeout 1d;
+  ssl_session_cache shared:skyline:10m;
+  ssl_session_tickets off;
+
+  # Every response over HTTPS (threat model A2).
+  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header Referrer-Policy "no-referrer" always;
+  add_header X-Frame-Options "DENY" always;
+
+  # The API and its WebSocket. X-Forwarded-For is SET to the client's
+  # address, never appended: a client cannot spoof its address past us
+  # (the backend trusts exactly one proxy hop, TRUST_PROXY=1).
+  location /api/ {
+    proxy_pass http://backend:3000/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_read_timeout 3600s;   # WebSockets stay open
+    proxy_send_timeout 3600s;
+    proxy_request_buffering off; # stream media uploads through
+    proxy_hide_header Strict-Transport-Security; # Nginx sends it, once
+  }
+
+  # Release files (APK, installer) and the manifest the API also reads.
+  location /downloads/ {
+    alias /srv/releases/;
+    add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    types { application/vnd.android.package-archive apk; application/json json; }
+    default_type application/octet-stream;
+  }
+
+  # The dashboard (built for /admin/). Same origin as the API: no CORS.
+  location /admin/ {
+    alias /srv/dashboard/;
+    try_files $uri $uri/ /admin/index.html;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header Cache-Control "no-store" always;
+  }
+
+  # The download page (board 41).
+  location / {
+    root /srv/download;
+    try_files $uri /index.html;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+  }
+}

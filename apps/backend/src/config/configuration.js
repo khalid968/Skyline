@@ -18,6 +18,12 @@ function devTurnUrls() {
   return `turn:${host}:3478?transport=udp,turn:${host}:3478?transport=tcp`;
 }
 
+export function parseTrustProxy(raw) {
+  if (raw === undefined || raw === '') return null;
+  if (/^\d+$/.test(raw)) return Number(raw);
+  return raw;
+}
+
 export default () => {
   const db = {
     host: process.env.DATABASE_HOST || 'localhost',
@@ -46,9 +52,20 @@ export default () => {
       // wake-ups). Unset: no push; the socket still works while the app runs.
       fcmServiceAccountFile: process.env.FCM_SERVICE_ACCOUNT_FILE || null,
     },
+    // Behind Nginx (Phase 13): which proxies to believe for the client's
+    // address, so rate limits and the audit log see real addresses. Express's
+    // own syntax: a hop count ("1") or addresses/subnets ("loopback, 172.16.0.0/12").
+    trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
+    // Board 42: apps older than this get 426 and "Please update". The release
+    // manifest (versions, download links, checksums) is written at release time.
+    app: {
+      minVersion: process.env.APP_MIN_VERSION || '0.0.0',
+      releasesFile: process.env.APP_RELEASES_FILE || null,
+    },
     redis: {
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+      password: process.env.REDIS_PASSWORD || undefined,
       channel: process.env.REDIS_EVENTS_CHANNEL || 'skyline:events',
     },
     auth: {

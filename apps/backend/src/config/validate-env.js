@@ -74,6 +74,10 @@ export function validateEnv(env) {
 
   const dbUrl = databaseUrl(env, problems);
 
+  if (env.APP_MIN_VERSION && !/^\d+\.\d+\.\d+$/.test(env.APP_MIN_VERSION)) {
+    problems.push('APP_MIN_VERSION must look like 1.2.3');
+  }
+
   if (env.RATE_LIMIT_SCALE !== undefined && env.RATE_LIMIT_SCALE !== '') {
     const scale = Number(env.RATE_LIMIT_SCALE);
     if (!Number.isFinite(scale) || scale <= 0) {
@@ -99,6 +103,16 @@ export function validateEnv(env) {
     // fallback (this machine's LAN address) is wrong for a server.
     if (!env.TURN_URLS) {
       problems.push('TURN_URLS must list the call relay address in production');
+    }
+    // Behind Nginx every request would otherwise seem to come from Nginx:
+    // one shared rate-limit counter for everyone, and useless audit addresses.
+    if (!env.TRUST_PROXY) {
+      problems.push('TRUST_PROXY must name the reverse proxy in production (e.g. "1")');
+    } else if (env.TRUST_PROXY === 'true') {
+      problems.push('TRUST_PROXY must not be "true" in production (that believes any client); name the proxy or a hop count');
+    }
+    if (!env.REDIS_PASSWORD || env.REDIS_PASSWORD.length < 16) {
+      problems.push('REDIS_PASSWORD must be set (at least 16 characters) in production');
     }
   }
 

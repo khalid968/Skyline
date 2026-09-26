@@ -7,6 +7,7 @@ import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/calls/presentation/call_overlay.dart';
 import 'features/settings/presentation/lock_screen.dart';
+import 'features/updates/presentation/update_widgets.dart';
 import 'src/rust/frb_generated.dart';
 
 Future<void> main() async {
@@ -32,9 +33,20 @@ class SkylineApp extends ConsumerWidget {
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
       routerConfig: router,
-      builder: (context, child) => _Calls(child: _LockGate(child: child ?? const SizedBox.shrink())),
+      builder: (context, child) => _Calls(child: _LockGate(child: _Updates(child: child ?? const SizedBox.shrink()))),
     );
   }
+}
+
+/// Board 42: a version the server no longer supports covers the app with
+/// "Please update" (inside the lock: a locked app stays locked).
+class _Updates extends ConsumerWidget {
+  const _Updates({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) =>
+      UpdateRequiredGate(releases: ref.watch(appControllerProvider).releases, child: child);
 }
 
 /// A call rings over everything, the lock screen included (like a phone): it

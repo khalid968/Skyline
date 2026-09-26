@@ -6,7 +6,56 @@ working around it.
 
 ---
 
-## 2026-09-27 — Phase 13 (Deployment) planned: owner decisions and plan
+## 2026-09-26 — Phase 13 (Deployment) as built
+
+How the owner's Phase 13 decisions were carried out. The operator's side: `docs/deployment/operator-guide.md`.
+
+- **One Compose file for production** (`infra/production/docker-compose.yml`). Nginx is the only public
+  web entry. Postgres, Redis, MinIO and the API have no published ports. coturn uses host networking,
+  because a relay needs its public address and port range, and denies every private and loopback range.
+- **One domain, paths not subdomains:** `/` is the download page, `/admin/` the dashboard, `/api/` the
+  API and WebSocket, `/downloads/` the release files. It needs one certificate and one DNS record, and the
+  dashboard stays same-origin with the API (no CORS, a locked decision). The dashboard is built with
+  `DASHBOARD_BASE=/admin/`. The app joins paths onto its base, because `Uri.resolve` would drop `/api`.
+- **Client addresses:** Nginx *sets* `X-Forwarded-For` to the connecting address, never appends to it.
+  The API trusts exactly one hop (`TRUST_PROXY=1`). Production refuses to start without it, and refuses
+  `true`, which would believe any forged header and make every per-address limit dodgeable.
+- **No access log** at Nginx: it would record every member's address and timing.
+- **Two database roles:** migrations run as the owner `skyline` (`docker compose run migrate`). The API
+  runs as `skyline_app`, which owns nothing, so it cannot TRUNCATE, disable triggers or change the
+  schema. The append-only and protected-owner triggers therefore hold even against a compromised API
+  process.
+- **Redis has a password** in production (required, at least 16 characters).
+- **The backend image is precompiled** (Babel into `dist/`, `node dist/main.js`, dev dependencies
+  pruned, runs as `node`, tini). babel-node is for development only.
+- **Backups:** nightly `pg_dump` plus the media volume, encrypted with `age` to the owner's public key,
+  kept 30 days on the same server. `restore.sh` refuses a database that isn't empty.
+  `fetch-backup.sh` copies the newest backup to the owner's computer (the known-risks mitigation).
+- **Deploy:** `deploy.sh` migrates, starts, health-checks and rolls back to the previous images on
+  failure. Migrations only add, so old code runs on the new schema.
+- **App versions (board 42):** the app sends `x-skyline-app: <version>+<platform>`. Below
+  `APP_MIN_VERSION` the server answers 426 `{minimum}` to everything except `/app/releases` and health.
+  A request without the header passes, because the dashboard and tools don't send it. The gate is for
+  forcing security fixes, not access control. `GET /app/releases` is public and names nobody. The app
+  checks at start and every six hours. The release manifest is a file in the `releases` volume, so
+  publishing needs no restart.
+- **Releases** (`.github/workflows/release.yml`, tag `v1.2.3`): the tag must equal pubspec's version,
+  and `docs/releases/<version>.md` must exist; it becomes the in-app notes. Each platform builds only
+  when its signing secrets exist, and **nothing unsigned is ever released**: the Android signature is
+  checked not to be the debug key, and Windows is verified with signtool. The workflow drafts a GitHub
+  release with `manifest.json` and `SHA256SUMS`. The operator runs `publish-release.sh`, which checks
+  every checksum, copies the files first and the manifest last, and can raise the minimum. A manual run
+  is a dry run.
+- **Windows installer:** Inno Setup, per-user (no admin rights), fixed AppId. The vault in `%APPDATA%`
+  is never touched by an update or an uninstall.
+- **Android signing** comes from `android/key.properties` (gitignored), written by CI from secrets. It
+  falls back to the debug key for local runs only.
+- **TURN over TLS is deferred:** certbot's key is root-only and coturn runs unprivileged
+  (known-risks).
+- **Found and recorded, not built:** a locked-out owner cannot be recovered (known-risks). A
+  shell-only reset tool needs the owner's decision.
+
+## 2026-09-26 — Phase 13 (Deployment) planned: owner decisions and plan
 
 The owner's answers:
 - **Hosting:** a rented virtual server in the EU (Hetzner or OVH class), running the single-host Docker

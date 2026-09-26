@@ -1134,7 +1134,7 @@ Board 40 was approved ("great keep going").
      denial, separate database roles, the production object store, and `DATABASE_POOL_MAX=20`.
 
 
-## 2026-09-27 — Phase 13 (Deployment) planned
+## 2026-09-26 — Phase 13 (Deployment) planned
 
 - Owner decisions (decisions.md): EU rented server; Android direct download, a signed Windows installer,
   TestFlight/App Store; MinIO from source; backups on the same server (risk recorded in known-risks, with
@@ -1148,3 +1148,54 @@ Board 40 was approved ("great keep going").
 
   The cross-device run proved Android→Windows video works (184 frames decoded, 640×480). The confirming
   rerun without the software-codec setting waits for the emulator.
+
+## 2026-09-26 — Phase 13 (Deployment) built (owner: "ok go")
+
+The owner approved prototypes 41 and 42 and started the phase.
+
+- **Built:**
+  - **`infra/production`:** Compose, Nginx with TLS and a self-signed stand-in, two database roles,
+    Redis with a password, coturn denying private ranges, and encrypted backups plus restore. Scripts:
+    `deploy.sh`, `generate-secrets.sh`, `publish-release.sh`, `fetch-backup.sh`.
+  - **Backend:**
+    - `TRUST_PROXY`, `REDIS_PASSWORD`, `APP_MIN_VERSION`;
+    - the 426 gate, and `GET /app/releases` (`modules/releases`);
+    - a precompiled production image (`Dockerfile`, `npm run build`).
+  - **Dashboard:** served under `/admin/`.
+  - **Download page:** `apps/download` (board 41).
+  - **App:**
+    - base-path-safe URLs and https required in release builds;
+    - the `x-skyline-app` header;
+    - `ReleaseService`, the update banner, the what's-new sheet and the "Please update" gate (board 42).
+  - **Release workflow:** `.github/workflows/release.yml`, with Android signing from `key.properties`,
+    the Inno Setup installer and TestFlight. The first release notes are `docs/releases/1.0.0.md`.
+  - **Operator guide:** `docs/deployment/operator-guide.md`.
+- **Proven:** a full dress rehearsal on this PC (project `skyline-rehearsal`, ports 8080/8443):
+  - every URL and the security headers;
+  - the app role cannot TRUNCATE, DROP, CREATE or disable triggers;
+  - a forged `X-Forwarded-For` is ignored, and the address is blocked after 8 wrong codes;
+  - backups are encrypted;
+  - restore drill: wipe, restore, sign in, and the triggers still hold;
+  - `publish-release.sh` published a test release, which the API and the page served;
+  - `fetch-backup.sh`'s copy came through with its checksums intact.
+
+  The rehearsal found one real bug: `dotenv` was missing from the image, so the admin CLI failed. It is
+  fixed. The rehearsal is torn down (`down -v`); its images are kept locally.
+- **Tests:**
+  - backend 119 unit, 105 db, 279 app;
+  - dashboard 31;
+  - app 32: new `updates_test.dart`, and `update_gate_test.dart` at three sizes, which caught an
+    overflow at 320×568 (fixed: the gate scrolls);
+  - `release.yml` passes actionlint.
+- **Found and recorded (known-risks):**
+  - TURN over TLS is not enabled.
+  - **The owner account cannot be recovered** if both the password and 2FA are lost. A shell-only
+    reset tool needs the owner's decision.
+- **Date fix:** the planning entries had been dated 2026-09-27; they are corrected to 2026-09-26.
+- **Not yet run (needs the owner):**
+  - the real server: rent it, set up DNS, then follow the guide;
+  - the release workflow: signing keys and certificates, an Apple Developer account, and the
+    `SKYLINE_DOMAIN` variable. A manual "Run workflow" dry run checks the builds, including the Windows
+    installer (Inno Setup is not installed on this PC).
+- **Still open from before:** rerun `scratchpad/run_cross.sh` to confirm Android→Windows video without the
+  software-codec setting, once the emulator is up.

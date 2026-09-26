@@ -1,0 +1,352 @@
+# Release (Phase 13). Pushing a tag v1.2.3 builds the apps for members and
+# drafts a GitHub release holding them plus manifest.json and SHA256SUMS. The
+# operator then puts them on the server with infra/production/publish-release.sh
+# (docs/deployment/operator-guide.md, "Releasing a new app version").
+#
+# Nothing is published unsigned. Each platform builds only when its signing
+# secrets exist and is left out of the release otherwise:
+#   Android:  ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS,
+#             ANDROID_KEY_PASSWORD, ANDROID_GOOGLE_SERVICES_JSON
+#   Windows:  WINDOWS_CERT_PFX_BASE64, WINDOWS_CERT_PASSWORD
+#   iPhone:   IOS_CERT_P12_BASE64, IOS_CERT_PASSWORD, IOS_PROFILE_BASE64,
+#             IOS_TEAM_ID, APPSTORE_API_KEY_ID, APPSTORE_API_ISSUER_ID,
+#             APPSTORE_API_KEY_P8, IOS_GOOGLE_SERVICE_INFO_PLIST
+# Repository variables (not secrets): SKYLINE_DOMAIN (chat.example.org) and
+# IOS_TESTFLIGHT_URL (the public TestFlight or App Store link).
+#
+# Run it by hand ("Run workflow") for a dry run: everything builds, unsigned
+# where secrets are missing, and nothing is released.
+#
+# Third-party actions are pinned to a commit (threat model A9).
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: 3.35.7
+
+jobs:
+  version:
+    name: Version and release notes
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      dry_run: ${{ steps.v.outputs.dry_run }}
+      api: ${{ steps.v.outputs.api }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The tag, pubspec.yaml and the version the app reports must agree, or
+      # the update check would compare the wrong numbers.
+      - id: v
+        env:
+          DOMAIN: ${{ vars.SKYLINE_DOMAIN }}
+        run: |
+          pub=$(sed -n 's/^version: \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' apps/mobile/pubspec.yaml)
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag=${GITHUB_REF_NAME#v}
+            [ "$tag" = "$pub" ] || { echo "::error::tag v$tag but pubspec.yaml says $pub"; exit 1; }
+            [ -n "$DOMAIN" ] || { echo "::error::set the repository variable SKYLINE_DOMAIN"; exit 1; }
+            echo "dry_run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "dry_run=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$pub" >> "$GITHUB_OUTPUT"
+          echo "api=https://${DOMAIN:-chat.example.org}/api" >> "$GITHUB_OUTPUT"
+          notes="docs/releases/$pub.md"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ ! -f "$notes" ]; then
+            echo "::error::write $notes (one line per change, shown in the app)"; exit 1
+          fi
+
+  android:
+    name: Android (signed APK)
+    needs: version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      HAVE_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
+        with:
+          version: '36.2'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Signing key and Firebase file
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_SERVICES: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ "$HAVE_KEY" = true ]; then
+            echo "$KEYSTORE" | base64 -d > android/release.jks
+            printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > android/key.properties
+          elif [ "${{ needs.version.outputs.dry_run }}" = false ]; then
+            echo "::warning::no Android signing key: Android is left out of this release"
+          fi
+          if [ -n "$GOOGLE_SERVICES" ]; then
+            printf '%s' "$GOOGLE_SERVICES" > android/app/google-services.json
+          else
+            # Dry run without secrets: a file of the right shape, fake values.
+            cat > android/app/google-services.json <<'JSON'
+          {"project_info":{"project_number":"000000000000","project_id":"skyline-ci-placeholder","storage_bucket":"skyline-ci-placeholder.appspot.com"},
+           "client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000","android_client_info":{"package_name":"com.skyline.skyline"}},
+           "oauth_client":[],"api_key":[{"current_key":"placeholder-not-a-key"}],
+           "services":{"appinvite_service":{"other_platform_oauth_client":[]}}}],"configuration_version":"1"}
+          JSON
+          fi
+      - name: Free disk space
+        working-directory: /
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/node_modules /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+      - run: flutter pub get
+      # One APK for every current phone (arm64) and older ones (arm32).
+      - name: Build
+        run: |
+          flutter build apk --release --target-platform android-arm,android-arm64 \
+            --build-number=${{ github.run_number }} \
+            --dart-define=SKYLINE_API=${{ needs.version.outputs.api }} \
+            --dart-define=SKYLINE_VERSION=${{ needs.version.outputs.version }}
+          mkdir -p ../../out
+          cp build/app/outputs/flutter-apk/app-release.apk ../../out/skyline-${{ needs.version.outputs.version }}.apk
+      - name: Check the signature
+        if: env.HAVE_KEY == 'true'
+        run: |
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | tail -1)
+          "$apksigner" verify --print-certs ../../out/*.apk | tee /tmp/certs
+          ! grep -q "CN=Android Debug" /tmp/certs
+      - run: rm -f android/release.jks android/key.properties
+        if: always()
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: env.HAVE_KEY == 'true' || needs.version.outputs.dry_run == 'true'
+        with:
+          name: android
+          path: out/
+          retention-days: 7
+
+  windows:
+    name: Windows (signed installer)
+    needs: version
+    runs-on: windows-2022
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/mobile
+    env:
+      HAVE_CERT: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
+        with:
+          version: '36.2'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build
+        run: |
+          flutter build windows --release \
+            --build-number=${{ github.run_number }} \
+            --dart-define=SKYLINE_API=${{ needs.version.outputs.api }} \
+            --dart-define=SKYLINE_VERSION=${{ needs.version.outputs.version }}
+      - name: Certificate
+        if: env.HAVE_CERT == 'true'
+        env:
+          PFX: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+        run: echo "$PFX" | base64 -d > "$RUNNER_TEMP/sign.pfx"
+      # skyline.exe is signed before it goes into the installer, then the
+      # installer itself; Windows SmartScreen checks both.
+      - name: Sign the program
+        if: env.HAVE_CERT == 'true'
+        env:
+          PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          signtool=$(ls "/c/Program Files (x86)/Windows Kits/10/bin/"*/x64/signtool.exe | tail -1)
+          "$signtool" sign //fd sha256 //tr http://timestamp.digicert.com //td sha256 \
+            //f "$RUNNER_TEMP/sign.pfx" //p "$PASSWORD" build/windows/x64/runner/Release/skyline.exe
+      - name: Installer
+        run: |
+          "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" //DAppVersion=${{ needs.version.outputs.version }} windows/installer/skyline.iss
+          mkdir -p ../../out
+          cp build/installer/skyline-setup-*.exe ../../out/
+      - name: Sign the installer
+        if: env.HAVE_CERT == 'true'
+        env:
+          PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          signtool=$(ls "/c/Program Files (x86)/Windows Kits/10/bin/"*/x64/signtool.exe | tail -1)
+          "$signtool" sign //fd sha256 //tr http://timestamp.digicert.com //td sha256 \
+            //f "$RUNNER_TEMP/sign.pfx" //p "$PASSWORD" ../../out/skyline-setup-*.exe
+          "$signtool" verify //pa ../../out/skyline-setup-*.exe
+      - run: rm -f "$RUNNER_TEMP/sign.pfx"
+        if: always()
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: env.HAVE_CERT == 'true' || needs.version.outputs.dry_run == 'true'
+        with:
+          name: windows
+          path: out/
+          retention-days: 7
+
+  # iPhone: built, signed and uploaded to TestFlight. Apple distributes it;
+  # the manifest only points at IOS_TESTFLIGHT_URL. Untested until the
+  # organization's Apple Developer account exists (no Mac here).
+  ios:
+    name: iPhone (TestFlight)
+    needs: version
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      HAVE_APPLE: ${{ secrets.IOS_CERT_P12_BASE64 != '' && secrets.APPSTORE_API_KEY_P8 != '' }}
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Skip without Apple signing
+        if: env.HAVE_APPLE != 'true'
+        working-directory: .
+        run: echo "::notice::no Apple signing secrets; iPhone is not built"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.HAVE_APPLE == 'true'
+      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
+        if: env.HAVE_APPLE == 'true'
+        with:
+          version: '36.2'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        if: env.HAVE_APPLE == 'true'
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Keychain, certificate and profile
+        if: env.HAVE_APPLE == 'true'
+        env:
+          P12: ${{ secrets.IOS_CERT_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_CERT_PASSWORD }}
+          PROFILE: ${{ secrets.IOS_PROFILE_BASE64 }}
+          PLIST: ${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST }}
+        run: |
+          kc="$RUNNER_TEMP/release.keychain-db"; kcpw=$(openssl rand -hex 24)
+          security create-keychain -p "$kcpw" "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$kcpw" "$kc"
+          echo "$P12" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$kc"
+          security set-key-partition-list -S apple-tool:,apple: -k "$kcpw" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$PROFILE" | base64 -d > "$HOME/Library/MobileDevice/Provisioning Profiles/skyline.mobileprovision"
+          rm "$RUNNER_TEMP/cert.p12"
+          [ -z "$PLIST" ] || printf '%s' "$PLIST" > ios/Runner/GoogleService-Info.plist
+      - name: Build
+        if: env.HAVE_APPLE == 'true'
+        env:
+          TEAM: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          uuid=$(security cms -D -i "$HOME/Library/MobileDevice/Provisioning Profiles/skyline.mobileprovision" | plutil -extract UUID raw -)
+          cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key><dict><key>com.skyline.skyline</key><string>$uuid</string></dict>
+          </dict></plist>
+          PLIST
+          flutter pub get
+          flutter build ipa --release \
+            --build-number=${{ github.run_number }} \
+            --export-options-plist="$RUNNER_TEMP/export.plist" \
+            --dart-define=SKYLINE_API=${{ needs.version.outputs.api }} \
+            --dart-define=SKYLINE_VERSION=${{ needs.version.outputs.version }}
+      - name: Upload to TestFlight
+        if: env.HAVE_APPLE == 'true' && needs.version.outputs.dry_run == 'false'
+        env:
+          KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          P8: ${{ secrets.APPSTORE_API_KEY_P8 }}
+        run: |
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          printf '%s' "$P8" > "$HOME/.appstoreconnect/private_keys/AuthKey_$KEY_ID.p8"
+          xcrun altool --upload-app --type ios -f build/ios/ipa/*.ipa --apiKey "$KEY_ID" --apiIssuer "$ISSUER"
+      - name: Clean up
+        if: always() && env.HAVE_APPLE == 'true'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/release.keychain-db" || true
+          rm -rf "$HOME/.appstoreconnect" "$HOME/Library/MobileDevice/Provisioning Profiles/skyline.mobileprovision"
+
+  release:
+    name: Draft the release
+    needs: [version, android, windows, ios]
+    if: needs.version.outputs.dry_run == 'false'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: out
+          merge-multiple: true
+      # manifest.json is what GET /app/releases and the download page read.
+      - name: Manifest and checksums
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          IOS_URL: ${{ vars.IOS_TESTFLIGHT_URL }}
+        run: |
+          cd out
+          ls -l
+          [ -n "$(ls)" ] || { echo "::error::no platform was signed; nothing to release"; exit 1; }
+          python3 - <<'PY'
+          import hashlib, json, os, glob
+          v = os.environ['VERSION']
+          notes = [l.strip().lstrip('-* ').strip() for l in open(f'../docs/releases/{v}.md', encoding='utf-8')]
+          latest = {'version': v, 'notes': [n for n in notes if n and not n.startswith('#')]}
+          def item(path):
+              data = open(path, 'rb').read()
+              return {'url': '/downloads/' + os.path.basename(path), 'size': len(data),
+                      'sha256': hashlib.sha256(data).hexdigest()}
+          for platform, pattern in (('android', '*.apk'), ('windows', 'skyline-setup-*.exe')):
+              found = glob.glob(pattern)
+              if found:
+                  latest[platform] = item(found[0])
+          if os.environ.get('IOS_URL'):
+              latest['ios'] = {'url': os.environ['IOS_URL']}
+          json.dump({'latest': latest}, open('manifest.json', 'w'), indent=2)
+          PY
+          sha256sum *.apk *.exe 2>/dev/null > SHA256SUMS || true
+          cat manifest.json SHA256SUMS
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" out/* --draft --verify-tag \
+            --title "Skyline ${{ needs.version.outputs.version }}" \
+            --notes-file "docs/releases/${{ needs.version.outputs.version }}.md"

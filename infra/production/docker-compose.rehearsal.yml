@@ -1,0 +1,13 @@
+# The dress rehearsal: the real production stack on a development PC.
+#   docker compose --env-file <rehearsal.env> -f docker-compose.yml \
+#     -f docker-compose.rehearsal.yml -p skyline-rehearsal up -d
+# Differences, and only these: web on 8080/8443 (no clash with anything on
+# 80/443), the self-signed certificate (no Let's Encrypt), and no call relay
+# (host networking does not exist on Docker Desktop).
+services:
+  web:
+    ports: !override
+      - "8080:80"
+      - "8443:443"
+  coturn:
+    profiles: ["never"]

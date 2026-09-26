@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../config.dart';
 import '../crypto/device_crypto.dart';
+import '../version.dart';
 import 'session.dart';
 
 /// A failed call. `status` is the HTTP status (0 when the server could not be
@@ -72,7 +74,9 @@ class ApiClient {
   /// already there (HTTP Range). [onProgress] gets (bytes so far, total).
   Future<void> download(String path, File out, {void Function(int got, int total)? onProgress}) async {
     Future<http.StreamedResponse> open(String token, int from) async {
-      final req = http.Request('GET', base.resolve(path))..headers['authorization'] = 'Bearer $token';
+      final req = http.Request('GET', url(path))
+        ..headers['authorization'] = 'Bearer $token'
+        ..headers['x-skyline-app'] = appVersionHeader;
       if (from > 0) req.headers['range'] = 'bytes=$from-';
       try {
         return await _http.send(req).timeout(_timeout);
@@ -119,6 +123,9 @@ class ApiClient {
   }
 
   /// Unauthenticated POST (activation).
+  /// A GET that needs no session (the release manifest, board 42).
+  Future<Object?> getPublic(String path) async => _decode(await _send('GET', path, null, null));
+
   Future<Object?> postPublic(String path, Object body) async {
     final res = await _send('POST', path, body, null);
     return _decode(res);
@@ -141,7 +148,8 @@ class ApiClient {
 
   Future<http.Response> _send(String method, String path, Object? body, String? token,
       {Uint8List? raw, Duration timeout = _timeout}) async {
-    final req = http.Request(method, base.resolve(path));
+    final req = http.Request(method, url(path));
+    req.headers['x-skyline-app'] = appVersionHeader;
     if (token != null) req.headers['authorization'] = 'Bearer $token';
     if (body != null) {
       req.headers['content-type'] = 'application/json';
@@ -161,7 +169,27 @@ class ApiClient {
     }
   }
 
+  /// [path] (which may carry a query) under the API base, keeping the base's
+  /// own path: https://example.org/api + /me/inbox -> https://example.org/api/me/inbox.
+  /// (Uri.resolve would drop "/api".)
+  Uri url(String path) => under(base, path);
+
+  static Uri under(Uri base, String path) {
+    final q = path.indexOf('?');
+    final p = q < 0 ? path : path.substring(0, q);
+    final joined = base.replace(path: AppConfig.joinPath(base.path, p));
+    return q < 0 ? joined : Uri.parse('$joined${path.substring(q)}');
+  }
+
+  /// Board 42: set when the server said this version is no longer supported
+  /// (426), with the minimum it named. The app shows "Please update".
+  static final updateRequired = ValueNotifier<String?>(null);
+
   Object? _decode(http.Response res) {
+    if (res.statusCode == 426) {
+      final body = res.body.isEmpty ? null : jsonDecode(res.body);
+      updateRequired.value = body is Map ? (body['minimum'] as String? ?? '') : '';
+    }
     Object? body;
     if (res.body.isNotEmpty) {
       try {

@@ -50,6 +50,7 @@ export class RedisService {
         const client = new Redis({
           host: config.get('redis.host'),
           port: config.get('redis.port'),
+          password: config.get('redis.password'),
           // Fail a command quickly rather than queueing it forever while Redis
           // is down; callers decide what an outage means for them.
           maxRetriesPerRequest: 2,

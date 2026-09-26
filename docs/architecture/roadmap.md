@@ -54,7 +54,7 @@ See `design.md` for the standing design-review rule.
 12. **Testing & hardening** — planned 2026-09-26 (decisions.md): CI on GitHub Actions including iOS, 500-person load target, threat model. Unit, widget, integration, backend, API, security, and performance suites
     across client, server and dashboard. Threat model review.
 
-13. **Deployment** — planned 2026-09-27 (decisions.md): EU rented server, Android direct download, a signed Windows installer, TestFlight, MinIO from source, backups on the same server. Production Docker Compose, Nginx TLS, CI/CD, secrets management, automated
+13. **Deployment** — ✅ built 2026-09-26, awaiting review (planned the same day; decisions.md): EU rented server, Android direct download, a signed Windows installer, TestFlight, MinIO from source, backups on the same server. Production Docker Compose, Nginx TLS, CI/CD, secrets management, automated
     backups, monitoring, logging, health checks, operator and admin guides.
 
 ---

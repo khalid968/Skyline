@@ -29,6 +29,39 @@ export function securityHeaders(production) {
   };
 }
 
+// Board 42: the apps send "x-skyline-app: <version>+<platform>". One older
+// than the minimum gets 426 with the versions, and shows "Please update"; the
+// dashboard and tools send no such header and are unaffected. Health and the
+// release manifest stay reachable, or an old app could never learn what to do.
+export function minimumAppVersion(minimum) {
+  const min = parseVersion(minimum);
+  return (req, res, next) => {
+    const raw = req.headers['x-skyline-app'];
+    if (!raw || !min || req.path === '/app/releases' || req.path.startsWith('/health')) return next();
+    const v = parseVersion(String(raw).split('+')[0]);
+    if (v && compareVersions(v, min) < 0) {
+      res.status(426).json({
+        statusCode: 426,
+        error: 'Upgrade Required',
+        message: 'this version of Skyline is no longer supported',
+        minimum,
+      });
+      return;
+    }
+    next();
+  };
+}
+
+export function parseVersion(s) {
+  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(s ?? '').trim());
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+export function compareVersions(a, b) {
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i];
+  return 0;
+}
+
 export function configureApp(app) {
   const config = app.get(ConfigService);
   const logger = new JsonLogger(config.get('logLevel'));
@@ -39,6 +72,11 @@ export function configureApp(app) {
   // Do not advertise the framework to anyone probing the server.
   app.getHttpAdapter().getInstance().disable('x-powered-by');
   app.use(securityHeaders(config.get('env') === 'production'));
+  const trustProxy = config.get('trustProxy');
+  if (trustProxy !== null && trustProxy !== undefined) {
+    app.getHttpAdapter().getInstance().set('trust proxy', trustProxy);
+  }
+  app.use(minimumAppVersion(config.get('app').minVersion));
 
   app.use(requestContext(logger));
   // Media upload parts arrive as raw ciphertext, at most one 8 MB part each.

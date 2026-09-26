@@ -11,6 +11,7 @@ import '../../features/media/data/media_service.dart';
 import '../../features/messages/data/local_store.dart';
 import '../../features/messages/data/messenger.dart';
 import '../../features/settings/data/app_lock.dart';
+import '../../features/updates/data/release_service.dart';
 import '../api/api_client.dart';
 import '../api/session.dart';
 import '../config.dart';
@@ -35,6 +36,7 @@ class AppController extends ChangeNotifier {
   AppPhase phase = AppPhase.loading;
   CryptoDevice? crypto;
   ApiClient? api;
+  ReleaseService? releases;
   LocalStore? store;
   Messenger? messenger;
   CallService? calls;
@@ -50,6 +52,8 @@ class AppController extends ChangeNotifier {
       api = ApiClient(base: AppConfig.apiBase, sessions: sessions, crypto: crypto!);
       store = LocalStore(crypto!);
       activation = ActivationService(api: api!, crypto: crypto!, sessions: sessions);
+      // Board 42: needs no session, so it also works before activation.
+      releases = ReleaseService(api: api!)..start();
       lock = AppLock(crypto: crypto!, store: store!);
       await lock!.load();
       final session = await sessions.read();

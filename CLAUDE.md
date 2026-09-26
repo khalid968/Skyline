@@ -51,6 +51,19 @@ the current state of play.
   - Also built: several files at once (albums), view once (screenshots blocked on Android and Windows) and
     the media gallery (boards 23-25). Photos are re-encoded with EXIF stripped; `Start Skyline.cmd` starts everything.
 - **Phase 8b (groups and message tools) — ✅ built and pushed 2026-09-25.**
+- **Phase 13 (Deployment) — ✅ built 2026-09-26**, awaiting the owner's review. Operator guide:
+  `docs/deployment/operator-guide.md`.
+  - `infra/production`: Compose with Nginx (Let's Encrypt), backend, Postgres with two roles (the API's
+    `skyline_app` owns nothing), Redis with a password, MinIO, coturn (private ranges denied), and
+    encrypted backups. Scripts: `deploy.sh` (rolls back on failure), `publish-release.sh`, `fetch-backup.sh`.
+  - One domain: `/` is the download page (board 41), `/admin/` the dashboard, `/api/` the API. Production
+    requires `TRUST_PROXY=1`.
+  - Board 42: the app sends `x-skyline-app`. Below `APP_MIN_VERSION` the server answers 426 and the app
+    shows "Please update". `GET /app/releases` is public.
+  - `.github/workflows/release.yml` (tag `v1.2.3`): builds the signed APK and Windows installer (Inno
+    Setup) and uploads to TestFlight. Nothing unsigned is released.
+  - Proven by a full dress rehearsal on this PC (headers, roles, spoofed-IP limit, backup and restore).
+    Not yet run: the real server and the release workflow. Both need secrets the owner creates.
 - **Phase 12 (Testing and hardening) — ✅ built 2026-09-26**, awaiting the owner's review.
   - Threat model: `docs/security/threat-model.md`. How to run every suite: `docs/testing.md`.
   - **CI** (`.github/workflows/ci.yml`, actions pinned to commits) runs backend, dashboard, Rust, Flutter,
@@ -186,6 +199,8 @@ apps/backend/    NestJS (JS) — src/modules/{auth,users,devices,chats,messages,
 apps/dashboard/  Admin web app — React + Vite, plain JS (src/lib/api.js is the only fetch path; src/pages/*)
 crypto-core/     Rust workspace: core/ (libsignal + encrypted vault), ffi/ (flutter_rust_bridge surface), e2e/ (dev tool)
 infra/docker/    Dev docker-compose.yml (Postgres, Redis, MinIO)
+infra/production/ Production Compose, Nginx, backups, deploy/publish scripts (operator guide: docs/deployment/)
+apps/download/   The public download page (board 41), served by Nginx at /
 docs/            progress-log.md + architecture/ (overview, decisions, design, contact-graph, roadmap,
                  known-risks, tech-stack-decisions, folder-structure), api/, database/, security/
                  (authorization.md), deployment/
@@ -241,6 +256,11 @@ npm install
 npm run dev                # http://localhost:5173, proxies /api -> backend
 npm test                   # Vitest + Testing Library, no backend needed
 npm run build
+
+# Production stack (infra/production; see docs/deployment/operator-guide.md)
+./deploy.sh                # on the server: build, migrate, start, health check, roll back on failure
+# Dress rehearsal on this PC: docs/try-it-yourself.md, "Phase 13"
+npm run build              # (apps/backend) Babel into dist/, what the image runs
 
 # Dev data plane (repo root) — Docker Desktop must be running
 docker compose -f infra/docker/docker-compose.yml up -d   # Postgres, Redis, MinIO

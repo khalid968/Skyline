@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../version.dart';
 import '../api/api_client.dart';
 
 enum ConnectionStatus { offline, connecting, online }
@@ -73,7 +74,7 @@ class RealtimeClient {
       final session = await api.session();
       final channel = IOWebSocketChannel.connect(
         uri,
-        headers: {'authorization': 'Bearer ${session.accessToken}'},
+        headers: {'authorization': 'Bearer ${session.accessToken}', 'x-skyline-app': appVersionHeader},
         pingInterval: const Duration(seconds: 25),
       );
       _channel = channel;

@@ -200,7 +200,7 @@ decrypts.
 - **If it flakes:** rerun it. If it keeps failing, look for a real new code path before widening the
   tolerance.
 
-## Backups live on the same server (owner decision, 2026-09-27) — ACCEPTED, WATCH
+## Backups live on the same server (owner decision, 2026-09-26) — ACCEPTED, WATCH
 - **What:** nightly encrypted backups are kept on the production server itself. If the server is lost (a
   provider outage or account problem, disk failure, a compromise that wipes it), the backups go with it,
   and so does everyone's message routing state, the contact graph and 30 days of media.
@@ -210,3 +210,21 @@ decrypts.
   Doing that weekly would turn this into an off-site backup.
 - **Revisit:** before the member count grows, or at the first incident.
 
+
+## Calls on networks that block UDP and port 3478 (Phase 13, 2026-09-26) — WATCH
+- **What:** the call relay listens on UDP and TCP 3478 only. TURN over TLS (5349, or 443) is not enabled:
+  certbot's private key is readable by root only and coturn runs unprivileged. A network that allows
+  nothing but HTTPS (some hotels, corporate guest Wi-Fi) cannot place calls; messages still work.
+- **Would close it:** a small hook that copies the renewed certificate into a coturn-readable volume,
+  then `--tls-listening-port`. On one IP, 443 is taken by Nginx, so it would be 5349 or a second address.
+- **Revisit:** at the first report of calls failing on a restrictive network.
+
+## The owner cannot be recovered (Phase 13, 2026-09-26) — ACCEPTED, WATCH
+- **What:** the owner account is protected: nobody can reset its password or two-factor sign-in, and
+  `admin-create` only bootstraps the first admin. An owner who loses both the password and the 2FA
+  device can no longer sign in to the dashboard, and nobody else can create or remove admins.
+- **Mitigation:** the operator guide says to keep both in a password manager and to promote a second
+  admin, who can keep running the service (members, links, groups) but cannot manage admins.
+- **Would close it:** a shell-only `owner:reset` tool (needs server access, audit-logged, announced
+  in the dashboard). Not built: it needs the owner's decision, since it gives whoever runs the server
+  a way to take the owner's account.

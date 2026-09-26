@@ -33,6 +33,9 @@ const cspMeta = {
 };
 
 export default defineConfig({
+  // Production serves the dashboard at /admin/ on the same origin as the API
+  // (infra/production); the build sets DASHBOARD_BASE=/admin/.
+  base: process.env.DASHBOARD_BASE || '/',
   plugins: [react(), cspMeta],
   server: {
     port: 5173,

@@ -9,6 +9,8 @@ import '../../../shared/widgets/connection_banner.dart';
 import '../../../shared/widgets/sky_icon.dart';
 import '../../messages/data/messenger.dart';
 import '../../messages/domain/models.dart';
+import '../../updates/data/release_service.dart';
+import '../../updates/presentation/update_widgets.dart';
 
 /// Boards 2, 5, 18 and 26: every conversation and group, and every person an
 /// administrator linked you to (a chat appears for them on its own). There is
@@ -19,10 +21,11 @@ class ChatListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final messenger = ref.watch(appControllerProvider).messenger!;
+    final app = ref.watch(appControllerProvider);
+    final messenger = app.messenger!;
     return ListenableBuilder(
       listenable: messenger,
-      builder: (context, _) => _ChatList(messenger: messenger),
+      builder: (context, _) => _ChatList(messenger: messenger, releases: app.releases),
     );
   }
 }
@@ -41,8 +44,9 @@ class _Row {
 enum _Filter { all, unread, groups }
 
 class _ChatList extends StatefulWidget {
-  const _ChatList({required this.messenger});
+  const _ChatList({required this.messenger, this.releases});
   final Messenger messenger;
+  final ReleaseService? releases;
 
   @override
   State<_ChatList> createState() => _ChatListState();
@@ -152,6 +156,7 @@ class _ChatListState extends State<_ChatList> {
             ]),
           ),
           ConnectionBanner(status: messenger.connection),
+          if (widget.releases != null && !_archive) UpdateBanner(releases: widget.releases!),
           Expanded(
             child: FutureBuilder<List<_Row>>(
               future: _rows(),

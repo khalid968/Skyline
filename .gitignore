@@ -53,3 +53,7 @@ Thumbs.db
 **/google-services.json
 **/GoogleService-Info.plist
 .dev-pids
+
+# Production settings and secrets live only on the server.
+infra/production/.env
+infra/production/secrets/
