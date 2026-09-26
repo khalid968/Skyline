@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/app/app_controller.dart';
 import 'core/push/push.dart';
 import 'core/routing/app_router.dart';
-import 'core/theme/app_theme.dart';
 import 'features/calls/presentation/call_overlay.dart';
 import 'features/settings/presentation/lock_screen.dart';
 import 'features/updates/presentation/update_widgets.dart';
@@ -25,15 +24,19 @@ class SkylineApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
+    final appearance = ref.watch(appControllerProvider.select((c) => c.appearance));
 
-    return MaterialApp.router(
-      title: 'Skyline',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
-      routerConfig: router,
-      builder: (context, child) => _Calls(child: _LockGate(child: _Updates(child: child ?? const SizedBox.shrink()))),
+    return ListenableBuilder(
+      listenable: appearance,
+      builder: (context, _) => MaterialApp.router(
+        title: 'Skyline',
+        debugShowCheckedModeBanner: false,
+        theme: appearance.lightTheme,
+        darkTheme: appearance.darkTheme,
+        themeMode: appearance.mode,
+        routerConfig: router,
+        builder: (context, child) => _Calls(child: _LockGate(child: _Updates(child: child ?? const SizedBox.shrink()))),
+      ),
     );
   }
 }
@@ -46,7 +49,10 @@ class _Updates extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) =>
-      UpdateRequiredGate(releases: ref.watch(appControllerProvider).releases, child: child);
+      UpdateRequiredGate(
+          releases: ref.watch(appControllerProvider).releases,
+          installer: ref.watch(appControllerProvider).installer,
+          child: child);
 }
 
 /// A call rings over everything, the lock screen included (like a phone): it

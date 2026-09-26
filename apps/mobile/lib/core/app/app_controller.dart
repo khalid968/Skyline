@@ -12,12 +12,14 @@ import '../../features/messages/data/local_store.dart';
 import '../../features/messages/data/messenger.dart';
 import '../../features/settings/data/app_lock.dart';
 import '../../features/updates/data/release_service.dart';
+import '../../features/updates/data/update_installer.dart';
 import '../api/api_client.dart';
 import '../api/session.dart';
 import '../config.dart';
 import '../crypto/device_crypto.dart';
 import '../push/push.dart';
 import '../realtime/realtime_client.dart';
+import '../theme/appearance.dart';
 
 enum AppPhase { loading, activate, ready, vaultLocked, failed }
 
@@ -37,6 +39,13 @@ class AppController extends ChangeNotifier {
   CryptoDevice? crypto;
   ApiClient? api;
   ReleaseService? releases;
+
+  /// Board 44: exists from the start (defaults) and loads the person's
+  /// choices once the vault is open.
+  final appearance = Appearance();
+
+  /// Board 43: downloads and hands over an update (one at a time).
+  final installer = UpdateInstaller();
   LocalStore? store;
   Messenger? messenger;
   CallService? calls;
@@ -51,6 +60,7 @@ class AppController extends ChangeNotifier {
       crypto = await openDeviceCrypto(vaultPath: path, keys: keys);
       api = ApiClient(base: AppConfig.apiBase, sessions: sessions, crypto: crypto!);
       store = LocalStore(crypto!);
+      await appearance.load(store!);
       activation = ActivationService(api: api!, crypto: crypto!, sessions: sessions);
       // Board 42: needs no session, so it also works before activation.
       releases = ReleaseService(api: api!)..start();

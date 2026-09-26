@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth, capabilities } from '../lib/auth';
-import { Avatar, Icon, ROLE_LABEL } from './ui';
+import { Avatar, Icon, Logo, ROLE_LABEL } from './ui';
 
 // Pages fire this after acting on an alert, so the count in the menu follows
 // at once instead of on the next poll.
@@ -33,7 +33,7 @@ export default function Shell() {
     <div className="shell">
       <aside className="sidebar" aria-label="Main">
         <div className="brand">
-          <Icon name="shield" size={24} stroke="#6E96FF" width={1.8} />
+          <Logo size={28} />
           <span className="brand-word">SKYLINE</span>
           <span className="brand-tag">ADMIN</span>
         </div>

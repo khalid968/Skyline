@@ -108,6 +108,24 @@ const PATHS = {
   ),
 };
 
+// Skyline's logo (board 45, "Blue shield S"; branding/skyline-logo.svg).
+export function Logo({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 120 120" aria-hidden="true">
+      <rect width="120" height="120" rx="28" fill="#0C111C" />
+      <path d="M60 20L31 32V55C31 75 43 90 60 98C77 90 89 75 89 55V32Z" fill="#3A63D8" />
+      <path
+        d="M70 45C67 38 51 38 51 47C51 55 69 54 69 64C69 73 53 75 49 68"
+        fill="none"
+        stroke="#FFFFFF"
+        strokeWidth="8"
+        strokeLinecap="round"
+      />
+      <circle cx="78" cy="34" r="4" fill="#E8A33D" />
+    </svg>
+  );
+}
+
 export function Icon({ name, size = 17, stroke = 'currentColor', width = 1.9 }) {
   return (
     <svg

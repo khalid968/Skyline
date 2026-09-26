@@ -22,7 +22,15 @@ class SkylineTokens extends ThemeExtension<SkylineTokens> {
     required this.danger,
     required this.bubbleIncoming,
     required this.bubbleOutgoing,
-  });
+    this.onAccent = const Color(0xFFFFFFFF),
+    this.onAccentSoft = const Color(0xFFDDE5FC),
+    Color? bubbleIncomingText,
+    Color? bubbleIncomingSoft,
+    Color? chatBackground,
+    this.chatPattern = ChatPattern.none,
+  })  : bubbleIncomingText = bubbleIncomingText ?? textPrimary,
+        bubbleIncomingSoft = bubbleIncomingSoft ?? textSecondary,
+        chatBackground = chatBackground ?? ground;
 
   final Color ground;
   final Color surface;
@@ -37,6 +45,32 @@ class SkylineTokens extends ThemeExtension<SkylineTokens> {
   final Color danger;
   final Color bubbleIncoming;
   final Color bubbleOutgoing;
+
+  // Board 44: the person's own colours. [onAccent] is text and icons on
+  // [accentFill] and on outgoing bubbles (white, or dark on a light colour);
+  // [onAccentSoft] is the time and marks there. The incoming pair follows the
+  // chat background so it stays readable on any colour.
+  final Color onAccent;
+  final Color onAccentSoft;
+  final Color bubbleIncomingText;
+  final Color bubbleIncomingSoft;
+  final Color chatBackground;
+  final ChatPattern chatPattern;
+
+  /// The accent as it reads on an incoming bubble (links, mentions, icons).
+  Color get incomingAccent {
+    final towards = bubbleIncoming.computeLuminance() < 0.4 ? const Color(0xFFFFFFFF) : const Color(0xFF000000);
+    double contrast(Color a, Color b) {
+      final x = a.computeLuminance(), y = b.computeLuminance();
+      return ((x > y ? x : y) + 0.05) / ((x > y ? y : x) + 0.05);
+    }
+
+    for (var t = 0.0; t <= 1.0; t += 0.05) {
+      final c = Color.lerp(accentText, towards, t)!;
+      if (contrast(c, bubbleIncoming) >= 4.5) return c;
+    }
+    return towards;
+  }
 
   static const dark = SkylineTokens(
     ground: Color(0xFF0C111C),
@@ -77,6 +111,9 @@ class SkylineTokens extends ThemeExtension<SkylineTokens> {
   SkylineTokens lerp(ThemeExtension<SkylineTokens>? other, double t) =>
       t < 0.5 ? this : (other as SkylineTokens? ?? this);
 }
+
+/// The optional texture behind a conversation (board 44).
+enum ChatPattern { none, dots, lines, grid }
 
 extension SkylineTokensX on BuildContext {
   SkylineTokens get sky => Theme.of(this).extension<SkylineTokens>()!;

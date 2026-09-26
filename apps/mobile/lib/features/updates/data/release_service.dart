@@ -8,7 +8,7 @@ import '../../../core/version.dart';
 
 /// One release, as the server publishes it (GET /app/releases).
 class Release {
-  Release({required this.version, required this.notes, required this.url, this.size});
+  Release({required this.version, required this.notes, required this.url, this.size, this.sha256});
   final String version;
   final List<String> notes;
 
@@ -16,6 +16,9 @@ class Release {
   /// the TestFlight / App Store link.
   final Uri url;
   final int? size;
+
+  /// The file's SHA-256 (hex), checked before an in-app install (board 43).
+  final String? sha256;
 }
 
 /// Board 42: is there a newer version for this platform, and is this one
@@ -31,6 +34,9 @@ class ReleaseService extends ChangeNotifier {
   final Uri base;
   Release? available;
   String? minimum;
+
+  /// When the server last answered (board 43's "Last checked").
+  DateTime? checkedAt;
   Timer? _timer;
   bool _disposed = false;
 
@@ -50,10 +56,18 @@ class ReleaseService extends ChangeNotifier {
       final j = await fetch('/app/releases') as Map<String, Object?>;
       minimum = j['minimum'] as String?;
       available = parse(j['latest'], base, Platform.operatingSystem);
+      checkedAt = DateTime.now();
       _changed();
     } on Object {
       // offline or no release yet: try again later
     }
+  }
+
+  /// Board 43's button: true when the server answered.
+  Future<bool> checkNow() async {
+    final before = checkedAt;
+    await check();
+    return checkedAt != before;
   }
 
   /// The release for [platform] if it is newer than this build.
@@ -76,6 +90,7 @@ class ReleaseService extends ChangeNotifier {
       ],
       url: url,
       size: (item['size'] as num?)?.toInt(),
+      sha256: item['sha256'] is String ? (item['sha256'] as String).toLowerCase() : null,
     );
   }
 

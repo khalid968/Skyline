@@ -6,6 +6,34 @@ working around it.
 
 ---
 
+## 2026-09-26 — Settings, appearance and the logo (boards 43-45)
+
+The owner approved boards 43 and 44 and chose logo 12, "Blue shield S".
+
+- **No web messaging client, not even as a stopgap for iPhone.** The owner asked; the locked decision
+  stands. There is no audited libsignal for the browser, and a web page reloads its code from the
+  server, so whoever controls the server could quietly serve a key-stealing version. iPhone users wait
+  for TestFlight: an individual Apple Developer account is the fastest route.
+- **Personal colours never touch meaning.** The person picks any colour for their own messages and
+  buttons, and any chat background. Green, amber and red (verified, caution, danger) are fixed tokens,
+  not offered as presets, and every notice keeps its icon and words. Text colours are computed for
+  WCAG 4.5:1: white or dark on the person's colour, and incoming bubbles follow the background. A test
+  covers every preset on every theme, plus arbitrary colours.
+- **Appearance lives in the vault's settings, on this device only.** It is never sent to the server,
+  so the first loading screen, before the vault opens, uses the default.
+- **In-app update install** (Android and Windows only): the app downloads from the organization's
+  server over https and checks the file's SHA-256 against the manifest. A mismatch deletes the file.
+  Then it hands the file to the system installer: Android still asks the person, and Windows runs the
+  signed installer. Without a checksum, or on iPhone, it opens the link instead. Android needs
+  `REQUEST_INSTALL_PACKAGES`, which is fine for a direct-download app and would need review on Play.
+- **Settings is a hub:** `/settings` holds Appearance, Privacy & security (moved to
+  `/settings/privacy`), Notifications and About. The name on it comes from `GET /me`, read-only: the
+  administrator sets names.
+- **Logo:** a blue shield with a white S and a small amber star on the app's dark ground. The source is
+  `branding/skyline-logo.svg`. `branding/make-icons.js` renders every icon: Android legacy and
+  adaptive (plus a themed monochrome), iOS full-bleed (iOS applies its own mask), Windows `.ico`, and
+  the web favicons.
+
 ## 2026-09-26 — Phase 13 (Deployment) as built
 
 How the owner's Phase 13 decisions were carried out. The operator's side: `docs/deployment/operator-guide.md`.

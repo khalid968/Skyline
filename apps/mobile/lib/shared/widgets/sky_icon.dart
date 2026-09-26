@@ -51,6 +51,8 @@ enum SkyIcons {
   videoOff('<rect x="2.8" y="6.5" width="12.5" height="11" rx="2.6"/><path d="m15.3 11.3 5.9-3.3v8l-5.9-3.3Z"/><path d="m3 3 18 18"/>'),
   more('<circle cx="12" cy="5.5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="18.5" r="1.3"/>'),
   chevronDown('<path d="m5 9 7 6.5L19 9"/>'),
+  palette('<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/>'),
+  bell('<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9Z"/><path d="M10 19.5a2 2 0 0 0 4 0"/>'),
   bellOff('<path d="M18 8.5a6 6 0 0 0-11.2-3"/><path d="M6 8.5c0 7-3 9-3 9h13"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><path d="m3 3 18 18"/>');
 
   const SkyIcons(this.paths);
@@ -71,7 +73,7 @@ class SkyIcon extends StatelessWidget {
     final hex = '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
     final svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${filled ? hex : 'none'}" '
         'stroke="$hex" stroke-opacity="${color.a}" stroke-width="$stroke" '
-        'stroke-linecap="round" stroke-linejoin="round">${icon.paths}</svg>';
+        'stroke-linecap="round" stroke-linejoin="round">${icon.paths.replaceAll('currentColor', hex)}</svg>';
     return ExcludeSemantics(child: SvgPicture.string(svg, width: size, height: size));
   }
 }

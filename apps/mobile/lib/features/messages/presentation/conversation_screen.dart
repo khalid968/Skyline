@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/app/app_controller.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/chat_backdrop.dart';
 import '../../../shared/widgets/connection_banner.dart';
 import '../../../shared/widgets/sky_icon.dart';
 import '../../media/data/media_service.dart';
@@ -330,67 +331,69 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                     ),
                   ConnectionBanner(status: messenger.connection, waiting: waiting),
                   Expanded(
-                    child: ListView.builder(
-                      controller: _scroll,
-                      reverse: true,
-                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-                      itemCount: messages.length + 1 + (messenger.isTyping(widget.peer) ? 1 : 0),
-                      itemBuilder: (context, i) {
-                        if (messenger.isTyping(widget.peer)) {
-                          if (i == 0) return _Typing(name: messenger.typingName(widget.peer));
-                          i--;
-                        }
-                        if (i == messages.length) return const _EncryptionNote();
-                        final m = messages[i];
-                        if (m.isNotice) {
-                          return Padding(
+                    child: ChatBackdrop(
+                      child: ListView.builder(
+                        controller: _scroll,
+                        reverse: true,
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                        itemCount: messages.length + 1 + (messenger.isTyping(widget.peer) ? 1 : 0),
+                        itemBuilder: (context, i) {
+                          if (messenger.isTyping(widget.peer)) {
+                            if (i == 0) return _Typing(name: messenger.typingName(widget.peer));
+                            i--;
+                          }
+                          if (i == messages.length) return const _EncryptionNote();
+                          final m = messages[i];
+                          if (m.isNotice) {
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: _Notice(
+                                m: m,
+                                name: name,
+                                onVerify: () => context.push('/chat/${widget.peer}/verify'),
+                                onCallBack: canWrite
+                                    ? (video) => ref.read(appControllerProvider).calls?.start(widget.peer, video: video)
+                                    : null,
+                              ),
+                            );
+                          }
+                          void act() => _actions(m, canWrite: canWrite, chat: chat, name: name);
+                          return AnimatedContainer(
+                            key: _keys.putIfAbsent(m.id, GlobalKey.new),
+                            duration: const Duration(milliseconds: 250),
                             padding: const EdgeInsets.only(top: 10),
-                            child: _Notice(
+                            decoration: BoxDecoration(
+                              color: _flash == m.id ? t.accentFill.withValues(alpha: 0.18) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: _Actionable(
                               m: m,
-                              name: name,
-                              onVerify: () => context.push('/chat/${widget.peer}/verify'),
-                              onCallBack: canWrite
-                                  ? (video) => ref.read(appControllerProvider).calls?.start(widget.peer, video: video)
-                                  : null,
+                              me: messenger.me,
+                              onActions: act,
+                              onReact: canWrite && !m.deleted ? (e) => messenger.react(m.id, e) : null,
+                              child: m.isMedia
+                                  ? _FromMember(
+                                      m: m,
+                                      child: MediaBubble(
+                                        m: m,
+                                        messenger: messenger,
+                                        meta: _Meta(m: m),
+                                        onDetails: m.fromMe ? () => _details(m) : null,
+                                      ),
+                                    )
+                                  : _Bubble(
+                                      m: m,
+                                      me: messenger.me,
+                                      unavailable: unavailable,
+                                      mentionTags: _tagsFor(m),
+                                      nameOf: messenger.nameOf,
+                                      onQuote: m.replyTo == null ? null : () => _jumpTo(m.replyTo!['id']! as String),
+                                      onTap: m.fromMe && !m.deleted ? () => _details(m) : null,
+                                    ),
                             ),
                           );
-                        }
-                        void act() => _actions(m, canWrite: canWrite, chat: chat, name: name);
-                        return AnimatedContainer(
-                          key: _keys.putIfAbsent(m.id, GlobalKey.new),
-                          duration: const Duration(milliseconds: 250),
-                          padding: const EdgeInsets.only(top: 10),
-                          decoration: BoxDecoration(
-                            color: _flash == m.id ? t.accentFill.withValues(alpha: 0.18) : Colors.transparent,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: _Actionable(
-                            m: m,
-                            me: messenger.me,
-                            onActions: act,
-                            onReact: canWrite && !m.deleted ? (e) => messenger.react(m.id, e) : null,
-                            child: m.isMedia
-                                ? _FromMember(
-                                    m: m,
-                                    child: MediaBubble(
-                                      m: m,
-                                      messenger: messenger,
-                                      meta: _Meta(m: m),
-                                      onDetails: m.fromMe ? () => _details(m) : null,
-                                    ),
-                                  )
-                                : _Bubble(
-                                    m: m,
-                                    me: messenger.me,
-                                    unavailable: unavailable,
-                                    mentionTags: _tagsFor(m),
-                                    nameOf: messenger.nameOf,
-                                    onQuote: m.replyTo == null ? null : () => _jumpTo(m.replyTo!['id']! as String),
-                                    onTap: m.fromMe && !m.deleted ? () => _details(m) : null,
-                                  ),
-                          ),
-                        );
-                      },
+                        },
+                      ),
                     ),
                   ),
                   if (canWrite && (_replyTo != null || _editing != null))
@@ -721,9 +724,9 @@ class _Bubble extends StatelessWidget {
         : failed
             ? const Color(0xFF5A1E26)
             : m.status == MessageStatus.waiting
-                ? const Color(0xFF26365E)
+                ? Color.lerp(t.bubbleOutgoing, t.ground, 0.45)!
                 : t.bubbleOutgoing;
-    final fg = m.fromMe ? Colors.white : t.textPrimary;
+    final fg = m.fromMe ? t.onAccent : t.bubbleIncomingText;
     final time =
         '${m.sentAt.toLocal().hour.toString().padLeft(2, '0')}:${m.sentAt.toLocal().minute.toString().padLeft(2, '0')}';
     if (m.deleted) {
@@ -780,7 +783,7 @@ class _Bubble extends StatelessWidget {
         Align(
           alignment: Alignment.centerLeft,
           // Plain text: long-press opens the actions, which include Copy.
-          child: Text.rich(_withMentions(m.text, mentionTags, fg, m.fromMe),
+          child: Text.rich(_withMentions(m.text, mentionTags, fg, m.fromMe, t),
               style: TextStyle(fontSize: 14.5, height: 1.45, color: fg)),
         ),
         const SizedBox(height: 5),
@@ -819,7 +822,7 @@ class _Meta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.sky;
-    final meta = m.fromMe ? const Color(0xFFDDE5FC) : t.textSecondary;
+    final meta = m.fromMe ? t.onAccentSoft : t.bubbleIncomingSoft;
     final time =
         '${m.sentAt.toLocal().hour.toString().padLeft(2, '0')}:${m.sentAt.toLocal().minute.toString().padLeft(2, '0')}';
     final remote = m.isMedia &&
@@ -850,16 +853,19 @@ class _Tick extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const c = Color(0xFFC9D6FB);
+    final t = context.sky;
+    final c = t.onAccentSoft;
     return switch (status) {
-      MessageStatus.sending || MessageStatus.waiting => const SkyIcon(SkyIcons.clock, size: 13, color: c, stroke: 2.3),
-      MessageStatus.sent => const SkyIcon(SkyIcons.tickOne, size: 14, color: c, stroke: 2.3),
-      MessageStatus.delivered => const SkyIcon(SkyIcons.tickTwo, size: 15, color: c, stroke: 2.3),
+      MessageStatus.sending || MessageStatus.waiting => SkyIcon(SkyIcons.clock, size: 13, color: c, stroke: 2.3),
+      MessageStatus.sent => SkyIcon(SkyIcons.tickOne, size: 14, color: c, stroke: 2.3),
+      MessageStatus.delivered => SkyIcon(SkyIcons.tickTwo, size: 15, color: c, stroke: 2.3),
+      // A badge in the bubble's own text colour: it differs in lightness
+      // from the bubble whatever colour the person chose (board 44).
       MessageStatus.read => Container(
           height: 16,
           padding: const EdgeInsets.symmetric(horizontal: 5),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
-          child: const SkyIcon(SkyIcons.tickTwo, size: 14, color: Color(0xFF2A4FB8), stroke: 2.8),
+          decoration: BoxDecoration(color: t.onAccent, borderRadius: BorderRadius.circular(999)),
+          child: SkyIcon(SkyIcons.tickTwo, size: 14, color: t.bubbleOutgoing, stroke: 2.8),
         ),
       MessageStatus.failed => const SkyIcon(SkyIcons.alertCircle, size: 14, color: Color(0xFFFFB4B7), stroke: 2.3),
     };
@@ -1204,7 +1210,7 @@ class _ComposerState extends State<_Composer> {
           IconButton.filled(
             tooltip: 'Send to ${widget.name}',
             onPressed: widget.onSend,
-            icon: const SkyIcon(SkyIcons.send, size: 19, color: Colors.white, stroke: 2),
+            icon: SkyIcon(SkyIcons.send, size: 19, color: t.onAccent, stroke: 2),
           )
         else
           // The same widget throughout a recording, so the press is not lost.
@@ -1337,7 +1343,7 @@ class _GroupHeader extends StatelessWidget {
 }
 
 /// Highlights "@Name" for the people a message mentions (board 27).
-TextSpan _withMentions(String text, List<String> tags, Color fg, bool onBlue) {
+TextSpan _withMentions(String text, List<String> tags, Color fg, bool onBlue, SkylineTokens t) {
   if (tags.isEmpty) return TextSpan(text: text);
   final spans = <InlineSpan>[];
   var rest = text;
@@ -1360,8 +1366,8 @@ TextSpan _withMentions(String text, List<String> tags, Color fg, bool onBlue) {
       text: tag,
       style: TextStyle(
         fontWeight: FontWeight.w600,
-        color: onBlue ? Colors.white : const Color(0xFF9DB8FF),
-        backgroundColor: onBlue ? const Color(0x33FFFFFF) : const Color(0x2E6E96FF),
+        color: onBlue ? t.onAccent : t.incomingAccent,
+        backgroundColor: (onBlue ? t.onAccent : t.incomingAccent).withValues(alpha: 0.18),
       ),
     ));
     rest = rest.substring(at + tag!.length);
@@ -1397,18 +1403,18 @@ class _Quote extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 6),
           padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
           decoration: BoxDecoration(
-            color: onBlue ? const Color(0x47080C16) : t.ground.withValues(alpha: 0.6),
-            border: Border(left: BorderSide(color: onBlue ? const Color(0xFFDDE5FC) : t.accentText, width: 3)),
+            color: onBlue ? const Color(0x2E080C16) : t.bubbleIncomingText.withValues(alpha: 0.08),
+            border: Border(left: BorderSide(color: onBlue ? t.onAccentSoft : t.incomingAccent, width: 3)),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             Text(who,
                 style: TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w700, color: onBlue ? const Color(0xFFDDE5FC) : t.accentText)),
+                    fontSize: 12, fontWeight: FontWeight.w700, color: onBlue ? t.onAccentSoft : t.incomingAccent)),
             Text((quote['preview'] as String?) ?? '',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12.5, color: onBlue ? const Color(0xFFDDE5FC) : t.textSecondary)),
+                style: TextStyle(fontSize: 12.5, color: onBlue ? t.onAccentSoft : t.bubbleIncomingSoft)),
           ]),
         ),
       ),
@@ -1647,12 +1653,14 @@ class _CallNotice extends StatelessWidget {
             height: 34,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: missed ? const Color(0x2ED04545) : (mine ? const Color(0x33FFFFFF) : const Color(0xFF2A3550)),
+              color: missed
+                  ? const Color(0x2ED04545)
+                  : (mine ? t.onAccent.withValues(alpha: 0.2) : t.incomingAccent.withValues(alpha: 0.16)),
               shape: BoxShape.circle,
             ),
             child: SkyIcon(video ? SkyIcons.video : SkyIcons.phoneCall,
                 size: 16,
-                color: missed ? const Color(0xFFFF9AA0) : (mine ? Colors.white : const Color(0xFF9DB8FF)),
+                color: missed ? const Color(0xFFFF9AA0) : (mine ? t.onAccent : t.incomingAccent),
                 stroke: 2),
           ),
           const SizedBox(width: 12),
@@ -1662,9 +1670,9 @@ class _CallNotice extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: missed ? const Color(0xFFFFB4B7) : (mine ? Colors.white : t.textPrimary))),
+                      color: missed ? const Color(0xFFFFB4B7) : (mine ? t.onAccent : t.bubbleIncomingText))),
               const SizedBox(height: 2),
-              Text(sub, style: TextStyle(fontSize: 12, color: mine ? const Color(0xFFDDE5FC) : t.textSecondary)),
+              Text(sub, style: TextStyle(fontSize: 12, color: mine ? t.onAccentSoft : t.bubbleIncomingSoft)),
             ]),
           ),
           if (missed && onCallBack != null) ...[

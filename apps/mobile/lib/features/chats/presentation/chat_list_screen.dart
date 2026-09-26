@@ -10,6 +10,7 @@ import '../../../shared/widgets/sky_icon.dart';
 import '../../messages/data/messenger.dart';
 import '../../messages/domain/models.dart';
 import '../../updates/data/release_service.dart';
+import '../../updates/data/update_installer.dart';
 import '../../updates/presentation/update_widgets.dart';
 
 /// Boards 2, 5, 18 and 26: every conversation and group, and every person an
@@ -25,7 +26,7 @@ class ChatListScreen extends ConsumerWidget {
     final messenger = app.messenger!;
     return ListenableBuilder(
       listenable: messenger,
-      builder: (context, _) => _ChatList(messenger: messenger, releases: app.releases),
+      builder: (context, _) => _ChatList(messenger: messenger, releases: app.releases, installer: app.installer),
     );
   }
 }
@@ -44,9 +45,10 @@ class _Row {
 enum _Filter { all, unread, groups }
 
 class _ChatList extends StatefulWidget {
-  const _ChatList({required this.messenger, this.releases});
+  const _ChatList({required this.messenger, this.releases, this.installer});
   final Messenger messenger;
   final ReleaseService? releases;
+  final UpdateInstaller? installer;
 
   @override
   State<_ChatList> createState() => _ChatListState();
@@ -156,7 +158,7 @@ class _ChatListState extends State<_ChatList> {
             ]),
           ),
           ConnectionBanner(status: messenger.connection),
-          if (widget.releases != null && !_archive) UpdateBanner(releases: widget.releases!),
+          if (widget.releases != null && !_archive) UpdateBanner(releases: widget.releases!, installer: widget.installer),
           Expanded(
             child: FutureBuilder<List<_Row>>(
               future: _rows(),
@@ -221,7 +223,7 @@ class _ChatListState extends State<_ChatList> {
                             padding: const EdgeInsets.only(right: 24),
                             decoration: BoxDecoration(color: t.accentFill, borderRadius: BorderRadius.circular(14)),
                             child: Text(r.archived ? 'Unarchive' : 'Archive',
-                                style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                                style: TextStyle(fontWeight: FontWeight.w600, color: t.onAccent)),
                           ),
                           // Swipe to archive (a phone); the row comes back from
                           // the list itself, so nothing is really dismissed.
@@ -302,8 +304,8 @@ class _Chip extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
           ),
           child: Text(label,
-              style: TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : t.textSecondary)),
+              style:
+                  TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? t.onAccent : t.textSecondary)),
         ),
       ),
     );
@@ -401,7 +403,8 @@ class _ChatRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(mentioned ? '@' : '$unread',
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white)),
+                      style: TextStyle(
+                          fontSize: 11.5, fontWeight: FontWeight.w700, color: row.muted ? Colors.white : t.onAccent)),
                 ),
               ],
             ]),

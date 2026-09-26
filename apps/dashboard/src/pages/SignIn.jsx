@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { ApiError } from '../lib/api';
-import { Icon } from '../components/ui';
+import { Logo } from '../components/ui';
 
 export function AuthBrand({ title, children }) {
   return (
     <div className="auth-brand">
       <div className="brand" style={{ padding: 0 }}>
-        <Icon name="shield" size={30} stroke="#6E96FF" width={1.8} />
+        <Logo size={34} />
         <span className="brand-word" style={{ fontSize: 17 }}>SKYLINE</span>
         <span className="brand-tag">ADMIN</span>
       </div>

@@ -62,7 +62,7 @@ class MediaBubble extends StatelessWidget {
                 MediaKind.file => _FileRow(m: m, index: 0, messenger: messenger, onDetails: onDetails),
                 MediaKind.voice => VoiceRow(m: m, messenger: messenger),
               };
-        final fg = m.fromMe ? Colors.white : t.textPrimary;
+        final fg = m.fromMe ? t.onAccent : t.bubbleIncomingText;
         return _align(Container(
           width: m.isAlbum ? 260 : (visual ? 240 : 260),
           padding: const EdgeInsets.all(4),
@@ -99,7 +99,7 @@ class MediaBubble extends StatelessWidget {
     if (!m.isAlbum || !m.fromMe || m.status != MessageStatus.sending) return null;
     final done = m.items.where((i) => i.state == MediaState.ready).length;
     return Text('Encrypting and sending · ${done + 1 > m.items.length ? m.items.length : done + 1} of ${m.items.length}',
-        style: const TextStyle(fontSize: 11, color: Color(0xFFDDE5FC)));
+        style: TextStyle(fontSize: 11, color: fg.withValues(alpha: 0.8)));
   }
 
   Widget _align(Widget child) => Align(
@@ -407,7 +407,7 @@ class _ViewOnceBubble extends StatelessWidget {
     } else {
       sub = info.state == MediaState.ready ? 'Tap to open · ${_clock(m.sentAt)}' : 'Tap to download · ${_clock(m.sentAt)}';
     }
-    final ring = m.fromMe ? const Color(0xFFDDE5FC) : (opened || gone ? const Color(0xFF55637D) : t.caution);
+    final ring = m.fromMe ? t.onAccentSoft : (opened || gone ? const Color(0xFF55637D) : t.caution);
     final bubble = Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
@@ -434,9 +434,9 @@ class _ViewOnceBubble extends StatelessWidget {
               style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,
-                  color: m.fromMe ? Colors.white : (opened ? t.textSecondary : t.textPrimary))),
+                  color: m.fromMe ? t.onAccent : (opened ? t.textSecondary : t.bubbleIncomingText))),
           const SizedBox(height: 2),
-          Text(sub, style: TextStyle(fontSize: 11.5, color: m.fromMe ? const Color(0xFFDDE5FC) : t.textSecondary)),
+          Text(sub, style: TextStyle(fontSize: 11.5, color: m.fromMe ? t.onAccentSoft : t.bubbleIncomingSoft)),
         ]),
       ]),
     );
@@ -478,8 +478,8 @@ class _FileRow extends StatelessWidget {
     final t = context.sky;
     final info = m.items[index];
     final tr = messenger.media.transfer(_key(m, index));
-    final fg = m.fromMe ? Colors.white : t.textPrimary;
-    final sub = m.fromMe ? const Color(0xFFDDE5FC) : t.textSecondary;
+    final fg = m.fromMe ? t.onAccent : t.bubbleIncomingText;
+    final sub = m.fromMe ? t.onAccentSoft : t.bubbleIncomingSoft;
     final ready = info.state == MediaState.ready && messenger.media.hasLocal(info);
     final ext = info.name.contains('.') ? info.name.split('.').last.toUpperCase() : 'FILE';
     final line = tr != null
@@ -506,13 +506,13 @@ class _FileRow extends StatelessWidget {
             height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: m.fromMe ? const Color(0x33FFFFFF) : const Color(0xFF2A3550),
+              color: m.fromMe ? t.onAccent.withValues(alpha: 0.2) : t.incomingAccent.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(10),
             ),
             child: SkyIcon(
               ready || m.fromMe ? SkyIcons.file : SkyIcons.download,
               size: 18,
-              color: m.fromMe ? Colors.white : const Color(0xFF9DB8FF),
+              color: m.fromMe ? t.onAccent : t.incomingAccent,
             ),
           ),
           const SizedBox(width: 11),
@@ -529,8 +529,9 @@ class _FileRow extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: tr.encrypting && tr.total <= 0 ? null : tr.fraction,
                     minHeight: 4,
-                    color: m.fromMe ? Colors.white : t.accentText,
-                    backgroundColor: m.fromMe ? const Color(0x33FFFFFF) : const Color(0xFF2A3550),
+                    color: m.fromMe ? t.onAccent : t.incomingAccent,
+                    backgroundColor:
+                        m.fromMe ? t.onAccent.withValues(alpha: 0.2) : t.incomingAccent.withValues(alpha: 0.16),
                   ),
                 ),
               ],
@@ -708,8 +709,8 @@ class _VoiceRowState extends State<VoiceRow> {
         ? info.wave
         : const [8, 14, 20, 12, 22, 26, 16, 10, 18, 24, 14, 8, 12, 20, 26, 18, 10, 14, 22, 16, 8, 12, 18, 24];
     final played = (bars.length * _position).round();
-    final on = light ? Colors.white : t.accentText;
-    final off = light ? Colors.white54 : const Color(0xFF45526E);
+    final on = light ? t.onAccent : t.incomingAccent;
+    final off = (light ? t.onAccent : t.bubbleIncomingText).withValues(alpha: 0.35);
     final transfer = widget.messenger.media.transfer(_key(widget.m, 0));
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
@@ -724,7 +725,7 @@ class _VoiceRowState extends State<VoiceRow> {
               width: 36,
               height: 36,
               alignment: Alignment.center,
-              decoration: BoxDecoration(color: light ? Colors.white : t.accentFill, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: light ? t.onAccent : t.accentFill, shape: BoxShape.circle),
               child: transfer != null
                   ? SizedBox(
                       width: 18,
@@ -732,13 +733,13 @@ class _VoiceRowState extends State<VoiceRow> {
                       child: CircularProgressIndicator(
                         strokeWidth: 2.4,
                         value: transfer.encrypting && transfer.total <= 0 ? null : transfer.fraction,
-                        color: light ? const Color(0xFF2A4FB8) : Colors.white,
+                        color: light ? t.bubbleOutgoing : t.onAccent,
                       ),
                     )
                   : SkyIcon(
                       _playing ? SkyIcons.pause : SkyIcons.play,
                       size: 14,
-                      color: light ? const Color(0xFF2A4FB8) : Colors.white,
+                      color: light ? t.bubbleOutgoing : t.onAccent,
                       stroke: 2.6,
                       filled: !_playing,
                     ),
@@ -768,7 +769,7 @@ class _VoiceRowState extends State<VoiceRow> {
         ),
         const SizedBox(width: 8),
         Text(formatDuration(info.durationMs),
-            style: TextStyle(fontSize: 11, color: light ? const Color(0xFFDDE5FC) : t.textSecondary)),
+            style: TextStyle(fontSize: 11, color: light ? t.onAccentSoft : t.bubbleIncomingSoft)),
       ]),
     );
   }

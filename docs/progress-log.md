@@ -1199,3 +1199,34 @@ The owner approved prototypes 41 and 42 and started the phase.
     installer (Inno Setup is not installed on this PC).
 - **Still open from before:** rerun `scratchpad/run_cross.sh` to confirm Android→Windows video without the
   software-codec setting, once the emulator is up.
+
+## 2026-09-26 — Settings, appearance and logo (boards 43-45), built
+
+- **Owner decisions:**
+  - Boards 43 and 44 are approved. The owner asked for more colour choice, so 44 got any colour for
+    messages and any chat background.
+  - Logo 12, "Blue shield S", was chosen from 12 directions.
+  - The web client stays out, even as an iPhone stopgap (decisions.md).
+- **App:**
+  - `core/theme/appearance.dart`: themes, presets, contrast maths, saved in the vault.
+  - New tokens: `onAccent`, `onAccentSoft`, `bubbleIncomingText`, `bubbleIncomingSoft`,
+    `chatBackground`, `chatPattern`, `incomingAccent`.
+  - Chat and media bubbles no longer hard-code white-on-blue.
+  - `ChatBackdrop` draws the chat background and its pattern.
+  - `/settings` is now a hub (`settings_screen.dart`); `/settings/appearance` and `/settings/privacy`
+    sit under it.
+  - `UpdateInstaller`: in-app download with a SHA-256 check on Android and Windows. It is used by
+    Settings, the board 42 sheet and the "Please update" screen.
+- **Logo:**
+  - `branding/skyline-logo.svg` plus `make-icons.js`: Android legacy, adaptive and monochrome icons,
+    iOS, Windows `.ico`, and the web favicons.
+  - `SkylineLogo` in the app, `Logo` in the dashboard, and the download page header.
+- **Tests:**
+  - app 47, including `appearance_test.dart`: contrast for every preset and theme, arbitrary colours
+    and backgrounds, the screen at three sizes, a checksum mismatch that is never installed, and a
+    failed download;
+  - dashboard 31, and its build passes.
+- **Not verified on a device yet:**
+  - how the new screens look (widget tests only);
+  - the Android installer hand-off;
+  - the Windows installer launch (it needs a real release with a checksum).

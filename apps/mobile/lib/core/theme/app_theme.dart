@@ -5,16 +5,17 @@ import 'tokens.dart';
 /// Skyline's Material 3 theme, built from the explicit tokens in
 /// docs/architecture/design.md (never from a seed colour).
 abstract final class AppTheme {
-  static ThemeData light() => _build(SkylineTokens.light, Brightness.light);
-  static ThemeData dark() => _build(SkylineTokens.dark, Brightness.dark);
+  static ThemeData light() => from(SkylineTokens.light, Brightness.light);
+  static ThemeData dark() => from(SkylineTokens.dark, Brightness.dark);
 
-  static ThemeData _build(SkylineTokens t, Brightness b) {
+  /// Any tokens, including the person's own colours (board 44).
+  static ThemeData from(SkylineTokens t, Brightness b) {
     final scheme = ColorScheme(
       brightness: b,
       primary: t.accentFill,
-      onPrimary: Colors.white,
+      onPrimary: t.onAccent,
       secondary: t.accentText,
-      onSecondary: Colors.white,
+      onSecondary: t.onAccent,
       error: t.danger,
       onError: Colors.white,
       surface: t.ground,
@@ -67,7 +68,7 @@ abstract final class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: t.accentFill,
-          foregroundColor: Colors.white,
+          foregroundColor: t.onAccent,
           minimumSize: const Size.fromHeight(52),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: const TextStyle(

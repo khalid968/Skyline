@@ -64,6 +64,12 @@ the current state of play.
     Setup) and uploads to TestFlight. Nothing unsigned is released.
   - Proven by a full dress rehearsal on this PC (headers, roles, spoofed-IP limit, backup and restore).
     Not yet run: the real server and the release workflow. Both need secrets the owner creates.
+- **Boards 43-45 — ✅ built 2026-09-26:**
+  - Settings hub with Check for updates and an in-app install checked by SHA-256.
+  - Appearance: five themes, any message colour and any chat background, with contrast computed and
+    the security colours fixed (`core/theme/appearance.dart`).
+  - Logo "Blue shield S": `branding/skyline-logo.svg`. Regenerate the icons with
+    `node branding/make-icons.js` (see its header).
 - **Phase 12 (Testing and hardening) — ✅ built 2026-09-26**, awaiting the owner's review.
   - Threat model: `docs/security/threat-model.md`. How to run every suite: `docs/testing.md`.
   - **CI** (`.github/workflows/ci.yml`, actions pinned to commits) runs backend, dashboard, Rust, Flutter,

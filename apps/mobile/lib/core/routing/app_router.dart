@@ -8,8 +8,10 @@ import '../../features/media/presentation/media_gallery_screen.dart';
 import '../../features/auth/presentation/activation_screen.dart';
 import '../../features/chats/presentation/chat_list_screen.dart';
 import '../../features/messages/presentation/conversation_screen.dart';
+import '../../features/settings/presentation/appearance_screen.dart';
 import '../../features/settings/presentation/privacy_screen.dart';
 import '../../features/settings/presentation/safety_number_screen.dart';
+import '../../features/settings/presentation/settings_screen.dart';
 import '../app/app_controller.dart';
 import '../theme/tokens.dart';
 
@@ -34,7 +36,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/activate', builder: (context, state) => const ActivationScreen()),
       GoRoute(path: '/problem', builder: (context, state) => _Problem(locked: app.phase == AppPhase.vaultLocked)),
       GoRoute(path: '/', builder: (context, state) => const ChatListScreen()),
-      GoRoute(path: '/settings', builder: (context, state) => const PrivacyScreen()),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsScreen(),
+        routes: [
+          GoRoute(path: 'privacy', builder: (context, state) => const PrivacyScreen()),
+          GoRoute(path: 'appearance', builder: (context, state) => const AppearanceScreen()),
+        ],
+      ),
       GoRoute(path: '/search', builder: (context, state) => const SearchScreen()),
       GoRoute(
         path: '/chat/:peer',

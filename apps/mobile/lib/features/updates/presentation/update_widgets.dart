@@ -5,11 +5,13 @@ import '../../../core/theme/tokens.dart';
 import '../../../core/version.dart';
 import '../../../shared/widgets/sky_icon.dart';
 import '../data/release_service.dart';
+import '../data/update_installer.dart';
 
 /// Board 42: a quiet banner at the top of Chats when a newer version exists.
 class UpdateBanner extends StatelessWidget {
-  const UpdateBanner({super.key, required this.releases});
+  const UpdateBanner({super.key, required this.releases, this.installer});
   final ReleaseService releases;
+  final UpdateInstaller? installer;
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +30,7 @@ class UpdateBanner extends StatelessWidget {
             ),
             child: InkWell(
               borderRadius: BorderRadius.circular(14),
-              onTap: () => showUpdateSheet(context, r),
+              onTap: () => showUpdateSheet(context, r, installer: installer),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 child: Row(children: [
@@ -61,7 +63,7 @@ class UpdateBanner extends StatelessWidget {
 
 /// What's new, with Download and install or Later. The download opens in the
 /// browser: the APK or installer from the organization's server, or TestFlight.
-Future<void> showUpdateSheet(BuildContext context, Release r) {
+Future<void> showUpdateSheet(BuildContext context, Release r, {UpdateInstaller? installer}) {
   final t = context.sky;
   return showModalBottomSheet<void>(
     context: context,
@@ -98,13 +100,7 @@ Future<void> showUpdateSheet(BuildContext context, Release r) {
           Text('Your messages, keys and settings stay on this device; updating replaces only the app.',
               style: TextStyle(fontSize: 12, height: 1.5, color: t.textSecondary)),
           const SizedBox(height: 14),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              launchUrl(r.url, mode: LaunchMode.externalApplication);
-            },
-            child: const Text('Download and install'),
-          ),
+          _InstallButton(release: r, installer: installer, label: 'Download and install'),
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Later')),
         ]),
       ),
@@ -115,8 +111,9 @@ Future<void> showUpdateSheet(BuildContext context, Release r) {
 /// Board 42, required: this version may no longer be used (the server's
 /// minimum, or a 426). Covers the app; nothing is lost.
 class UpdateRequiredGate extends StatelessWidget {
-  const UpdateRequiredGate({super.key, required this.releases, required this.child});
+  const UpdateRequiredGate({super.key, required this.releases, required this.child, this.installer});
   final ReleaseService? releases;
+  final UpdateInstaller? installer;
   final Widget child;
 
   @override
@@ -169,18 +166,15 @@ class UpdateRequiredGate extends StatelessWidget {
                             style: TextStyle(fontSize: 13, height: 1.55, color: Color(0xFF7C8AA5))),
                         const Spacer(),
                         const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 52,
-                          child: FilledButton(
-                            onPressed: release == null
-                                ? null
-                                : () => launchUrl(release.url, mode: LaunchMode.externalApplication),
-                            child: Text(release == null
-                                ? 'Ask your administrator for the new version'
-                                : 'Download ${release.version}'),
-                          ),
-                        ),
+                        if (release == null)
+                          const SizedBox(
+                            width: double.infinity,
+                            height: 52,
+                            child: FilledButton(
+                                onPressed: null, child: Text('Ask your administrator for the new version')),
+                          )
+                        else
+                          _InstallButton(release: release, installer: installer, label: 'Download ${release.version}'),
                         const SizedBox(height: 10),
                         const Text("From your organization's server",
                             style: TextStyle(fontSize: 12, color: Color(0xFF6E7E99))),
@@ -193,6 +187,47 @@ class UpdateRequiredGate extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Board 43's download inside boards 42's sheet and gate: progress, then the
+/// system installer (or the browser where the app can't install itself).
+class _InstallButton extends StatelessWidget {
+  const _InstallButton({required this.release, required this.installer, required this.label});
+  final Release release;
+  final UpdateInstaller? installer;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final i = installer;
+    if (i == null) {
+      return FilledButton(
+        onPressed: () => launchUrl(release.url, mode: LaunchMode.externalApplication),
+        child: Text(label),
+      );
+    }
+    return ListenableBuilder(
+      listenable: i,
+      builder: (context, _) =>
+          Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+        FilledButton(
+          onPressed: i.phase == InstallPhase.downloading ? null : () => i.run(release),
+          child: Text(switch (i.phase) {
+            InstallPhase.downloading => 'Downloading… ${(i.fraction * 100).round()}%',
+            InstallPhase.ready => 'Install',
+            InstallPhase.failed => 'Try again',
+            InstallPhase.idle => label,
+          }),
+        ),
+        if (i.problem != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(i.problem!,
+                textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: context.sky.danger)),
+          ),
+      ]),
     );
   }
 }
