@@ -45,8 +45,7 @@ services:
     entrypoint: >
       sh -c 'trap exit TERM;
              if [ -n "$$ADMIN_EMAIL" ]; then who="--email $$ADMIN_EMAIL --no-eff-email"; else who=--register-unsafely-without-email; fi;
-             certbot certonly --webroot -w /var/www/certbot -d ${SKYLINE_DOMAIN}
-               $$who --agree-tos --non-interactive --keep-until-expiring;
+             certbot certonly --webroot -w /var/www/certbot -d ${SKYLINE_DOMAIN} $$who --agree-tos --non-interactive --keep-until-expiring;
              while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --quiet; done'
 
   backend:
