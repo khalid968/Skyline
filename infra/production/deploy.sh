@@ -1,6 +1,7 @@
 #!/bin/sh
 # Deploys (or updates) Skyline on this server:
 #   ./deploy.sh              build the images here from this checkout
+#   ./deploy.sh --no-build   use the images already here (sent by ship.sh)
 #   ./deploy.sh 1.1.0        pull that version from SKYLINE_REGISTRY instead
 # Steps: images, database migrations (owner role), restart, health check.
 # If the new API does not become healthy, the previous version is started
@@ -15,7 +16,12 @@ set -a; . ./.env; set +a
 previous=${SKYLINE_VERSION:-local}
 target=${1:-local}
 
-if [ "$target" = "local" ]; then
+if [ "$target" = "--no-build" ]; then
+  target=local
+  for image in backend web backup; do
+    docker image inspect "${SKYLINE_REGISTRY:-skyline}/$image:local" >/dev/null || { echo "no ${SKYLINE_REGISTRY:-skyline}/$image:local here: run ship.sh first" >&2; exit 1; }
+  done
+elif [ "$target" = "local" ]; then
   SKYLINE_GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) \
   SKYLINE_VERSION=local docker compose build
 else

@@ -38,10 +38,15 @@ services:
       - letsencrypt:/etc/letsencrypt
       - certbot-www:/var/www/certbot
     # Obtain once, then try renewing twice a day (Nginx picks it up itself).
+    # The email is optional: Let's Encrypt no longer sends expiry mail, so
+    # without one nobody outside learns who runs the server.
+    environment:
+      ADMIN_EMAIL: ${SKYLINE_ADMIN_EMAIL:-}
     entrypoint: >
       sh -c 'trap exit TERM;
+             if [ -n "$$ADMIN_EMAIL" ]; then who="--email $$ADMIN_EMAIL --no-eff-email"; else who=--register-unsafely-without-email; fi;
              certbot certonly --webroot -w /var/www/certbot -d ${SKYLINE_DOMAIN}
-               --email ${SKYLINE_ADMIN_EMAIL:?set SKYLINE_ADMIN_EMAIL} --agree-tos --no-eff-email --non-interactive --keep-until-expiring;
+               $$who --agree-tos --non-interactive --keep-until-expiring;
              while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --quiet; done'
 
   backend:
