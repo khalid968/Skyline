@@ -54,6 +54,8 @@ void main() {
     // 1. Alice calls, Bob's device rings, Bob answers.
     await aCalls.start(bobId, video: false);
     expect(aCalls.current?.phase, CallPhase.outgoing);
+    // ignore: avoid_print
+
     final ringing = await eventually(() async => bCalls.current);
     expect(ringing.phase, CallPhase.incoming);
     expect(ringing.peer, aliceId);
@@ -72,7 +74,6 @@ void main() {
     // channel (a camera or a screen share only swaps the track in).
     expect(await aCalls.videoDirection(), TransceiverDirection.SendRecv);
     expect(await bCalls.videoDirection(), TransceiverDirection.SendRecv);
-
     // The call's own encrypted channel works both ways.
     await eventually(() async {
       await aCalls.sendProbe('from alice');

@@ -6,6 +6,56 @@ working around it.
 
 ---
 
+## 2026-09-27 — Phase 13 (Deployment) planned: owner decisions and plan
+
+The owner's answers:
+- **Hosting:** a rented virtual server in the EU (Hetzner or OVH class), running the single-host Docker
+  Compose stack. The owner rents it and provides the domain name.
+- **Apps:**
+  - Android as a direct download (a signed APK from the server's download page);
+  - Windows as a signed installer (the owner buys a code-signing certificate);
+  - iPhone through TestFlight, then the App Store (the owner opens an Apple Developer account; GitHub's
+    Macs build and sign).
+  - No Google Play.
+- **Media store:** MinIO built from source, as in development and CI.
+- **Backups: on the same server only (owner's choice).** A nightly encrypted database dump and media
+  snapshot, kept 30 days. The risk is recorded in known-risks: losing the server loses its backups. To
+  soften it, a one-command "download the latest backup" for the owner's own computer.
+
+The plan, in order (nothing is started until the owner approves, including prototypes 41-42):
+1. **Production stack** (`infra/production/`):
+   - Nginx with Let's Encrypt TLS, serving the dashboard and the download page;
+   - the backend as a built, non-root image, and the dashboard as static files;
+   - Postgres with a separate migration role, and an application role that does not own the tables (so
+     triggers cannot be bypassed);
+   - Redis with a password and no public port;
+   - MinIO, reachable only by the backend;
+   - coturn with TLS on 443 as a fallback, and private ranges denied.
+
+   The only public ports are 80, 443 and 3478. `trust proxy` is set for Nginx, and Nginx adds HSTS and
+   frame-ancestors. Secrets live in an env file on the server, never in git; `validate-env` already
+   refuses unsafe values.
+2. **Backups and restore:** nightly `pg_dump` plus the media, encrypted to the owner's public key (age),
+   30 days kept, a restore script, and a **tested restore drill**.
+3. **Releases:** CI builds a signed Android APK (release keystore in GitHub secrets), a signed Windows
+   installer and a TestFlight build on a version tag. Release builds point at the production address and
+   refuse plain HTTP.
+4. **Download page and updates (boards 41-42):**
+   - the server publishes the current and minimum supported version with checksums;
+   - the app shows the banner and sheet;
+   - a version below the minimum gets 426 from the API and the "Please update" screen.
+5. **Deploying:** images pushed to a private registry on a tag, plus a one-command deploy script
+   (pull, migrate, restart) with a health check and rollback.
+6. **Operator guide** (`docs/deployment/`):
+   - renting and hardening the server (firewall, SSH keys, automatic security updates);
+   - DNS; the first owner account;
+   - Firebase push credentials; backups and restore; updating; incidents.
+7. **Dress rehearsal:** the whole production stack on a local machine with real TLS (a local CA), then the
+   owner's server when it exists.
+
+What the owner provides: the server, a domain, the Apple Developer account and the code-signing
+certificate (as each step needs them). The Firebase project already exists.
+
 ## 2026-09-26 (late night) — First CI run: fixes, and iOS 15 as the minimum
 
 The first GitHub Actions run found three things that a single Windows PC could not:

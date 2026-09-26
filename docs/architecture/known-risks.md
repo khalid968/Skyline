@@ -200,3 +200,13 @@ decrypts.
 - **If it flakes:** rerun it. If it keeps failing, look for a real new code path before widening the
   tolerance.
 
+## Backups live on the same server (owner decision, 2026-09-27) — ACCEPTED, WATCH
+- **What:** nightly encrypted backups are kept on the production server itself. If the server is lost (a
+  provider outage or account problem, disk failure, a compromise that wipes it), the backups go with it,
+  and so does everyone's message routing state, the contact graph and 30 days of media.
+- **What is NOT lost:** message history lives on members' devices, and keys never leave them. A rebuilt
+  server would need the contact graph re-entered and every device re-activated.
+- **Mitigation built in:** a one-command download of the latest encrypted backup to the owner's computer.
+  Doing that weekly would turn this into an off-site backup.
+- **Revisit:** before the member count grows, or at the first incident.
+

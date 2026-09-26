@@ -1132,3 +1132,19 @@ Board 40 was approved ("great keep going").
   3. Phase 13 (Deployment) planning, which needs the owner's approval. It starts from the items marked
      Phase 13 in `docs/security/threat-model.md`: TLS and `trust proxy`, the relay's private-range
      denial, separate database roles, the production object store, and `DATABASE_POOL_MAX=20`.
+
+
+## 2026-09-27 — Phase 13 (Deployment) planned
+
+- Owner decisions (decisions.md): EU rented server; Android direct download, a signed Windows installer,
+  TestFlight/App Store; MinIO from source; backups on the same server (risk recorded in known-risks, with
+  a download-to-your-computer mitigation).
+- Prototypes 41 (download page) and 42 (update available / required) are on the canvas, **awaiting
+  approval**. Nothing is started.
+- **Still uncommitted from the Android video investigation:**
+  - `call_service.dart`: the notify-after-dispose guard, and the `debugVideoStats` / `debugIce` test
+    hooks;
+  - `calls_media_test.dart`, `cross_caller_test.dart`, `cross_callee_test.dart`.
+
+  The cross-device run proved Android→Windows video works (184 frames decoded, 640×480). The confirming
+  rerun without the software-codec setting waits for the emulator.

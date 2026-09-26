@@ -368,6 +368,46 @@ class CallService extends ChangeNotifier {
     return null;
   }
 
+  /// Test hook: video bytes this side sent, and video frames it decoded.
+  Future<String> debugVideoStats() async {
+    var sent = 0;
+    var decoded = 0;
+    final extra = <String>[];
+    for (final r in await _pc!.getStats()) {
+      final v = r.values;
+      if (v['kind'] != 'video' && v['mediaType'] != 'video') continue;
+      if (r.type == 'outbound-rtp') {
+        sent += (v['bytesSent'] as num? ?? 0).toInt();
+        extra.add('out(encoded=${v['framesEncoded']} fps=${v['framesPerSecond']} ${v['frameWidth']}x${v['frameHeight']} '
+            'limit=${v['qualityLimitationReason']} encoder=${v['encoderImplementation']} codec=${v['codecId']})');
+      }
+      if (r.type == 'inbound-rtp') {
+        decoded += (v['framesDecoded'] as num? ?? 0).toInt();
+        extra.add('in(received=${v['framesReceived']} dropped=${v['framesDropped']} lost=${v['packetsLost']} '
+            'nack=${v['nackCount']} pli=${v['pliCount']} decoder=${v['decoderImplementation']})');
+      }
+    }
+    return 'sentBytes=$sent framesDecoded=$decoded ${extra.join(' ')}';
+  }
+
+  /// Test hook: the ICE candidate pairs and how this side reaches the relay.
+  Future<String> debugIce() async {
+    final out = <String>[];
+    final reports = await _pc!.getStats();
+    final byId = {for (final r in reports) r.id: r};
+    for (final r in reports) {
+      if (r.type != 'candidate-pair') continue;
+      final v = r.values;
+      final local = byId[v['localCandidateId']]?.values ?? const {};
+      out.add('pair(${v['state']} nominated=${v['nominated']} sent=${v['bytesSent']} recv=${v['bytesReceived']} '
+          'local=${local['candidateType']}/${local['protocol']}/relay=${local['relayProtocol']})');
+    }
+    for (final r in reports) {
+      if (r.type == 'transport') out.add('transport(dtls=${r.values['dtlsState']} ice=${r.values['iceState']})');
+    }
+    return out.join(' ');
+  }
+
   /// Test hook: the negotiated direction of the video channel ("sendrecv"
   /// when both sides can turn their camera or a screen share on).
   Future<TransceiverDirection?> videoDirection() async => (await _videoChannel())?.getCurrentDirection();
@@ -611,8 +651,16 @@ class CallService extends ChangeNotifier {
     }
   }
 
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
     _ringTimer?.cancel();
     _tick?.cancel();
     unawaited(_pc?.close());
