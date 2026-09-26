@@ -113,6 +113,12 @@ class AppearanceScreen extends ConsumerWidget {
                       }),
                       selected: a.pattern == p,
                       onSelected: (_) => a.update(pattern: p),
+                      selectedColor: t.accentFill,
+                      checkmarkColor: t.onAccent,
+                      labelStyle: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: a.pattern == p ? t.onAccent : t.textPrimary,
+                      ),
                     ),
                 ]),
                 const SizedBox(height: 10),
