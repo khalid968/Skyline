@@ -160,9 +160,14 @@ decrypts.
 - **Fix for later:** after the wake-up, fetch and decrypt in the background, then decide whether to show
   anything. Android allows a short background run; iOS needs a notification service extension.
 
-## A closed app does not ring (Phase 10, 2026-09-25) — OPEN
-- **What:** a call rings only while Skyline is running. A killed app gets the content-free push wake-up
-  and shows the missed call afterwards, but it does not ring.
+## A closed app does not ring (Phase 10, 2026-09-25) — OPEN, CONFIRMED IN USE
+- **What:** a call rings only while Skyline is open on screen. A killed app gets the content-free push
+  wake-up and shows the missed call afterwards, but it does not ring.
+- **Confirmed by the owner on the live server (2026-09-26):** when someone calls, the app doesn't wake
+  up. No ringing and no call screen appear until the person opens Skyline by hand. By then the call
+  has often been given up and shows as missed.
+- **What people can do meanwhile:** send a message first ("calling you now"), or keep Skyline open for
+  an agreed call. Messages still arrive with the usual content-free notification.
 - **Why:** ringing a closed app needs Android's ConnectionService / full-screen-intent notification and
   iOS CallKit + PushKit (VoIP push). Each is its own piece of platform work.
 - **Fix for later:** a dedicated "incoming call" push that starts the ringing UI, still content-free (no
