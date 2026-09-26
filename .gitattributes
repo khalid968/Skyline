@@ -1,3 +1,5 @@
 # Scripts that run inside Linux containers must keep LF line endings.
 *.sh text eol=lf
 infra/production/web/nginx.conf.template text eol=lf
+# Everything that runs on the Linux server keeps Unix line endings.
+infra/production/** text=auto eol=lf

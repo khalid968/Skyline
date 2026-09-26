@@ -40,7 +40,8 @@ EOF
 docker compose --env-file "$tmp" build
 
 echo "== sending the code"
-(cd "$repo" && git archive --format=tar HEAD) \
+# Unix line endings whatever this computer uses (Windows would add CR).
+(cd "$repo" && git -c core.autocrlf=false -c core.eol=lf archive --format=tar HEAD) \
   | "$ssh" "$host" "mkdir -p $dir && tar -x -C $dir --exclude=infra/production/.env && echo $sha > $dir/REVISION"
 
 echo "== sending the images (a few minutes)"
