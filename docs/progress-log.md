@@ -1267,3 +1267,22 @@ The owner approved prototypes 41 and 42 and started the phase.
   - create the owner account (`admin-create`, a password only they type) and turn on 2FA;
   - the app build for the real domain, and the Android release key;
   - push the commits (not pushed: 9348fe8 through 84fe98c).
+
+## 2026-09-26 — Android 1.0.0 published on chat.secline.fyi
+
+- **Owner:** signed in to https://chat.secline.fyi/admin/ with the new owner account, and chose the
+  permanent Android signing key.
+- **Release key:** `C:\Users\kkhal\Skyline-secrets\skyline-android-release.jks`.
+  - PKCS12, alias `skyline`, RSA 4096, valid until 2054. The certificate SHA-256 starts `01:35:14:FB`.
+  - Its passwords are in `skyline-android-release.properties` beside it.
+  - `apps/mobile/android/key.properties` (gitignored) points at it for local release builds.
+  - Every future Android update must be signed with this key.
+  - It is not yet in the GitHub secrets for `release.yml`: the owner decides.
+- **Release:**
+  - `skyline-1.0.0.apk`: arm and arm64, 95 MB, `SKYLINE_API=https://chat.secline.fyi/api`,
+    `SKYLINE_VERSION=1.0.0`, signature verified.
+  - Published with `publish-release.sh`. `GET /app/releases` reports 1.0.0, and the download serves
+    the same SHA-256 (`0f270f1e…`).
+- **CI on 3c15b3f:** all green except the iOS simulator job, which built but timed out while loading
+  ("log reader failed unexpectedly", a simulator flake). The failed job was re-run.
+- **This PC:** `JAVA_HOME` points at a removed JDK 17. Android Studio's jbr works.
