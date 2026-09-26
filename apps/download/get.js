@@ -36,9 +36,21 @@
         link.removeAttribute('href');
         link.setAttribute('aria-disabled', 'true');
       }
+      // Until the organization has a code-signing certificate, a Windows
+      // installer published by hand is marked "signed": false, and the page
+      // says what Windows will show instead of "stop if it's unknown".
+      var unsigned = p[0] === 'windows' && item && item.signed === false;
       if (p[1] && item) {
         document.getElementById(p[0] + '-meta').textContent =
-          'Version ' + latest.version + (item.size ? ' · ' + mb(item.size) : '') + ' · ' + p[1];
+          'Version ' + latest.version + (item.size ? ' · ' + mb(item.size) : '') + ' · ' +
+          (unsigned ? 'Windows 10 or 11 · installer not signed yet' : p[1]);
+      }
+      if (unsigned) {
+        document.getElementById('windows-card').textContent =
+          'This installer isn’t signed yet, so Windows will show “Windows protected your PC” ' +
+          'and “Unknown publisher”. That is expected for now: choose More info, then Run anyway. ' +
+          'If you want to be sure the download is intact, compare its SHA-256 with the one below. ' +
+          'If anything else looks wrong, don’t install it: tell your administrator.';
       }
     });
   }
