@@ -55,7 +55,7 @@ Private to the owner. Current boards:
 | 38 · Admin · Audit log | Approved 2026-09-26: owner and admins only, filters, details, CSV |
 | 39 · Admin · Sessions | Approved 2026-09-26: dashboard sessions, sign out one or everyone but me |
 | 40 · A contact whose account is unavailable (mobile) | Approved 2026-09-26 (Phase 12): history stays, no composer or calls, nothing says why |
-| 41 · Get Skyline (download page, web) | Approved 2026-09-26 (Phase 13): Android / iPhone / Windows tabs, install steps, checksum, no cookies |
+| 41 · Get Skyline (download page, web) | Approved 2026-09-26 (Phase 13): Android / iPhone / Windows tabs, install steps, checksum, no cookies; 2026-09-26 owner-approved change: an installer marked `"signed": false` shows "Unknown publisher → More info → Run anyway" guidance instead of "stop" |
 | 42 · Update available / required (mobile) | Approved 2026-09-26 (Phase 13): banner and what's-new sheet; full-screen "Please update" below the minimum version |
 | 43 · Settings and Check for updates (mobile) | Approved 2026-09-26: settings hub (Appearance, Privacy & security, Notifications, About); manual check; in-app download on Android and Windows, checked against the published SHA-256 |
 | 44 · Appearance (mobile) | Approved 2026-09-26: five themes, 14 preset message colours plus any colour, chat background (9 presets, any colour, dots/lines/grid); text contrast automatic; security colours fixed |

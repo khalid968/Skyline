@@ -1286,3 +1286,25 @@ The owner approved prototypes 41 and 42 and started the phase.
 - **CI on 3c15b3f:** all green except the iOS simulator job, which built but timed out while loading
   ("log reader failed unexpectedly", a simulator flake). The failed job was re-run.
 - **This PC:** `JAVA_HOME` points at a removed JDK 17. Android Studio's jbr works.
+
+## 2026-09-26 — Windows 1.0.0 published (unsigned, owner's choice)
+
+- **Owner decision:** publish the Windows installer before a code-signing certificate exists. The
+  download page (board 41) was changed with the owner's OK: a manifest item with `"signed": false`
+  shows what Windows will display (Unknown publisher → More info → Run anyway) and points to the
+  checksum.
+- **Built on this PC:**
+  - Inno Setup 6, installed per user by winget.
+  - `skyline-setup-1.0.0.exe`, 21.7 MB, SHA-256 `7f2a088c…`.
+  - It bundles the C++ runtime from Sysnative, because ISCC is 32-bit.
+  - Tested: silent install, clean uninstall, the app starts.
+- **Found:** the production and development Windows builds would have shared one vault and one set
+  of stored keys. Desktop builds for a named server now keep their data under the server's host.
+  Development builds and phones keep the original names, since Android 1.0.0 shipped with them.
+- **Published:** the web image was re-shipped alone (with the new page and the 5-minute certificate
+  pickup). The manifest now lists Android and Windows, and both downloads match their checksums from
+  outside.
+- **Next:**
+  - a code-signing certificate (OV on a token, or Azure Trusted Signing if eligible);
+  - TestFlight once the Apple Developer account exists;
+  - push 0b718f7 and the commits after it (not pushed yet).
