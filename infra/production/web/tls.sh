@@ -4,7 +4,8 @@
 #   - Let's Encrypt's certificate when the certbot service has one;
 #   - otherwise a self-signed stand-in, so Nginx starts and can answer the
 #     certbot challenge (and so the local dress rehearsal works).
-# A background loop picks up renewed certificates twice a day and reloads.
+# A background loop checks every 5 minutes (a file comparison) and reloads
+# when certbot has a new certificate: the first one is live within minutes.
 set -eu
 TLS=/etc/nginx/tls
 LIVE="/etc/letsencrypt/live/${SKYLINE_DOMAIN}"
@@ -32,7 +33,7 @@ install_cert() {
 
 install_cert || true
 (
-  while sleep 43200; do
+  while sleep 300; do
     if install_cert; then nginx -s reload; fi
   done
 ) &
