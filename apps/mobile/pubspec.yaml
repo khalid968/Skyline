@@ -73,6 +73,11 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  # iOS builds with CocoaPods (ios/Podfile), as CI does. Newer Flutter turns
+  # on Swift Package Manager, which fails to resolve Firebase's dependencies.
+  config:
+    enable-swift-package-manager: false
+
   # Bundled, never fetched at runtime: a font download would tell a third
   # party every time someone opens Skyline. SIL Open Font License; the
   # licence texts ship in assets/fonts.
