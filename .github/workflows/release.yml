@@ -15,7 +15,9 @@
 # IOS_TESTFLIGHT_URL (the public TestFlight or App Store link).
 #
 # Run it by hand ("Run workflow") for a dry run: everything builds, unsigned
-# where secrets are missing, and nothing is released.
+# where secrets are missing, and nothing is released. Tick "testflight" to
+# send that run's iPhone build to TestFlight (the version in pubspec.yaml,
+# the run number as the build number); nothing else is published.
 #
 # Third-party actions are pinned to a commit (threat model A9).
 name: Release
@@ -24,6 +26,11 @@ on:
   push:
     tags: ['v*.*.*']
   workflow_dispatch:
+    inputs:
+      testflight:
+        description: Also upload the iPhone build to TestFlight (nothing else is released)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -50,8 +57,12 @@ jobs:
       - id: v
         env:
           DOMAIN: ${{ vars.SKYLINE_DOMAIN }}
+          TESTFLIGHT: ${{ inputs.testflight }}
         run: |
           pub=$(sed -n 's/^version: \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' apps/mobile/pubspec.yaml)
+          if [ "$TESTFLIGHT" = true ] && [ -z "$DOMAIN" ]; then
+            echo "::error::set the repository variable SKYLINE_DOMAIN before sending a build to TestFlight"; exit 1
+          fi
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             tag=${GITHUB_REF_NAME#v}
             [ "$tag" = "$pub" ] || { echo "::error::tag v$tag but pubspec.yaml says $pub"; exit 1; }
@@ -214,8 +225,8 @@ jobs:
           retention-days: 7
 
   # iPhone: built, signed and uploaded to TestFlight. Apple distributes it;
-  # the manifest only points at IOS_TESTFLIGHT_URL. Untested until the
-  # organization's Apple Developer account exists (no Mac here).
+  # the manifest only points at IOS_TESTFLIGHT_URL. App ID fyi.secline.skyline
+  # (Android keeps com.skyline.skyline: its published updates depend on it).
   ios:
     name: iPhone (TestFlight)
     needs: version
@@ -257,19 +268,30 @@ jobs:
           security set-keychain-settings -lut 3600 "$kc"
           security unlock-keychain -p "$kcpw" "$kc"
           echo "$P12" | base64 -d > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$kc"
-          security set-key-partition-list -S apple-tool:,apple: -k "$kcpw" "$kc" >/dev/null
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -f pkcs12 -k "$kc" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kcpw" "$kc" >/dev/null
           security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
-          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          echo "$PROFILE" | base64 -d > "$HOME/Library/MobileDevice/Provisioning Profiles/skyline.mobileprovision"
           rm "$RUNNER_TEMP/cert.p12"
+          security find-identity -v -p codesigning "$kc"
+          # Profiles by UUID, in both the old and the Xcode 16+ locations.
+          echo "$PROFILE" | base64 -d > "$RUNNER_TEMP/skyline.mobileprovision"
+          uuid=$(security cms -D -i "$RUNNER_TEMP/skyline.mobileprovision" | plutil -extract UUID raw -)
+          for d in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$d"; cp "$RUNNER_TEMP/skyline.mobileprovision" "$d/$uuid.mobileprovision"
+          done
+          echo "PROFILE_UUID=$uuid" >> "$GITHUB_ENV"
+          echo "PROFILE_NAME=$(security cms -D -i "$RUNNER_TEMP/skyline.mobileprovision" | plutil -extract Name raw -)" >> "$GITHUB_ENV"
           [ -z "$PLIST" ] || printf '%s' "$PLIST" > ios/Runner/GoogleService-Info.plist
       - name: Build
         if: env.HAVE_APPLE == 'true'
         env:
           TEAM: ${{ secrets.IOS_TEAM_ID }}
         run: |
-          uuid=$(security cms -D -i "$HOME/Library/MobileDevice/Provisioning Profiles/skyline.mobileprovision" | plutil -extract UUID raw -)
+          uuid="$PROFILE_UUID"
+          # The project is committed without a team (the team belongs to the
+          # Apple account, not the code): sign the app target, only here.
+          perl -0pi -e "s/(PRODUCT_BUNDLE_IDENTIFIER = fyi\.secline\.skyline;)/\$1\n\t\t\t\tCODE_SIGN_STYLE = Manual;\n\t\t\t\tDEVELOPMENT_TEAM = $TEAM;\n\t\t\t\t\"CODE_SIGN_IDENTITY[sdk=iphoneos*]\" = \"Apple Distribution\";\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"$PROFILE_NAME\";/g" ios/Runner.xcodeproj/project.pbxproj
+          grep -c "PROVISIONING_PROFILE_SPECIFIER" ios/Runner.xcodeproj/project.pbxproj
           cat > "$RUNNER_TEMP/export.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -277,7 +299,8 @@ jobs:
             <key>method</key><string>app-store-connect</string>
             <key>teamID</key><string>$TEAM</string>
             <key>signingStyle</key><string>manual</string>
-            <key>provisioningProfiles</key><dict><key>com.skyline.skyline</key><string>$uuid</string></dict>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key><dict><key>fyi.secline.skyline</key><string>$uuid</string></dict>
           </dict></plist>
           PLIST
           flutter pub get
@@ -287,7 +310,7 @@ jobs:
             --dart-define=SKYLINE_API=${{ needs.version.outputs.api }} \
             --dart-define=SKYLINE_VERSION=${{ needs.version.outputs.version }}
       - name: Upload to TestFlight
-        if: env.HAVE_APPLE == 'true' && needs.version.outputs.dry_run == 'false'
+        if: env.HAVE_APPLE == 'true' && (needs.version.outputs.dry_run == 'false' || inputs.testflight)
         env:
           KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
@@ -300,7 +323,8 @@ jobs:
         if: always() && env.HAVE_APPLE == 'true'
         run: |
           security delete-keychain "$RUNNER_TEMP/release.keychain-db" || true
-          rm -rf "$HOME/.appstoreconnect" "$HOME/Library/MobileDevice/Provisioning Profiles/skyline.mobileprovision"
+          rm -rf "$HOME/.appstoreconnect" "$HOME/Library/MobileDevice/Provisioning Profiles" \
+            "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" "$RUNNER_TEMP/skyline.mobileprovision"
 
   release:
     name: Draft the release
