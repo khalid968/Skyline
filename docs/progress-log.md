@@ -1330,3 +1330,27 @@ The owner approved prototypes 41 and 42 and started the phase.
   - iOS builds use CocoaPods (Swift Package Manager is disabled; found on a real Mac).
 - **On TestFlight:** the owner uploaded the first iPhone build by hand from a friend's Mac, on the
   friend's Apple Developer team (K73TU9BT85, Mohammed Alshidi).
+
+## 2026-09-29 — Phase 14a built: faster opening and call answering
+
+- **Owner:** approved boards 46 and 47 and Phase 14 ("looks great, keep going").
+- **Opening and returning to the app:**
+  - Found: nothing reconnected the socket when a phone app came back to the foreground. The dead
+    background socket was only noticed at the next keep-alive failure (25–50 s), and meanwhile the
+    server believed the device was online.
+  - Fixed: on phones the socket now closes on background, so the server knows to push. On
+    foreground it reconnects at once with no leftover backoff, and fetches the inbox over REST in
+    parallel. Not during a call; desktops unchanged.
+  - A cold start now fetches the inbox alongside opening the socket, instead of after its "ready".
+- **Calls:**
+  - Found: both sides waited for ICE gathering to complete, which hit the 5 s timeout every time.
+    The answerer also fetched relay credentials only after Accept.
+  - Fixed: send 300 ms after the first relay candidate (still at most 5 s). While ringing, fetch the
+    relay credentials and set up the renderers; the microphone still opens only on Accept.
+  - Measured with `calls_test` on Windows against a throwaway server:
+    - dial → ring: 5490 ms before, 867 ms after;
+    - accept → connected: 5738 ms before, 644 ms after.
+  - Against the live server from Oman, add about 155 ms per round trip.
+- **Tests:** app 48 unit tests, `calls_test` passes with timing printed, and actionlint is clean on
+  `release.yml`. The throwaway servers and databases are removed.
+- **Not yet on devices:** it needs an app release (1.0.1) to reach members.

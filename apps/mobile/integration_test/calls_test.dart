@@ -52,19 +52,24 @@ void main() {
     }
 
     // 1. Alice calls, Bob's device rings, Bob answers.
+    final dial = Stopwatch()..start();
     await aCalls.start(bobId, video: false);
     expect(aCalls.current?.phase, CallPhase.outgoing);
-    // ignore: avoid_print
 
     final ringing = await eventually(() async => bCalls.current);
+    final rang = dial.elapsedMilliseconds;
     expect(ringing.phase, CallPhase.incoming);
     expect(ringing.peer, aliceId);
     expect(ringing.outgoing, isFalse);
+    final answer = Stopwatch()..start();
     await bCalls.accept();
 
     // Both ends connect, and only through the relay.
     await eventually(() async => aCalls.current?.phase == CallPhase.connected ? true : null);
     await eventually(() async => bCalls.current?.phase == CallPhase.connected ? true : null);
+    // Phase 14a: how long from dialling to ringing, and from Accept to talking.
+    // ignore: avoid_print
+    print('CALL TIMING dial->ring ${rang}ms, accept->connected ${answer.elapsedMilliseconds}ms');
     await eventually(() async => aCalls.lastCandidateType != null ? true : null);
     expect(aCalls.lastCandidateType, 'relay');
     await eventually(() async => bCalls.lastCandidateType != null ? true : null);

@@ -85,6 +85,11 @@ class CallService extends ChangeNotifier {
         _ => connected ? 'completed' : (outgoing ? 'noAnswer' : 'missed'),
       };
   static const _gatherFor = Duration(seconds: 5);
+
+  /// Once the first relay route is found, how long to wait for the others
+  /// (TCP, IPv6) before sending. Waiting for all of them could take the full
+  /// [_gatherFor] (Phase 14a: answering took seconds).
+  static const _gatherGrace = Duration(milliseconds: 300);
   static const _uuid = Uuid();
   static const _shareService = MethodChannel('skyline/screen_share');
 
@@ -92,6 +97,11 @@ class CallService extends ChangeNotifier {
   final localRenderer = RTCVideoRenderer();
   final remoteRenderer = RTCVideoRenderer();
   bool _renderersReady = false;
+
+  /// Relay credentials fetched while an incoming call rings, so Accept does
+  /// not wait for the server (Phase 14a). Never the microphone: that only
+  /// opens on Accept.
+  Future<Object?>? _turnSoon;
 
   RTCPeerConnection? _pc;
   RTCDataChannel? _control;
@@ -299,13 +309,20 @@ class CallService extends ChangeNotifier {
 
   // ---------------------------------------------------------- plumbing
 
+  Future<void>? _renderersInit;
+
+  /// Once, shared: ringing starts it and Accept waits for the same one.
+  Future<void> _initRenderers() => _renderersInit ??= () async {
+        await localRenderer.initialize();
+        await remoteRenderer.initialize();
+        _renderersReady = true;
+      }();
+
   Future<void> _open(Call call, {required bool offering}) async {
-    if (!_renderersReady) {
-      await localRenderer.initialize();
-      await remoteRenderer.initialize();
-      _renderersReady = true;
-    }
-    final turn = await api.get('/calls/turn') as Map<String, Object?>;
+    await _initRenderers();
+    final early = _turnSoon == null ? null : await _turnSoon;
+    _turnSoon = null;
+    final turn = (early ?? await api.get('/calls/turn')) as Map<String, Object?>;
     final urls = [for (final u in turn['urls']! as List<Object?>) _forThisDevice(u! as String)];
     _pc = await createPeerConnection({
       // One entry per address: the Windows plugin keeps only the last of a
@@ -420,14 +437,25 @@ class CallService extends ChangeNotifier {
     return url.replaceFirst(RegExp(r'(turns?:)(localhost|127\.0\.0\.1)'), '\$1$host');
   }
 
-  /// Waits for relay candidates to be gathered, then returns the full SDP.
+  /// Waits for relay candidates, then returns the SDP with them. It sends as
+  /// soon as gathering completes, or [_gatherGrace] after the first relay
+  /// route appears, whichever is first; at most [_gatherFor].
   Future<String> _gathered() async {
     final done = Completer<void>();
+    Timer? grace;
+    void finish() {
+      if (!done.isCompleted) done.complete();
+    }
+
     _pc!.onIceGatheringState = (s) {
-      if (s == RTCIceGatheringState.RTCIceGatheringStateComplete && !done.isCompleted) done.complete();
+      if (s == RTCIceGatheringState.RTCIceGatheringStateComplete) finish();
     };
-    if (_pc!.iceGatheringState == RTCIceGatheringState.RTCIceGatheringStateComplete) done.complete();
+    _pc!.onIceCandidate = (c) {
+      if ((c.candidate ?? '').contains(' typ relay')) grace ??= Timer(_gatherGrace, finish);
+    };
+    if (_pc!.iceGatheringState == RTCIceGatheringState.RTCIceGatheringStateComplete) finish();
     await done.future.timeout(_gatherFor, onTimeout: () {});
+    grace?.cancel();
     final desc = await _pc!.getLocalDescription();
     return desc!.sdp!;
   }
@@ -552,6 +580,7 @@ class CallService extends ChangeNotifier {
       _screen = null;
       _hasVideo = false;
       _pendingOffer = null;
+      _turnSoon = null;
       _offerDevice = null;
       _answerDevice = null;
       final record = recordedOutcome(outcome, outgoing: call.outgoing, connected: call.connectedAt != null);
@@ -606,6 +635,9 @@ class CallService extends ChangeNotifier {
         _pendingOffer = sdp;
         _offerDevice = device;
         _ringTimer = Timer(ringFor, () => _finish(incoming, 'missed'));
+        // While it rings: what Accept would otherwise wait for.
+        _turnSoon = api.get('/calls/turn').then<Object?>((v) => v, onError: (Object _) => null);
+        unawaited(_initRenderers());
         notifyListeners();
 
       case 'answer':

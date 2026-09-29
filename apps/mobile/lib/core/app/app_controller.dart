@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -25,7 +25,7 @@ enum AppPhase { loading, activate, ready, vaultLocked, failed }
 
 /// Opens the device's vault, finds out whether this device is activated, and
 /// owns the long-lived services. The router follows [phase].
-class AppController extends ChangeNotifier {
+class AppController extends ChangeNotifier with WidgetsBindingObserver {
   AppController({SessionStore? sessions, StorageKeyStore? keys, this.vaultPath})
       : sessions = sessions ?? SecureSessionStore(),
         keys = keys ?? SecureStorageKeyStore();
@@ -54,6 +54,7 @@ class AppController extends ChangeNotifier {
   PushRegistrar? push;
 
   Future<void> boot() async {
+    WidgetsBinding.instance.addObserver(this);
     try {
       final path = vaultPath ?? await _defaultVaultPath();
       _dataDir = File(path).parent;
@@ -109,6 +110,24 @@ class AppController extends ChangeNotifier {
     await m.start();
     push = PushRegistrar(api: api!, messenger: m);
     unawaited(push!.start());
+  }
+
+  /// Phase 14a: on phones, the connection follows the app. In the background
+  /// the socket is closed (pushes take over); back in front it reconnects at
+  /// once and fetches anything new. Desktops keep their socket: they get no
+  /// pushes, and a minimised window must still receive.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final m = messenger;
+    if (m == null || !(Platform.isAndroid || Platform.isIOS)) return;
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      // Not during a call: switching apps mid-call (a screen share) must not
+      // cut the call's signalling.
+      if (calls?.current != null) return;
+      unawaited(m.paused());
+    } else if (state == AppLifecycleState.resumed) {
+      unawaited(m.resumed());
+    }
   }
 
   void _watchSignedOut() {

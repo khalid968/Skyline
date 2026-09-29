@@ -131,6 +131,18 @@ class Messenger extends ChangeNotifier {
     unawaited(_topUpKeys());
     unawaited(media.sweepViewCache());
     realtime.start();
+    // Fetch what arrived while the app was closed straight away, alongside
+    // opening the socket, instead of waiting for its "ready" (Phase 14a).
+    unawaited(sync().catchError((Object _) {}));
+  }
+
+  /// The app went to the background (phones): see [RealtimeClient.pause].
+  Future<void> paused() => realtime.pause();
+
+  /// Back in the foreground: reconnect now and fetch anything new at once.
+  Future<void> resumed() async {
+    unawaited(sync().catchError((Object _) {}));
+    await realtime.resume();
   }
 
   @override

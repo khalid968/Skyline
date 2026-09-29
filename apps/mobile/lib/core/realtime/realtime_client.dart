@@ -35,6 +35,7 @@ class RealtimeClient {
   Timer? _retry;
   int _attempt = 0;
   bool _running = false;
+  bool _paused = false;
 
   Stream<RealtimeEvent> get events => _events.stream;
   Stream<ConnectionStatus> get status => _status.stream;
@@ -54,6 +55,40 @@ class RealtimeClient {
     _set(ConnectionStatus.offline);
   }
 
+  /// The app went to the background (phones only): close the socket
+  /// cleanly. The phone would kill it soon anyway without telling us, and a
+  /// closed socket tells the server this device is away, so it sends a push
+  /// instead of writing to a dead connection.
+  Future<void> pause() async {
+    if (!_running || _paused) return;
+    _paused = true;
+    _retry?.cancel();
+    await _drop();
+    _set(ConnectionStatus.offline);
+  }
+
+  /// Back in the foreground: connect now. Never wait for a keep-alive to
+  /// discover that the old socket died, and forget any backoff (Phase 14a).
+  Future<void> resume() async {
+    if (!_running) return;
+    _paused = false;
+    _retry?.cancel();
+    _attempt = 0;
+    await _drop();
+    _set(ConnectionStatus.offline);
+    unawaited(_connect());
+  }
+
+  /// Closes the current socket without treating it as a failure (no retry).
+  Future<void> _drop() async {
+    final sub = _sub;
+    final channel = _channel;
+    _sub = null;
+    _channel = null;
+    await sub?.cancel();
+    await channel?.sink.close();
+  }
+
   /// Try again now (e.g. the app came to the foreground).
   void nudge() {
     if (!_running || _current != ConnectionStatus.offline) return;
@@ -68,7 +103,7 @@ class RealtimeClient {
   }
 
   Future<void> _connect() async {
-    if (!_running) return;
+    if (!_running || _paused) return;
     _set(ConnectionStatus.connecting);
     try {
       final session = await api.session();
@@ -77,8 +112,13 @@ class RealtimeClient {
         headers: {'authorization': 'Bearer ${session.accessToken}', 'x-skyline-app': appVersionHeader},
         pingInterval: const Duration(seconds: 25),
       );
-      _channel = channel;
       await channel.ready;
+      if (!_running || _paused) {
+        // Went to the background while connecting.
+        await channel.sink.close();
+        return;
+      }
+      _channel = channel;
       _sub = channel.stream.listen(
         _onFrame,
         onDone: _onClosed,
@@ -123,7 +163,7 @@ class RealtimeClient {
     _sub = null;
     _channel = null;
     _set(ConnectionStatus.offline);
-    if (!_running) return;
+    if (!_running || _paused) return;
     // 1s, 2s, 4s ... capped at 30s, with jitter so many phones do not
     // reconnect in lockstep after a server restart.
     final seconds = min(30, pow(2, _attempt).toInt());
