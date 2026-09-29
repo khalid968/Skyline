@@ -24,6 +24,7 @@ export class PushService {
     this.db = db;
     this.redis = redis;
     this.prefix = config.get('rateLimit.prefix');
+    this.ringCalls = config.get('push')?.ringCalls !== false;
     this.transport = transport;
     this.logger = new Logger('Push');
   }
@@ -59,7 +60,7 @@ export class PushService {
   // makes the app pull its inbox too). Never throws.
   async ring(recipientUserId, deviceIds, messageId) {
     const rung = [];
-    if (!deviceIds.length) return rung;
+    if (!this.ringCalls || !deviceIds.length) return rung;
     try {
       const { rows } = await this.db.query(
         `SELECT p.id, p.device_id, p.provider, p.token

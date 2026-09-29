@@ -51,6 +51,9 @@ export default () => {
       // Google service-account JSON for Firebase Cloud Messaging (Android
       // wake-ups). Unset: no push; the socket still works while the app runs.
       fcmServiceAccountFile: process.env.FCM_SERVICE_ACCOUNT_FILE || null,
+      // Phase 14c: ring closed apps for call offers. PUSH_RING_CALLS=off keeps
+      // the usual wake-up instead (while the ringing is being verified).
+      ringCalls: process.env.PUSH_RING_CALLS !== 'off',
     },
     // Behind Nginx (Phase 13): which proxies to believe for the client's
     // address, so rate limits and the audit log see real addresses. Express's
