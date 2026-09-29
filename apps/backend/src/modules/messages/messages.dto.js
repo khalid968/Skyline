@@ -44,6 +44,13 @@ export class SendMessageDto {
   @ArrayMaxSize(10)
   @IsUUID('all', { each: true })
   attachmentIds;
+
+  // Phase 14c: "this message is a call offer", so the recipient's closed app
+  // rings. The one piece of routing metadata the server learns about content
+  // (it largely knew: the caller fetched relay credentials to place it).
+  @IsOptional()
+  @IsIn(['call'])
+  urgent;
 }
 
 // Typing indicators: relayed live to online devices only, never stored.

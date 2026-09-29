@@ -207,7 +207,13 @@ export class MessagesService {
       await this.usage.bump('messages');
       // Open apps hear the socket nudge; closed ones get a content-free push.
       await this.nudge(caller.userId, [recipientUserId, caller.userId]);
-      await this.push.wake(result.devices);
+      // A call offer rings the recipient's closed apps (Phase 14c); every
+      // other device, and every other message, gets the usual wake-up.
+      const rung =
+        dto.urgent === 'call'
+          ? await this.push.ring(recipientUserId, result.devices, dto.messageId)
+          : [];
+      await this.push.wake(result.devices.filter((d) => !rung.includes(d)));
     }
     return { messageId: result.messageId, sentAt: result.sentAt };
   }

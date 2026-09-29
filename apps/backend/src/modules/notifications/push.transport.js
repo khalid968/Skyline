@@ -7,6 +7,12 @@ import { Logger } from '@nestjs/common';
 // The app wakes, pulls its inbox from Skyline and decrypts on the device.
 export const WAKE_UP = { t: 'inbox' };
 
+// Phase 14c: "a call is ringing", so a closed app can show its ringing screen.
+// Still no sender, no name, no chat: only the call offer's message id, a
+// random UUID the caller's app made, so the phone can find that one message in
+// its inbox and decrypt who is calling itself.
+export const ringPayload = (messageId) => ({ t: 'call', m: messageId });
+
 export const PUSH_TRANSPORT = Symbol('PUSH_TRANSPORT');
 
 // send() resolves to 'ok', 'invalid' (the token is dead: forget it) or
@@ -47,7 +53,7 @@ export class FcmTransport {
     this.logger = new Logger('Push');
   }
 
-  async send(provider, token) {
+  async send(provider, token, payload = WAKE_UP) {
     if (provider !== 'fcm') return 'error';
     const res = await fetch(
       `https://fcm.googleapis.com/v1/projects/${this.projectId}/messages:send`,
@@ -60,8 +66,9 @@ export class FcmTransport {
         body: JSON.stringify({
           message: {
             token,
-            data: WAKE_UP,
-            android: { priority: 'high', ttl: '3600s' },
+            data: payload,
+            // A call is over in a minute; a wake-up can wait an hour.
+            android: { priority: 'high', ttl: payload.t === 'call' ? '60s' : '3600s' },
           },
         }),
       },

@@ -63,8 +63,8 @@ export class RecordingPushTransport {
     this.outcome = 'ok';
   }
 
-  async send(provider, token) {
-    this.sent.push({ provider, token });
+  async send(provider, token, payload) {
+    this.sent.push(payload ? { provider, token, payload } : { provider, token });
     return this.outcome;
   }
 }

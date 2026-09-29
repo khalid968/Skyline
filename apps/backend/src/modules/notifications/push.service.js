@@ -7,12 +7,15 @@ import {
 import { DatabaseService } from '../../database/database.service';
 import { RedisService } from '../../redis/redis.module';
 import { ConfigService } from '@nestjs/config';
-import { PUSH_TRANSPORT } from './push.transport';
+import { PUSH_TRANSPORT, ringPayload } from './push.transport';
 
 // Content-free wake-ups for devices whose app is closed (decisions.md, Phase
 // 8). One live token per device; a wake-up per device at most every few
 // seconds (a burst of messages needs only one); dead tokens are forgotten.
 const COALESCE_SECONDS = 5;
+// A call push is never merged with message wake-ups, only with itself (a
+// caller who redials at once rings once).
+const RING_COALESCE_SECONDS = 3;
 
 @Injectable()
 @Dependencies(DatabaseService, RedisService, ConfigService, PUSH_TRANSPORT)
@@ -49,6 +52,41 @@ export class PushService {
       'UPDATE push_tokens SET revoked_at = now() WHERE device_id = $1 AND revoked_at IS NULL',
       [deviceId],
     );
+  }
+
+  // Phase 14c: rings the recipient's devices among these for a call offer.
+  // Returns the device ids it rang (they need no separate wake-up: ringing
+  // makes the app pull its inbox too). Never throws.
+  async ring(recipientUserId, deviceIds, messageId) {
+    const rung = [];
+    if (!deviceIds.length) return rung;
+    try {
+      const { rows } = await this.db.query(
+        `SELECT p.id, p.device_id, p.provider, p.token
+           FROM push_tokens p JOIN devices d ON d.id = p.device_id
+          WHERE p.device_id = ANY($1::uuid[]) AND d.user_id = $2
+            AND p.revoked_at IS NULL AND d.revoked_at IS NULL`,
+        [deviceIds, recipientUserId],
+      );
+      for (const r of rows) {
+        const fresh = await this.redis.client.set(
+          `${this.prefix}:push:call:${r.device_id}`,
+          '1',
+          'EX',
+          RING_COALESCE_SECONDS,
+          'NX',
+        );
+        if (fresh !== 'OK') continue;
+        const outcome = await this.transport.send(r.provider, r.token, ringPayload(messageId));
+        if (outcome === 'ok') rung.push(r.device_id);
+        if (outcome === 'invalid') {
+          await this.db.query('UPDATE push_tokens SET revoked_at = now() WHERE id = $1', [r.id]);
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`call push failed: ${err.message}`);
+    }
+    return rung;
   }
 
   // Wakes these devices. Never throws: a missed wake-up only delays delivery

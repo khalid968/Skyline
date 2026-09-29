@@ -123,6 +123,54 @@ describe('push wake-ups (recording transport)', () => {
     expect(WAKE_UP).toEqual({ t: 'inbox' });
   });
 
+  it('rings the recipient for a call offer, with only the message id (Phase 14c)', async () => {
+    const { from, to } = await pair('p1r');
+    const tok = token();
+    await api().put('/me/push').set(to.h).send({ provider: 'fcm', token: tok });
+    const messageId = crypto.randomUUID();
+    const res = await api()
+      .post(`/users/${to.userId}/messages`)
+      .set(from.h)
+      .send({
+        messageId,
+        urgent: 'call',
+        envelopes: [
+          { userId: to.userId, deviceNumber: to.deviceNumber, kind: 'whisper', body: b64(crypto.randomBytes(64)) },
+        ],
+      });
+    expect(res.status).toBe(201);
+    // One push, the ring (no separate wake-up), carrying nothing but the id.
+    expect(t.push.sent).toEqual([{ provider: 'fcm', token: tok, payload: { t: 'call', m: messageId } }]);
+  });
+
+  it('never rings the caller’s own devices, and rejects other urgency values', async () => {
+    const { from, to } = await pair('p1s');
+    await api().put('/me/push').set(from.h).send({ provider: 'fcm', token: token() });
+    const res = await api()
+      .post(`/users/${to.userId}/messages`)
+      .set(from.h)
+      .send({
+        messageId: crypto.randomUUID(),
+        urgent: 'call',
+        envelopes: [
+          { userId: to.userId, deviceNumber: to.deviceNumber, kind: 'whisper', body: b64(crypto.randomBytes(64)) },
+        ],
+      });
+    expect(res.status).toBe(201);
+    expect(t.push.sent.filter((s) => s.payload)).toEqual([]);
+    const bad = await api()
+      .post(`/users/${to.userId}/messages`)
+      .set(from.h)
+      .send({
+        messageId: crypto.randomUUID(),
+        urgent: 'now',
+        envelopes: [
+          { userId: to.userId, deviceNumber: to.deviceNumber, kind: 'whisper', body: b64(crypto.randomBytes(64)) },
+        ],
+      });
+    expect(bad.status).toBe(400);
+  });
+
   it('wakes a device once for a burst of messages', async () => {
     const { from, to } = await pair('p2');
     await api()
