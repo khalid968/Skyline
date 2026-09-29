@@ -119,6 +119,7 @@ compromise.
 | Threat | Protection | Proof, or residual risk |
 | --- | --- | --- |
 | Read message content | Wake-ups carry no content, not even the sender | `push.e2e-spec` |
+| Learn who is calling whom from a ringing push (Phase 14c) | A call push carries only the offer's message ID, a random UUID made by the caller's app: no sender, no name, no chat. The phone reads the sender from its own inbox and names them from its keystore. | `push.e2e-spec` (ring payload, never to the caller's devices). **Residual:** Google (and later Apple) learns that this device is getting a call, and when. |
 | Learn when a device receives something | Unavoidable while push is used | **Residual** |
 
 ### A8 · Lost or stolen device

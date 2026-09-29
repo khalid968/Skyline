@@ -172,6 +172,17 @@ decrypts.
   iOS CallKit + PushKit (VoIP push). Each is its own piece of platform work.
 - **Fix for later:** a dedicated "incoming call" push that starts the ringing UI, still content-free (no
   caller name leaves the server).
+- **Phase 14c (2026-09-29), Android, pending device tests:** a call offer now sends a ringing push
+  carrying only the offer's random message ID. Android shows its own call screen at once. Limits of this
+  first version:
+  - **The name:** it shows only if Skyline was used in the last 15 minutes (a valid access token lets
+    the phone read the sender from its inbox without decrypting). Otherwise it says "Skyline call" until
+    the app opens. The background never refreshes the session and never opens the vault.
+  - **Decline:** declining on the native screen stops the ringing only, and the caller hears it ring
+    out. A real "declined" would need the vault.
+  - **Stale ringing:** if the caller hangs up first, the native screen keeps ringing until its
+    45-second timeout.
+  - **iPhone:** needs PushKit/CallKit with the APNs key (Phase 14b/14c, iOS part).
 
 ## Calls trust the relay for availability, not for secrecy (Phase 10, 2026-09-25)
 - **What:** every call goes through our coturn relay. The relay sees encrypted packets, both devices' IP

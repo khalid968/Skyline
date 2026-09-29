@@ -1354,3 +1354,45 @@ The owner approved prototypes 41 and 42 and started the phase.
 - **Tests:** app 48 unit tests, `calls_test` passes with timing printed, and actionlint is clean on
   `release.yml`. The throwaway servers and databases are removed.
 - **Not yet on devices:** it needs an app release (1.0.1) to reach members.
+
+## 2026-09-29 — Session closed (owner: "close after this task")
+
+- **Live:** version 1.0.1 (Phase 14a speed) is published on chat.secline.fyi for Android and Windows.
+  iPhone: the owner builds with `--build-number=2` on the Mac.
+- **Committed locally, NOT pushed** (the last push was 23bd6a7):
+  - 4347ac3: release 1.0.1;
+  - 431bf11: 14c server ring push (`urgent: "call"` → `{t:'call', m:<messageId>}`);
+  - 88d0547: the vault-reuse fix plus 14c Android ringing;
+  - b043ed2: the `PUSH_RING_CALLS` switch;
+  - plus this entry and the known-risks and threat-model updates.
+- **Bug found by the owner, fixed and tested, not yet released:**
+  - The owner revoked the Windows device and activated the same app for another account. The vault
+    keeps its first address, so the new account ran on the old identity and every message showed
+    "could not be opened".
+  - The owner decided to erase: a vault serves one activation. Revoking or suspending now erases the
+    vault; on start, a vault bound to another account retires the device and erases.
+    `vault_reuse_test.dart` passes (2/2).
+  - **The owner's Windows install stays broken until 1.0.2.** 1.0.2 fixes it by itself on start (the
+    device is retired, and the app asks for activation). The owner then issues a new activation code
+    for that user.
+- **Phase 14c (ringing when closed), Android: built, NOT device-tested.**
+  - The wiped emulator can't register for FCM ("FCM Registration failed"). Testing needs a real
+    Android phone, or an emulator signed into a Google account.
+  - The server change isn't deployed. Deploy it together with 1.0.2: an old server rejects the new
+    `urgent` field, so call offers from 1.0.2 would fail. Deploy with `PUSH_RING_CALLS=on` once a
+    phone test passes, or `off` to ship 1.0.2 first.
+  - Known limits (known-risks): the name only if used in the last 15 minutes; Decline only stops
+    the ringing; the native screen rings out if the caller hangs up.
+- **Waiting on the owner:**
+  - the Apple push key (.p8) and `GoogleService-Info.plist` (14b, and 14c on iPhone);
+  - the TestFlight API key;
+  - "push".
+- **Next session, in order:**
+  1. Test 14c on a real Android phone.
+  2. Deploy the server with `ship.sh` (it includes the ring push and the switch).
+  3. Build and publish 1.0.2 (the vault fix plus 14c).
+  4. The owner re-activates Windows.
+  5. 14b once the Apple items exist.
+  6. 14d profile photos.
+- **Observed:** the Android splash screen is white behind the dark logo. It could be themed dark (it
+  needs a look on the canvas first).
