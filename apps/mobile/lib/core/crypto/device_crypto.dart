@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -72,6 +73,20 @@ Future<CryptoDevice> openDeviceCrypto({
     await keys.write(key);
   }
   return CryptoDevice.open(path: vaultPath, storageKey: key);
+}
+
+/// Erases this device's vault (and its encrypted media folder beside it) and
+/// replaces the storage key, so what is left of the old file on disk can never
+/// be read. [CryptoDevice] must be disposed first. Owner decision 2026-09-29:
+/// a vault is used by one activation only; activating again starts fresh.
+Future<void> eraseDeviceVault({required String vaultPath, required StorageKeyStore keys}) async {
+  for (final suffix in const ['', '-wal', '-shm', '-journal']) {
+    final f = File('$vaultPath$suffix');
+    if (await f.exists()) await f.delete();
+  }
+  final media = Directory('${File(vaultPath).parent.path}${Platform.pathSeparator}media');
+  if (await media.exists()) await media.delete(recursive: true);
+  await keys.write(_randomKey());
 }
 
 Uint8List _randomKey() {

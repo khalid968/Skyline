@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../../features/calls/data/ringer.dart';
 import '../../features/messages/data/messenger.dart';
 import '../api/api_client.dart';
 
@@ -60,6 +61,11 @@ Future<void> _showNewMessage() => _notices.show(
 
 @pragma('vm:entry-point')
 Future<void> onBackgroundWakeUp(RemoteMessage message) async {
+  // Phase 14c: a call rings on the phone's own screen (ringer.dart).
+  if (message.data['t'] == 'call' && message.data['m'] is String) {
+    await ringForPush(message.data['m'] as String);
+    return;
+  }
   if (message.data['t'] != 'inbox') return;
   await _initNotices();
   await _showNewMessage();

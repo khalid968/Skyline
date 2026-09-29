@@ -147,6 +147,10 @@ class Appearance extends ChangeNotifier {
 
   Future<void> load(LocalStore store) async {
     _store = store;
+    theme = ThemeChoice.phone;
+    accent = 'sky';
+    background = 'theme';
+    pattern = ChatPattern.none;
     try {
       final m = await store.setting('appearance');
       if (m is Map) {

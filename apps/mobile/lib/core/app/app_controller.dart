@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../features/auth/data/activation_service.dart';
 import '../../features/calls/data/call_service.dart';
+import '../../features/calls/data/ringer.dart';
 import '../../features/media/data/media_service.dart';
 import '../../features/messages/data/local_store.dart';
 import '../../features/messages/data/messenger.dart';
@@ -52,6 +53,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   ActivationService? activation;
   AppLock? lock;
   PushRegistrar? push;
+  NativeRinging? ringing;
 
   Future<void> boot() async {
     WidgetsBinding.instance.addObserver(this);
@@ -70,6 +72,18 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       final session = await sessions.read();
       if (session == null) {
         phase = AppPhase.activate;
+      } else if (!await _vaultBelongsTo(session)) {
+        // This vault was activated for another account (or device) before:
+        // the app was revoked, then activated again on top of it. Nothing it
+        // sends or receives can work, and it holds someone else's identity.
+        // Retire this device on the server and start fresh (2026-09-29).
+        try {
+          await api!.post('/me/devices/${session.deviceId}/revoke');
+        } on Object {
+          // best effort: the new activation makes a new device anyway
+        }
+        await _eraseAndRestart();
+        return;
       } else {
         await _startMessenger(session);
       }
@@ -79,6 +93,48 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       phase = AppPhase.failed;
     }
     notifyListeners();
+  }
+
+  /// Does this vault belong to [session]'s account and device? The vault
+  /// takes its address once, for good: setting the same one again is fine, an
+  /// unset one is set now, and a different one is refused.
+  Future<bool> _vaultBelongsTo(Session session) async {
+    try {
+      await crypto!.setLocalAddress(userId: session.userId, deviceNumber: session.deviceNumber);
+      return true;
+    } on CryptoException {
+      return false;
+    }
+  }
+
+  /// Owner decision 2026-09-29: a vault serves one activation. Once this
+  /// device is revoked (or the account suspended), it must be activated again
+  /// as a new device, so the old vault, its messages and its keys are erased
+  /// and a fresh one is made. Nothing of the previous account carries over.
+  Future<void> _eraseAndRestart() async {
+    phase = AppPhase.loading;
+    notifyListeners();
+    WidgetsBinding.instance.removeObserver(this);
+    releases?.dispose();
+    releases = null;
+    lock?.dispose();
+    lock = null;
+    activation = null;
+    store = null;
+    api = null;
+    final c = crypto;
+    crypto = null;
+    c?.dispose();
+    try {
+      await eraseDeviceVault(vaultPath: vaultPath ?? await _defaultVaultPath(), keys: keys);
+    } on Object {
+      phase = AppPhase.failed;
+      notifyListeners();
+      return;
+    }
+    await CallerNames.clear();
+    await sessions.clear();
+    await boot();
   }
 
   /// Called by the activation screen once the server has accepted the code.
@@ -108,6 +164,13 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     calls = CallService(messenger: m, api: api!);
     phase = AppPhase.ready;
     await m.start();
+    // Answered on the phone's own ringing screen (Phase 14c): take the call
+    // as soon as its offer is fetched and decrypted.
+    ringing = NativeRinging(onAccepted: () {
+      calls?.acceptWhenRinging();
+      unawaited(m.sync().catchError((Object _) {}));
+    });
+    unawaited(ringing!.start());
     push = PushRegistrar(api: api!, messenger: m);
     unawaited(push!.start());
   }
@@ -133,19 +196,20 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   void _watchSignedOut() {
     final m = messenger;
     if (m == null || !m.signedOut) return;
-    // The device was revoked or the account suspended. The vault stays (its
-    // history is still this person's), but this device must be activated
-    // again with a new code to talk to anyone.
+    // The device was revoked or the account suspended. It can only come back
+    // as a new device with a new code, and a vault serves one activation: it
+    // is erased and a fresh one made (owner decision 2026-09-29).
     m.removeListener(_watchSignedOut);
+    unawaited(ringing?.dispose());
+    ringing = null;
+    unawaited(CallerNames.clear());
     unawaited(push?.stop());
     push = null;
     calls?.dispose(); // ends any call in progress
     calls = null;
-    unawaited(sessions.clear());
     m.dispose();
     messenger = null;
-    phase = AppPhase.activate;
-    notifyListeners();
+    unawaited(_eraseAndRestart());
   }
 
   static Future<String> _defaultVaultPath() async {

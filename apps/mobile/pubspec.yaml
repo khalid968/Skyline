@@ -56,6 +56,9 @@ dependencies:
   flutter_webrtc: ^1.6.2+hotfix.3
   url_launcher: ^6.3.2
   crypto: ^3.0.7
+  # Phase 14c: the phone's own ringing screen (Android full-screen call,
+  # iPhone CallKit). Pinned exactly: it runs when Skyline is closed.
+  flutter_callkit_incoming: 3.1.6
 
 dev_dependencies:
   flutter_test:

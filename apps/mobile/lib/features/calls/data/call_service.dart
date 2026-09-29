@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../messages/data/messenger.dart';
+import 'ringer.dart';
 
 enum CallPhase { outgoing, incoming, connecting, connected, ended }
 
@@ -102,6 +103,22 @@ class CallService extends ChangeNotifier {
   /// not wait for the server (Phase 14a). Never the microphone: that only
   /// opens on Accept.
   Future<Object?>? _turnSoon;
+
+  /// Set when the person tapped Accept on the phone's own ringing screen
+  /// (Phase 14c): the offer, once fetched and decrypted, is answered at once.
+  DateTime? _acceptUntil;
+
+  /// Accept the next incoming call if it arrives soon. The offer is normally
+  /// fetched within a second or two of the app opening; a short window means
+  /// a different, later call is never answered by mistake.
+  void acceptWhenRinging() {
+    _acceptUntil = DateTime.now().add(const Duration(seconds: 20));
+    final call = current;
+    if (call != null && !call.outgoing && call.phase == CallPhase.incoming) {
+      _acceptUntil = null;
+      unawaited(accept());
+    }
+  }
 
   RTCPeerConnection? _pc;
   RTCDataChannel? _control;
@@ -581,6 +598,7 @@ class CallService extends ChangeNotifier {
       _hasVideo = false;
       _pendingOffer = null;
       _turnSoon = null;
+      unawaited(NativeRinging.stopAll());
       _offerDevice = null;
       _answerDevice = null;
       final record = recordedOutcome(outcome, outgoing: call.outgoing, connected: call.connectedAt != null);
@@ -639,6 +657,14 @@ class CallService extends ChangeNotifier {
         _turnSoon = api.get('/calls/turn').then<Object?>((v) => v, onError: (Object _) => null);
         unawaited(_initRenderers());
         notifyListeners();
+        final until = _acceptUntil;
+        _acceptUntil = null;
+        if (until != null && DateTime.now().isBefore(until)) {
+          // Already answered on the phone's ringing screen.
+          unawaited(accept());
+        }
+        // The app's own screen has it now: stop the phone's ringing.
+        unawaited(NativeRinging.stopAll());
 
       case 'answer':
         if (call == null || call.id != callId) return;

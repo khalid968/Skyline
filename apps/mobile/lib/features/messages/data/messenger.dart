@@ -10,6 +10,7 @@ import '../../../core/api/session.dart';
 import '../../../core/crypto/device_crypto.dart';
 import '../../../core/realtime/realtime_client.dart';
 import '../../auth/data/prekeys.dart';
+import '../../calls/data/ringer.dart';
 import '../../media/data/media_service.dart';
 import '../domain/models.dart';
 import '../domain/message_rules.dart';
@@ -206,6 +207,8 @@ class Messenger extends ChangeNotifier {
       }
     }
     _contacts.removeWhere((id, _) => !seen.contains(id));
+    // For naming a caller while the app is closed (Phase 14c).
+    unawaited(CallerNames.write({for (final c in _contacts.values) c.userId: c.displayName}));
     await _refreshOwnDevices();
     notifyListeners();
   }
@@ -673,7 +676,7 @@ class Messenger extends ChangeNotifier {
   /// Posts [content] to [peer] and our own other devices, fixing the device
   /// list when the server says it is stale.
   Future<void> _post(String peer, String messageId, Map<String, Object?> content,
-      {List<String>? attachmentIds}) async {
+      {List<String>? attachmentIds, String? urgent}) async {
     final bytes = utf8.encode(jsonEncode(content));
     var targets = await _targets(peer);
     for (var attempt = 0; attempt < 3; attempt++) {
@@ -693,6 +696,7 @@ class Messenger extends ChangeNotifier {
           'messageId': messageId,
           'envelopes': envelopes,
           if (attachmentIds != null) 'attachmentIds': attachmentIds,
+          if (urgent != null) 'urgent': urgent,
         });
         return;
       } on ApiException catch (e) {
@@ -1283,7 +1287,9 @@ class Messenger extends ChangeNotifier {
   /// Sends one call-setup message (Phase 10) to [peer]'s devices and our own
   /// other devices, encrypted like any message. Throws when it cannot go.
   Future<void> sendCallSignal(String peer, Map<String, Object?> content) =>
-      _post(peer, _uuid.v4(), {'v': 1, 'type': 'call', 'peer': peer, ...content});
+      _post(peer, _uuid.v4(), {'v': 1, 'type': 'call', 'peer': peer, ...content},
+          // An offer rings the other side's closed apps (Phase 14c).
+          urgent: content['action'] == 'offer' ? 'call' : null);
 
   /// Board 35: a call leaves a line in the chat.
   Future<void> recordCall(
