@@ -1308,3 +1308,25 @@ The owner approved prototypes 41 and 42 and started the phase.
   - a code-signing certificate (OV on a token, or Azure Trusted Signing if eligible);
   - TestFlight once the Apple Developer account exists;
   - push 0b718f7 and the commits after it (not pushed yet).
+
+## 2026-09-29 — Phase 14 planned (after TestFlight)
+
+- **Owner feedback after TestFlight:**
+  - add profile photos;
+  - iPhone gets no notifications;
+  - calls to Android don't ring until the app is opened;
+  - opening the app is slow to connect;
+  - answering a call takes a while to connect.
+- **Owner decisions:** order speed → iPhone notifications → ringing → photos. Photos are each
+  person's own and E2EE. iPhone notifications say "New message" only. The ringing screen shows the
+  caller's name.
+- **Plan:** decisions.md "Phase 14 planned". Prototypes 46 (profile photo) and 47 (calls and alerts
+  when closed) are on the canvas, **awaiting approval**. Nothing is built.
+- **Also this session:**
+  - the iPhone app ID is now `fyi.secline.skyline`;
+  - the release workflow can send a manual run to TestFlight;
+  - `config/production.json` holds the live server settings, and GitHub has the repository variable
+    `SKYLINE_DOMAIN`;
+  - iOS builds use CocoaPods (Swift Package Manager is disabled; found on a real Mac).
+- **On TestFlight:** the owner uploaded the first iPhone build by hand from a friend's Mac, on the
+  friend's Apple Developer team (K73TU9BT85, Mohammed Alshidi).

@@ -56,6 +56,7 @@ See `design.md` for the standing design-review rule.
 
 13. **Deployment** — ✅ built 2026-09-26, awaiting review (planned the same day; decisions.md): EU rented server, Android direct download, a signed Windows installer, TestFlight, MinIO from source, backups on the same server. Production Docker Compose, Nginx TLS, CI/CD, secrets management, automated
     backups, monitoring, logging, health checks, operator and admin guides.
+14. **After TestFlight** — planned 2026-09-29 (decisions.md), awaiting approval: faster opening and call answering, iPhone notifications, calls that ring when the app is closed (board 47), end-to-end encrypted profile photos (board 46).
 
 ---
 

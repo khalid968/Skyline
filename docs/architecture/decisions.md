@@ -6,6 +6,75 @@ working around it.
 
 ---
 
+## 2026-09-29 — Phase 14 planned: after TestFlight (speed, iPhone alerts, ringing, profile photos)
+
+The owner tested Skyline on TestFlight and Android and asked for five things. The owner's answers:
+- **Order:** 1) speed, 2) iPhone notifications, 3) calls that ring when the app is closed, 4) profile
+  photos.
+- **Profile photos:** each person sets their own. They are end-to-end encrypted, so only linked
+  contacts see them, never the server or admins. Names stay admin-set.
+- **iPhone notifications:** "New message" only, content-free like Android.
+- **Ringing screen:** shows the caller's name, decrypted on the phone. The push itself stays
+  content-free.
+
+**14a · Speed: opening the app, and answering a call.** Measure first: time each startup step against
+the live server from Oman, and each step from Accept to audio. Likely causes and fixes:
+- The app may refresh its session on every start, even with a valid token. It should use the token
+  it has.
+- REST, the inbox pull and the WebSocket may run one after another. They should run in parallel.
+- Each extra round trip to Germany costs about 130 ms.
+- On a call, the answerer fetches relay credentials and gathers every ICE candidate only after
+  Accept (no trickle). Instead, fetch the credentials and prepare the connection while it rings, and
+  cap candidate gathering.
+- The chat list already shows from the vault. Connecting must never block it.
+
+**14b · iPhone notifications.**
+- The owner (on the friend's team) creates an APNs key (.p8) and registers the iOS app
+  `fyi.secline.skyline` in Firebase. That gives the key for Firebase, and `GoogleService-Info.plist`
+  for the release secrets.
+- App: push is allowed on iOS, with the permission prompt, the entitlement and APNs registration.
+- Server: iOS tokens get an alert push ("New message") with no content. iOS doesn't deliver silent
+  data pushes reliably.
+
+**14c · Calls ring when the app is closed** (board 47). The known-risks entry is confirmed in use.
+- **Sender:** when sending a call offer, the app marks the send as urgent (`urgent: "call"`). This is
+  the one new piece of metadata: the server learns "this message starts a call". It largely knew
+  already, because the caller fetches relay credentials.
+- **Server, Android:** a high-priority FCM data message, `type: call`, content-free.
+- **Server, iPhone:** a VoIP push through APNs directly (HTTP/2, token auth, the same .p8). FCM
+  can't send PushKit pushes.
+- **App:** `flutter_callkit_incoming` (or a small native equivalent after review):
+  - iPhone: CallKit, reporting the call at once as Apple requires, then updating the name once the
+    offer is fetched and decrypted.
+  - Android: a full-screen-intent call notification over the lock screen, or a call banner while in
+    use.
+  - Accept opens straight into the call; Decline sends the usual decline.
+- **Risks:**
+  - Decrypting in the background must not race the main app's ratchet state. The background path
+    stores what it decrypts for the app, never decrypts twice.
+  - Android 14 limits full-screen intents to calling apps, so the permission may need the person's OK.
+  - Needs real-device testing in both directions.
+
+**14d · Profile photos** (board 46).
+- **The photo:** chosen or taken, cropped square, resized to about 512 px, EXIF stripped (as media
+  already is), and encrypted with the existing attachment encryption. No new cryptography.
+- **Storage:** uploaded to MinIO as a profile object that doesn't expire at 30 days. The server
+  stores only an opaque pointer and a version per person.
+- **The key:** sent to each linked contact inside a Signal message (`{"type":"profile"}`). It is sent
+  again when someone new is linked, when a device is added, and on every change.
+- **Removing** a photo sends an update, and contacts return to initials.
+- **Where it shows:** chat list, chat header, calls (including 47's screens), group senders, and
+  full size on tap. The dashboard shows initials only.
+- **Accepted risk:** admins can't see or remove an offensive photo. Someone can unlink the person,
+  and the photo stops reaching the contacts they lose. This goes into known-risks when built.
+- **Out of scope:** group photos (groups are admin-managed; later, if wanted).
+
+**Needs the owner (Apple side):**
+- the APNs key (Keys → + → Apple Push Notifications service), downloaded once;
+- the iOS app in Firebase (bundle `fyi.secline.skyline`) and its `GoogleService-Info.plist`;
+- Push Notifications enabled on the App ID (done when it was registered);
+- the TestFlight upload key from before, for the automated builds.
+
 ## 2026-09-26 — Settings, appearance and the logo (boards 43-45)
 
 The owner approved boards 43 and 44 and chose logo 12, "Blue shield S".
