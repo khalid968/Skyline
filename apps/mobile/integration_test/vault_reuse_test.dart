@@ -76,6 +76,35 @@ void main() {
     await fresh.setLocalAddress(userId: newAccount, deviceNumber: 2);
   });
 
+  // Needs a RUNNING throwaway server that doesn't know this login (any fresh
+  // e2e fixture): --dart-define=SKYLINE_API=http://localhost:3078
+  test('a login the server refuses erases the vault and asks for activation', () async {
+    final path = '${dir.path}${Platform.pathSeparator}skyline-vault.db';
+    final keys = MemoryKeyStore();
+    final d = await openDeviceCrypto(vaultPath: path, keys: keys);
+    final identity = (await d.identity()).identityKey;
+    await d.setLocalAddress(userId: newAccount, deviceNumber: 1);
+    d.dispose();
+    final sessions = MemorySessionStore()
+      ..session = Session(
+        userId: newAccount,
+        deviceId: '6f0b6a1e-0000-4000-8000-0000000000d2',
+        deviceNumber: 1,
+        accessToken: 'skd_stale',
+        accessExpiresAt: DateTime.now().subtract(const Duration(minutes: 1)),
+        refreshToken: 'skd_unknown0000000000000000000000000000000000000',
+      );
+    final app = AppController(sessions: sessions, keys: keys, vaultPath: path);
+    await app.boot();
+    expect(app.phase, AppPhase.ready);
+    // The refresh is refused: signed out, so the vault is erased.
+    for (var i = 0; i < 100 && app.phase != AppPhase.activate; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    expect(app.phase, AppPhase.activate);
+    expect((await app.crypto!.identity()).identityKey, isNot(equals(identity)));
+  }, skip: const String.fromEnvironment('SKYLINE_API').isEmpty ? 'needs a throwaway server' : false);
+
   test('a vault that belongs to the login keeps working', () async {
     final path = '${dir.path}${Platform.pathSeparator}skyline-vault.db';
     final keys = MemoryKeyStore();

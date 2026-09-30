@@ -200,6 +200,13 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // as a new device with a new code, and a vault serves one activation: it
     // is erased and a fresh one made (owner decision 2026-09-29).
     m.removeListener(_watchSignedOut);
+    // Not here: we are inside the messenger's own notifyListeners, and a
+    // ChangeNotifier must not be disposed during its notification (found in
+    // use: the assertion aborted the whole sign-out). Right after it instead.
+    scheduleMicrotask(() => _tearDownSignedOut(m));
+  }
+
+  void _tearDownSignedOut(Messenger m) {
     unawaited(ringing?.dispose());
     ringing = null;
     unawaited(CallerNames.clear());
@@ -208,7 +215,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     calls?.dispose(); // ends any call in progress
     calls = null;
     m.dispose();
-    messenger = null;
+    if (messenger == m) messenger = null;
     unawaited(_eraseAndRestart());
   }
 
