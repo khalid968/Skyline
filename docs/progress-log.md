@@ -1396,3 +1396,22 @@ The owner approved prototypes 41 and 42 and started the phase.
   6. 14d profile photos.
 - **Observed:** the Android splash screen is white behind the dark logo. It could be themed dark (it
   needs a look on the canvas first).
+
+## 2026-09-30 — Release 1.0.2: vault fixes; server with the ring push (switched off)
+
+- **Found testing on the emulator:** signing out never erased the vault. The handler disposed the
+  messenger inside its own notification; the assertion aborted it, and the app sat on "Connecting".
+  Fixed with a microtask teardown in 41c72ae. The new `vault_reuse_test` case failed on the old code
+  and passes on the new; 3/3 pass.
+- **Server deployed** (41c72ae via `ship.sh`): it accepts `urgent: "call"`, and `PUSH_RING_CALLS=off`
+  in the server's `.env`, so call offers get the usual wake-up. All services are healthy.
+- **Published 1.0.2** for Android (permanent key, versionCode 3) and Windows (unsigned). Both
+  downloads verified from outside. It carries the vault fixes and the 14c ringing code, which stays
+  dormant while the switch is off.
+- **The owner's Windows install:** 1.0.2 retires that device and asks for activation. Then issue a
+  new code for that user.
+- **Not done:** the ringing test on a device. The emulator is too slow here, and the one-hour
+  background limit killed it and the test server mid-test. When the owner's Android phone runs 1.0.2,
+  set `PUSH_RING_CALLS=on` in `/opt/skyline/infra/production/.env`, run `docker compose up -d
+  backend`, and call the phone with Skyline closed.
+- **iPhone 1.0.2:** build on the Mac with `--build-number=3`.
