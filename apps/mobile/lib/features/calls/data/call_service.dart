@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/api/api_client.dart';
 import '../../messages/data/messenger.dart';
 import 'ringer.dart';
+import 'ringtone.dart';
 
 enum CallPhase { outgoing, incoming, connecting, connected, ended }
 
@@ -56,9 +57,13 @@ class CallService extends ChangeNotifier {
     required this.api,
     this.captureMedia = true,
     this.ringFor = const Duration(seconds: 45),
-  }) {
+    Ringtone? ringtone,
+  }) : ringtone = ringtone ?? Ringtone() {
     messenger.onCall = _onSignal;
   }
+
+  /// Sound and vibration while a call rings on the app's own screen.
+  final Ringtone ringtone;
 
   final Messenger messenger;
   final ApiClient api;
@@ -177,6 +182,7 @@ class CallService extends ChangeNotifier {
     if (call == null || call.outgoing || call.phase != CallPhase.incoming || offer == null) return;
     call.phase = CallPhase.connecting;
     _ringTimer?.cancel();
+    unawaited(ringtone.stop());
     notifyListeners();
     try {
       await _open(call, offering: false);
@@ -573,6 +579,7 @@ class CallService extends ChangeNotifier {
     try {
       _ringTimer?.cancel();
       _tick?.cancel();
+      unawaited(ringtone.stop());
       final seconds = call.elapsed.inSeconds;
       call
         ..phase = CallPhase.ended
@@ -662,6 +669,8 @@ class CallService extends ChangeNotifier {
         if (until != null && DateTime.now().isBefore(until)) {
           // Already answered on the phone's ringing screen.
           unawaited(accept());
+        } else {
+          unawaited(ringtone.start());
         }
         // The app's own screen has it now: stop the phone's ringing.
         unawaited(NativeRinging.stopAll());
@@ -720,6 +729,7 @@ class CallService extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _ringTimer?.cancel();
+    unawaited(ringtone.dispose());
     _tick?.cancel();
     unawaited(_pc?.close());
     if (_renderersReady) {
