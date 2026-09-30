@@ -1415,3 +1415,27 @@ The owner approved prototypes 41 and 42 and started the phase.
   set `PUSH_RING_CALLS=on` in `/opt/skyline/infra/production/.env`, run `docker compose up -d
   backend`, and call the phone with Skyline closed.
 - **iPhone 1.0.2:** build on the Mac with `--build-number=3`.
+
+## 2026-09-30 — Release 1.0.3: profile photos (14d) and an in-app ringtone
+
+- **Owner asked for:** profile photos (board 46), plus sound and vibration while a call rings,
+  "noticeable, not annoying".
+- **Ringtone** (86a3d11):
+  - Android plays the phone's own ringtone at the ring volume and follows the ringer mode (silent:
+    nothing; vibrate: vibration only), with a two-pulse vibration (`Ringer.kt`).
+  - iPhone and Windows play a soft chime generated in the repo (`assets/sounds/ring.wav`). On iPhone
+    it respects the silent switch.
+  - It stops on answer, decline, or end. `calls_test` passes.
+- **Profile photos:**
+  - Server (27a0d3b): migration 016; `PUT /me/photo` and `DELETE /me/photo`; downloads by anyone who
+    can see the owner; `/me/contacts` includes `photo`. All suites pass: 119 unit, 105 db, 284 app.
+  - App (c02e272): the Settings card is tappable; take a photo (phones), choose one, or remove it;
+    crop in a circle, re-encoded at 512 px. The key goes one to one by Signal; avatars show photos
+    everywhere; groups keep initials.
+  - `profile_photos_test`: a contact gets the exact bytes, and a removal clears them. Passes.
+- **Deployed** e94f976 (migration 016 applied on the live database). **Published 1.0.3** for Android
+  (versionCode 4) and Windows. Both downloads verified from outside.
+- **Pending:**
+  - iPhone 1.0.3 on the Mac (`--build-number=4`);
+  - the 14c ringing test on a phone (the server switch is still off);
+  - 14b: the owner's Apple push key and the Firebase iOS app (steps given in chat).
