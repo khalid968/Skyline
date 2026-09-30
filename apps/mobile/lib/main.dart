@@ -7,6 +7,7 @@ import 'core/routing/app_router.dart';
 import 'features/calls/presentation/call_overlay.dart';
 import 'features/settings/presentation/lock_screen.dart';
 import 'features/updates/presentation/update_widgets.dart';
+import 'shared/widgets/avatar.dart';
 import 'src/rust/frb_generated.dart';
 
 Future<void> main() async {
@@ -35,7 +36,10 @@ class SkylineApp extends ConsumerWidget {
         darkTheme: appearance.darkTheme,
         themeMode: appearance.mode,
         routerConfig: router,
-        builder: (context, child) => _Calls(child: _LockGate(child: _Updates(child: child ?? const SizedBox.shrink()))),
+        builder: (context, child) => ProfilePhotoScope(
+          photos: ref.watch(appControllerProvider).photos,
+          child: _Calls(child: _LockGate(child: _Updates(child: child ?? const SizedBox.shrink()))),
+        ),
       ),
     );
   }

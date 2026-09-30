@@ -1,5 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../../features/profile/data/profile_photos.dart';
+
+/// Makes profile photos (Phase 14d) available to every [Avatar] below it;
+/// avatars rebuild when a photo arrives, changes or is removed.
+class ProfilePhotoScope extends InheritedNotifier<ProfilePhotos> {
+  const ProfilePhotoScope({super.key, required ProfilePhotos? photos, required super.child})
+      : super(notifier: photos);
+
+  static ProfilePhotos? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<ProfilePhotoScope>()?.notifier;
+}
+
 /// Person avatars are circles; group avatars are rounded squares (design.md,
 /// board 26). The tint is stable per person or group.
 class Avatar extends StatelessWidget {
@@ -37,6 +49,17 @@ class Avatar extends StatelessWidget {
     var h = 0;
     for (final c in seed.codeUnits) {
       h = (h * 31 + c) & 0x7fffffff;
+    }
+    // A person's own photo, when we have it (never for groups).
+    final photo = square ? null : ProfilePhotoScope.of(context)?.photoOf(seed);
+    if (photo != null) {
+      final px = (size * MediaQuery.devicePixelRatioOf(context)).round();
+      return ExcludeSemantics(
+        child: ClipOval(
+          child: Image.memory(photo,
+              width: size, height: size, fit: BoxFit.cover, cacheWidth: px, gaplessPlayback: true),
+        ),
+      );
     }
     return ExcludeSemantics(
       child: Container(

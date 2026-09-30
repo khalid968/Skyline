@@ -11,6 +11,7 @@ import '../../features/calls/data/ringer.dart';
 import '../../features/media/data/media_service.dart';
 import '../../features/messages/data/local_store.dart';
 import '../../features/messages/data/messenger.dart';
+import '../../features/profile/data/profile_photos.dart';
 import '../../features/settings/data/app_lock.dart';
 import '../../features/updates/data/release_service.dart';
 import '../../features/updates/data/update_installer.dart';
@@ -54,6 +55,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   AppLock? lock;
   PushRegistrar? push;
   NativeRinging? ringing;
+
+  /// Phase 14d: profile photos (yours and your contacts').
+  ProfilePhotos? photos;
 
   Future<void> boot() async {
     WidgetsBinding.instance.addObserver(this);
@@ -161,6 +165,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     );
     m.addListener(_watchSignedOut);
     messenger = m;
+    photos = ProfilePhotos(messenger: m, media: m.media, store: store!);
     calls = CallService(messenger: m, api: api!);
     phase = AppPhase.ready;
     await m.start();
@@ -207,6 +212,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _tearDownSignedOut(Messenger m) {
+    photos?.dispose();
+    photos = null;
     unawaited(ringing?.dispose());
     ringing = null;
     unawaited(CallerNames.clear());

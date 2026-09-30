@@ -244,3 +244,12 @@ decrypts.
 - **Would close it:** a shell-only `owner:reset` tool (needs server access, audit-logged, announced
   in the dashboard). Not built: it needs the owner's decision, since it gives whoever runs the server
   a way to take the owner's account.
+
+## Profile photos can't be moderated (Phase 14d, 2026-09-30) — ACCEPTED
+- **What:** profile photos are end-to-end encrypted (owner decision), so administrators can't see them and
+  can't remove an offensive one.
+- **Mitigation:** only the people someone is linked to (or shares a group with) can download their photo.
+  An administrator can unlink or suspend the person, and the photo then stops reaching the contacts they
+  lose.
+- **Also:** group members who are not linked to someone see initials. The photo's key travels one to one;
+  sending it through groups is a possible follow-up.

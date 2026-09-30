@@ -8,6 +8,7 @@ import '../../../core/version.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/skyline_logo.dart';
 import '../../../shared/widgets/sky_icon.dart';
+import '../../profile/presentation/photo_editor.dart';
 import '../../updates/data/release_service.dart';
 import '../../updates/data/update_installer.dart';
 import 'settings_widgets.dart';
@@ -49,20 +50,64 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 6, 16, 28),
         children: [
-          SettingsCard(padding: const EdgeInsets.all(16), children: [
-            Row(children: [
-              Avatar(name: _name ?? '', seed: me, size: 52),
-              const SizedBox(width: 14),
+          // Board 46: your photo is yours to choose; your name is not.
+          SettingsCard(padding: const EdgeInsets.fromLTRB(16, 22, 16, 18), children: [
+            Center(
+              child: Semantics(
+                button: true,
+                label: 'Change your photo',
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: app.photos == null ? null : () => changeProfilePhoto(context, app.photos!),
+                  child: Stack(children: [
+                    Avatar(name: _name ?? '', seed: me, size: 104),
+                    Positioned(
+                      right: 0,
+                      bottom: 2,
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: t.surfaceRaised,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: t.surface, width: 3),
+                        ),
+                        child: SkyIcon(SkyIcons.camera, size: 16, color: t.textPrimary, stroke: 2),
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(_name ?? ' ',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: t.textPrimary)),
+            const SizedBox(height: 4),
+            Text('Your name is set by your administrator. Your photo is yours to choose.',
+                textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, color: t.textSecondary)),
+          ]),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: t.verified.withValues(alpha: 0.10),
+              border: Border.all(color: t.verified.withValues(alpha: 0.35)),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SkyIcon(SkyIcons.lock, size: 18, color: t.verified, stroke: 2),
+              const SizedBox(width: 10),
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(_name ?? ' ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: t.textPrimary)),
-                  const SizedBox(height: 3),
-                  Text('Your name is set by your administrator',
-                      style: TextStyle(fontSize: 12.5, color: t.textSecondary)),
-                ]),
+                child: Text(
+                  'Only the people you’re linked to can see your photo. It’s end-to-end encrypted like your '
+                  'messages: your organization’s server and administrators can’t see it.',
+                  style: TextStyle(fontSize: 12.5, height: 1.5, color: t.textPrimary),
+                ),
               ),
             ]),
-          ]),
+          ),
           const SettingsSection('Settings'),
           SettingsCard(children: [
             ListenableBuilder(

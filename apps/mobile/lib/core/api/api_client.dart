@@ -56,6 +56,7 @@ class ApiClient {
   Future<Object?> get(String path) => _call('GET', path);
   Future<Object?> post(String path, [Object? body]) => _call('POST', path, body);
   Future<Object?> put(String path, [Object? body]) => _call('PUT', path, body);
+  Future<Object?> delete(String path) => _call('DELETE', path);
 
   /// PUTs raw bytes (one part of an encrypted upload). 8 MB can take a while
   /// on a slow link, so the timeout is generous.

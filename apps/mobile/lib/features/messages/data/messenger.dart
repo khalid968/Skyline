@@ -27,12 +27,17 @@ class Contact {
     required this.displayName,
     required this.suspended,
     required this.devices,
+    this.photo,
   });
   final String userId;
   final String username;
   final String displayName;
   final bool suspended;
   final List<DirectoryDevice> devices;
+
+  /// Their current profile photo's upload (Phase 14d); its key arrives from
+  /// them by Signal message.
+  final String? photo;
 }
 
 class DirectoryDevice {
@@ -100,6 +105,10 @@ class Messenger extends ChangeNotifier {
   /// Phase 10: call setup messages go to the CallService. (sender user,
   /// sender device, the peer this belongs to, the content)
   void Function(String sender, int device, String peer, Map<String, Object?> content)? onCall;
+
+  /// A profile photo message (Phase 14d): whose photo, and its key or
+  /// "removed". From one of our own devices it is our own photo.
+  Future<void> Function(String userId, Map<String, Object?> content)? onProfile;
 
   String get me => session.userId;
   List<Contact> get contacts => _contacts.values.toList()
@@ -186,6 +195,7 @@ class Messenger extends ChangeNotifier {
         username: j['username']! as String,
         displayName: j['displayName']! as String,
         suspended: j['suspended'] == true,
+        photo: j['photo'] as String?,
         devices: [
           for (final d in (j['devices']! as List<Object?>).cast<Map<String, Object?>>())
             DirectoryDevice(
@@ -965,6 +975,8 @@ class Messenger extends ChangeNotifier {
       case 'call':
         // One to one only: a call is between two linked people.
         if (!group) onCall?.call(sender, device, peer, content);
+      case 'profile':
+        if (!group) await onProfile?.call(fromMe ? me : sender, content);
       case 'edit' || 'delete' || 'react' || 'pin':
         await _applyControl(peer, sender, content, senderName: senderName);
       case 'opened':
@@ -1286,6 +1298,10 @@ class Messenger extends ChangeNotifier {
 
   /// Sends one call-setup message (Phase 10) to [peer]'s devices and our own
   /// other devices, encrypted like any message. Throws when it cannot go.
+  /// Our profile photo's key (or "removed") to one contact (Phase 14d).
+  Future<void> sendProfile(String peer, Map<String, Object?> content) =>
+      _post(peer, _uuid.v4(), {'v': 1, 'type': 'profile', 'peer': peer, ...content});
+
   Future<void> sendCallSignal(String peer, Map<String, Object?> content) =>
       _post(peer, _uuid.v4(), {'v': 1, 'type': 'call', 'peer': peer, ...content},
           // An offer rings the other side's closed apps (Phase 14c).
