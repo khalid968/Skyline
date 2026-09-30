@@ -117,6 +117,10 @@ export class GraphService {
           WHERE a.id = $2 AND a.status = 'ready' AND a.expires_at > now()
             AND (
               up.user_id = $1
+              OR (a.kind = 'profile' AND EXISTS (
+                SELECT 1 FROM users u
+                 WHERE u.photo_attachment_id = a.id
+                   AND u.id IN (SELECT user_id FROM visible_user_ids($1))))
               OR EXISTS (
                 SELECT 1 FROM messages m JOIN chats c ON c.id = m.chat_id
                  WHERE m.id = a.message_id

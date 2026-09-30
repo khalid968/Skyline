@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import {
+  NotFoundException,
   Injectable,
   Dependencies,
   BadRequestException,
@@ -187,6 +188,44 @@ export class MediaService {
     obj.body.pipe(res);
   }
 
+  // ------------------------------------------------------ profile photos
+
+  // Phase 14d (board 46): this finished upload of the caller's is now their
+  // profile photo. It must be theirs, ready, and not sent in any message. The
+  // previous photo expires at once (the sweep deletes its blob).
+  async setProfilePhoto(caller, attachmentId) {
+    await this.db.transaction(async (client) => {
+      const { rowCount } = await client.query(
+        `UPDATE attachments a SET kind = 'profile', expires_at = 'infinity'
+           FROM devices d
+          WHERE a.id = $1 AND a.status = 'ready' AND a.message_id IS NULL AND a.kind = 'message'
+            AND d.id = a.uploaded_by_device_id AND d.user_id = $2`,
+        [attachmentId, caller.userId],
+      );
+      if (rowCount !== 1) throw new NotFoundException();
+      await this.expireProfilePhoto(client, caller.userId);
+      await client.query('UPDATE users SET photo_attachment_id = $1 WHERE id = $2', [
+        attachmentId,
+        caller.userId,
+      ]);
+    });
+  }
+
+  async clearProfilePhoto(caller) {
+    await this.db.transaction(async (client) => {
+      await this.expireProfilePhoto(client, caller.userId);
+      await client.query('UPDATE users SET photo_attachment_id = NULL WHERE id = $1', [caller.userId]);
+    });
+  }
+
+  async expireProfilePhoto(client, userId) {
+    await client.query(
+      `UPDATE attachments SET expires_at = now()
+        WHERE id = (SELECT photo_attachment_id FROM users WHERE id = $1)`,
+      [userId],
+    );
+  }
+
   // ------------------------------------------------------------ claiming
 
   // Called inside the message-send transaction: the message now carries these
@@ -197,6 +236,7 @@ export class MediaService {
       `UPDATE attachments a SET message_id = $1
          FROM devices d
         WHERE a.id = ANY($2::uuid[]) AND a.message_id IS NULL AND a.status = 'ready'
+          AND a.kind = 'message'
           AND d.id = a.uploaded_by_device_id AND d.user_id = $3`,
       [messageId, attachmentIds, caller.userId],
     );

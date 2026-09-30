@@ -76,7 +76,7 @@ export class MessagesService {
   async contacts(me) {
     const { rows } = await this.db.query(
       `SELECT u.id, u.username::text AS username, u.display_name, u.status,
-              c.id AS chat_id
+              u.photo_attachment_id, c.id AS chat_id
          FROM users u
          LEFT JOIN chats c ON c.kind = 'direct'
               AND c.user_a_id = LEAST(u.id, $1::uuid) AND c.user_b_id = GREATEST(u.id, $1::uuid)
@@ -91,6 +91,7 @@ export class MessagesService {
       displayName: r.display_name,
       suspended: r.status === 'suspended',
       chatId: r.chat_id,
+      photo: r.photo_attachment_id ?? null,
       devices: devices.get(r.id) || [],
     }));
   }

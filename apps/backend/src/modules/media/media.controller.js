@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Bind,
   Body,
   Param,
@@ -13,13 +14,43 @@ import {
   HttpCode,
   Dependencies,
 } from '@nestjs/common';
-import { IsInt, IsString, Length, Max, Min } from 'class-validator';
+import { IsInt, IsString, IsUUID, Length, Max, Min } from 'class-validator';
 import {
   AttachmentTarget,
   OwnUploadTarget,
 } from '../../common/decorators/access.decorators';
 import { Validated } from '../../common/decorators/validated.decorator';
 import { MediaService, MAX_CIPHERTEXT } from './media.service';
+
+export class ProfilePhotoDto {
+  @IsUUID() attachmentId;
+}
+
+// Phase 14d (board 46): your own profile photo. Upload it like any
+// attachment (encrypted on the device), then name it here. Only people who can
+// see you may download it; its key reaches them by Signal message.
+@Controller('me/photo')
+@Dependencies(MediaService)
+export class ProfilePhotoController {
+  constructor(media) {
+    this.media = media;
+  }
+
+  @Put()
+  @HttpCode(204)
+  @Bind(Req(), Body())
+  @Validated(undefined, ProfilePhotoDto)
+  async set(req, dto) {
+    await this.media.setProfilePhoto(req.account, dto.attachmentId);
+  }
+
+  @Delete()
+  @HttpCode(204)
+  @Bind(Req())
+  async clear(req) {
+    await this.media.clearProfilePhoto(req.account);
+  }
+}
 
 export class StartUploadDto {
   @IsInt() @Min(17) @Max(MAX_CIPHERTEXT) ciphertextBytes;

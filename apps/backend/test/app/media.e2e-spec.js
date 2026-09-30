@@ -322,4 +322,52 @@ describe('media (real tokens, real object store)', () => {
       ).status,
     ).toBe(400);
   });
+
+  // Phase 14d (board 46): profile photos.
+  describe('profile photos', () => {
+    const contactsOf = async (d) => (await api().get('/me/contacts').set(d.h)).body;
+
+    it('a contact sees and downloads your photo; nobody else can', async () => {
+      const { from, to } = await people('pp1');
+      const stranger = await device((await mkUser(db.client, 'pp1c', { status: 'pending' })).id);
+      const bytes = crypto.randomBytes(40 * 1024);
+      const up = await upload(from, bytes);
+      expect((await api().put('/me/photo').set(from.h).send({ attachmentId: up.attachmentId })).status).toBe(204);
+
+      const seen = (await contactsOf(to)).find((c) => c.userId === from.userId);
+      expect(seen.photo).toBe(up.attachmentId);
+      const got = await download(to, up.attachmentId);
+      expect(got.status).toBe(200);
+      expect(Buffer.compare(got.body, bytes)).toBe(0);
+      expect((await download(stranger, up.attachmentId)).status).toBe(404);
+    });
+
+    it('a photo is never sent in a message, and a sent file never becomes a photo', async () => {
+      const { from, to } = await people('pp2');
+      const photo = await upload(from, crypto.randomBytes(1024));
+      await api().put('/me/photo').set(from.h).send({ attachmentId: photo.attachmentId });
+      expect((await send(from, to, [photo.attachmentId])).status).toBe(400);
+
+      const file = await upload(from, crypto.randomBytes(1024));
+      expect((await send(from, to, [file.attachmentId])).status).toBe(201);
+      expect((await api().put('/me/photo').set(from.h).send({ attachmentId: file.attachmentId })).status).toBe(404);
+      // Someone else's upload: the same 404.
+      const theirs = await upload(to, crypto.randomBytes(1024));
+      expect((await api().put('/me/photo').set(from.h).send({ attachmentId: theirs.attachmentId })).status).toBe(404);
+    });
+
+    it('replacing or removing a photo takes the old one away at once', async () => {
+      const { from, to } = await people('pp3');
+      const first = await upload(from, crypto.randomBytes(2048));
+      await api().put('/me/photo').set(from.h).send({ attachmentId: first.attachmentId });
+      const second = await upload(from, crypto.randomBytes(2048));
+      await api().put('/me/photo').set(from.h).send({ attachmentId: second.attachmentId });
+      expect((await download(to, first.attachmentId)).status).toBe(404);
+      expect((await download(to, second.attachmentId)).status).toBe(200);
+
+      expect((await api().delete('/me/photo').set(from.h)).status).toBe(204);
+      expect((await contactsOf(to)).find((c) => c.userId === from.userId).photo).toBeNull();
+      expect((await download(to, second.attachmentId)).status).toBe(404);
+    });
+  });
 });
