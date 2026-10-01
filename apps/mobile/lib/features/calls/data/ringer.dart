@@ -27,6 +27,28 @@ bool get nativeRingingSupported => Platform.isAndroid;
 
 const ringSeconds = 45;
 
+/// Android 14+: a locked phone shows the full-screen call screen only if
+/// Skyline may use full-screen notifications. Without it, a call arrives as a
+/// banner. Older Android versions always allow it.
+Future<bool> fullScreenCallsAllowed() async {
+  if (!nativeRingingSupported) return true;
+  try {
+    return await FlutterCallkitIncoming.canUseFullScreenIntent();
+  } on Object {
+    return true;
+  }
+}
+
+/// Opens Android's page where the person allows it.
+Future<void> askForFullScreenCalls() async {
+  if (!nativeRingingSupported) return;
+  try {
+    await FlutterCallkitIncoming.requestFullIntentPermission();
+  } on Object {
+    // no settings page: nothing to do
+  }
+}
+
 Future<void> ringForPush(String messageId) async {
   if (!nativeRingingSupported) return;
   String? name;

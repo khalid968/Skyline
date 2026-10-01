@@ -3,16 +3,49 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/app/app_controller.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../shared/widgets/sky_icon.dart';
+import '../../calls/data/ringer.dart';
 import '../data/device_prefs.dart';
 import 'settings_widgets.dart';
 
 /// Board 48: how an incoming call rings while Skyline is open. Android only
 /// for now (the phone's own call screen needs Apple's push service on iPhone).
-class CallsSettingsScreen extends ConsumerWidget {
+class CallsSettingsScreen extends ConsumerStatefulWidget {
   const CallsSettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CallsSettingsScreen> createState() => _CallsSettingsScreenState();
+}
+
+class _CallsSettingsScreenState extends ConsumerState<CallsSettingsScreen> with WidgetsBindingObserver {
+  bool _fullScreen = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _check();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Back from Android's settings page: look again.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _check();
+  }
+
+  Future<void> _check() async {
+    final ok = await fullScreenCallsAllowed();
+    if (mounted && ok != _fullScreen) setState(() => _fullScreen = ok);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final prefs = ref.watch(appControllerProvider).device;
     return Scaffold(
       appBar: const SettingsAppBar(title: 'Calls'),
@@ -23,6 +56,10 @@ class CallsSettingsScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 28),
             children: [
+              if (!_fullScreen) ...[
+                const SizedBox(height: 10),
+                const _FullScreenWarning(onAllow: askForFullScreenCalls),
+              ],
               const SettingsSection('How incoming calls ring'),
               SettingsCard(children: [
                 _Option(
@@ -96,6 +133,44 @@ class _Option extends StatelessWidget {
           ]),
         ),
       ),
+    );
+  }
+}
+
+/// Android 14+: without this permission a call on a locked phone is only a
+/// banner, never the full-screen call screen.
+class _FullScreenWarning extends StatelessWidget {
+  const _FullScreenWarning({required this.onAllow});
+  final Future<void> Function() onAllow;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.sky;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: t.caution.withValues(alpha: 0.10),
+        border: Border.all(color: t.caution.withValues(alpha: 0.40)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SkyIcon(SkyIcons.warn, size: 18, color: t.caution, stroke: 2),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Calls can’t fill the screen while your phone is locked. Allow Skyline to show full-screen '
+              'notifications so a call rings like a phone call.',
+              style: TextStyle(fontSize: 13, height: 1.5, color: t.textPrimary),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton(onPressed: onAllow, child: const Text('Allow')),
+        ),
+      ]),
     );
   }
 }
