@@ -1484,3 +1484,18 @@ The owner approved prototypes 41 and 42 and started the phase.
   full-screen permission was on. The switch stays on.
 - **Released 1.0.5** (Android versionCode 6, Windows): the full-screen permission warning. iPhone
   1.0.5: `--build-number=6` on the Mac.
+
+### To fix in the next version (owner, 2026-10-01)
+
+- **Declining a call from the phone's call notification leaves the caller ringing.** Likely cause:
+  - When Skyline is closed, Decline on the native call screen (flutter_callkit_incoming) runs with no
+    app listening. `NativeRinging.onDeclined` is only wired while the app runs.
+  - The background push handler can't send the Signal-encrypted "decline": it must never open the
+    vault from a second isolate (see `push.dart`).
+  - So the caller hears ringing until their 45-second timeout.
+  - Options to weigh:
+    - on Decline, open the app briefly (or start it headless) to send the decline;
+    - or add a content-free server signal for "this offer was declined" that the caller's device
+      honours. That shows the server one more fact, so it needs the owner's decision.
+  - Also check the case where Skyline is open in the background, in case Decline gets lost there
+    too.
