@@ -6,6 +6,45 @@ working around it.
 
 ---
 
+## 2026-10-01 — Call style setting, and Skyline in the background on Windows (boards 48-49)
+
+The owner asked for two things, and approved prototypes 48 and 49 ("looks good").
+
+**Board 48: how incoming calls ring** (Settings › Calls, this device only).
+- "Skyline's call screen" stays the default: today's behaviour.
+- "Like a phone call": a call that arrives while Skyline is open also rings on the phone's own call
+  screen (flutter_callkit_incoming), and the app's ringing screen stays hidden until it is answered.
+  Answering opens Skyline's call screen; Decline there declines the call.
+- **Android only for now.** On iPhone the phone's own call screen needs CallKit with PushKit, which
+  needs Apple's push service (14b). The setting is hidden on iPhone and Windows until then.
+- If the push already rang the phone's screen (the app was in the background), the app leaves that
+  ringing in place and does not ring a second time.
+
+**Board 49: Windows keeps working in the background.** The owner chose:
+- notifications say **who** a message is from ("New message from Sarah"), never the text, with a
+  switch to say only "New message";
+- **start with Windows: on by default.**
+
+How it works:
+- **Start with Windows:** a per-person `Run` entry (launch_at_startup) starts `skyline.exe
+  --background`. The runner then never shows the window; only the icon by the clock appears.
+  - The default is applied once, on first run (`startupApplied`), so turning it off in Task Manager
+    is respected.
+  - A development build never turns it on by itself, and uses its own entry name.
+- **Keep running when the window is closed** (on): window_manager prevents the close and hides the
+  window. The tray icon (tray_manager) opens the window on click; its menu offers Open and Quit.
+- **One copy at a time:** the runner holds a named mutex, keyed by the exe's path. A second launch
+  signals the first to show its window, then exits. Two copies would open the same vault.
+- **Quitting for real:** the runner quits on `WM_ENDSESSION`, so Windows sign-out and the installer's
+  Restart Manager still close Skyline even though closing the window only hides it. The uninstaller
+  stops Skyline and removes the `Run` entry.
+- **Notifications** (flutter_local_notifications on Windows, unpackaged AUMID): shown only while the
+  window is hidden, minimised or not in front.
+  - Muted chats stay silent, and there is at most one notice per chat every 5 seconds, so the backlog
+    fetched at sign-in doesn't pile up.
+  - A call shows a notice with Answer and Decline while Skyline plays its chime.
+  - Unpackaged apps cannot withdraw a notice, so a stale call notice does nothing when tapped.
+
 ## 2026-09-29 — Phase 14 planned: after TestFlight (speed, iPhone alerts, ringing, profile photos)
 
 The owner tested Skyline on TestFlight and Android and asked for five things. The owner's answers:

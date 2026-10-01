@@ -70,6 +70,11 @@ the current state of play.
     the security colours fixed (`core/theme/appearance.dart`).
   - Logo "Blue shield S": `branding/skyline-logo.svg`. Regenerate the icons with
     `node branding/make-icons.js` (see its header).
+- **Boards 48-49 — ✅ built 2026-10-01:**
+  - Settings › Calls: "Like a phone call" (Android) rings on the phone's own call screen even while open.
+  - Windows (`core/platform/desktop_shell.dart`): start with Windows (on by default, `--background`
+    starts hidden), close to the tray, one copy at a time (runner mutex), notifications that name only
+    the sender.
 - **Phase 12 (Testing and hardening) — ✅ built 2026-09-26**, awaiting the owner's review.
   - Threat model: `docs/security/threat-model.md`. How to run every suite: `docs/testing.md`.
   - **CI** (`.github/workflows/ci.yml`, actions pinned to commits) runs backend, dashboard, Rust, Flutter,

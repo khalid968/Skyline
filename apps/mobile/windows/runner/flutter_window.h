@@ -16,6 +16,13 @@ class FlutterWindow : public Win32Window {
   explicit FlutterWindow(const flutter::DartProject& project);
   virtual ~FlutterWindow();
 
+  // Board 49: started by Windows at sign-in, Skyline stays by the clock and
+  // the window is not shown.
+  void SetStartHidden(bool hidden) { start_hidden_ = hidden; }
+
+  // Posted when a second launch hands over to this one: show the window.
+  static constexpr UINT kShowMessage = WM_APP + 0x51;
+
  protected:
   // Win32Window:
   bool OnCreate() override;
@@ -26,6 +33,8 @@ class FlutterWindow : public Win32Window {
  private:
   // The project to run.
   flutter::DartProject project_;
+
+  bool start_hidden_ = false;
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;

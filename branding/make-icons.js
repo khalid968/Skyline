@@ -64,6 +64,10 @@ const sizes = [16, 24, 32, 48, 64, 128, 256];
 pngToIco(sizes.map((s) => png(rounded, s))).then((ico) => {
   write(path.join(mobile, 'windows/runner/resources/app_icon.ico'), ico);
 });
+// The icon by the clock (board 49): small sizes only, loaded at runtime.
+pngToIco([16, 20, 24, 32, 48].map((s) => png(rounded, s))).then((ico) => {
+  write(path.join(mobile, 'assets/icons/tray.ico'), ico);
+});
 
 // Web: dashboard and download page favicons, and a PNG for anywhere else
 write(path.join(repo, 'apps/dashboard/public/favicon.svg'), rounded + '\n');

@@ -9,6 +9,7 @@ import '../../features/auth/presentation/activation_screen.dart';
 import '../../features/chats/presentation/chat_list_screen.dart';
 import '../../features/messages/presentation/conversation_screen.dart';
 import '../../features/settings/presentation/appearance_screen.dart';
+import '../../features/settings/presentation/calls_settings_screen.dart';
 import '../../features/settings/presentation/privacy_screen.dart';
 import '../../features/settings/presentation/safety_number_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
@@ -42,6 +43,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(path: 'privacy', builder: (context, state) => const PrivacyScreen()),
           GoRoute(path: 'appearance', builder: (context, state) => const AppearanceScreen()),
+          GoRoute(path: 'calls', builder: (context, state) => const CallsSettingsScreen()),
         ],
       ),
       GoRoute(path: '/search', builder: (context, state) => const SearchScreen()),

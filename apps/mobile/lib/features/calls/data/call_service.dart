@@ -30,6 +30,7 @@ class Call {
   bool remoteVideo = false; // they are sending camera or screen
   bool remoteSharing = false;
   bool weak = false; // the connection is struggling
+  bool native = false; // ringing on the phone's own call screen (board 48)
   String? endReason;
 
   Duration get elapsed => connectedAt == null ? Duration.zero : DateTime.now().difference(connectedAt!);
@@ -58,12 +59,18 @@ class CallService extends ChangeNotifier {
     this.captureMedia = true,
     this.ringFor = const Duration(seconds: 45),
     Ringtone? ringtone,
-  }) : ringtone = ringtone ?? Ringtone() {
+    bool Function()? ringsNatively,
+  })  : ringtone = ringtone ?? Ringtone(),
+        ringsNatively = ringsNatively ?? (() => false) {
     messenger.onCall = _onSignal;
   }
 
   /// Sound and vibration while a call rings on the app's own screen.
   final Ringtone ringtone;
+
+  /// Board 48: whether a call that arrives while the app is open rings on
+  /// the phone's own call screen ("Like a phone call") instead of ours.
+  final bool Function() ringsNatively;
 
   final Messenger messenger;
   final ApiClient api;
@@ -183,6 +190,11 @@ class CallService extends ChangeNotifier {
     call.phase = CallPhase.connecting;
     _ringTimer?.cancel();
     unawaited(ringtone.stop());
+    if (call.native) {
+      // Answered on the phone's screen: ours takes over from here.
+      call.native = false;
+      unawaited(NativeRinging.stopAll());
+    }
     notifyListeners();
     try {
       await _open(call, offering: false);
@@ -669,11 +681,19 @@ class CallService extends ChangeNotifier {
         if (until != null && DateTime.now().isBefore(until)) {
           // Already answered on the phone's ringing screen.
           unawaited(accept());
+          unawaited(NativeRinging.stopAll());
+        } else if (nativeRingingSupported && ringsNatively()) {
+          // "Like a phone call": the phone rings it, our screen stays out of
+          // the way until it is answered.
+          incoming.native = true;
+          notifyListeners();
+          unawaited(ringInApp(
+              callId: callId, name: messenger.contact(peer)?.displayName ?? 'Skyline call', video: video));
         } else {
           unawaited(ringtone.start());
+          // The app's own screen has it now: stop the phone's ringing.
+          unawaited(NativeRinging.stopAll());
         }
-        // The app's own screen has it now: stop the phone's ringing.
-        unawaited(NativeRinging.stopAll());
 
       case 'answer':
         if (call == null || call.id != callId) return;

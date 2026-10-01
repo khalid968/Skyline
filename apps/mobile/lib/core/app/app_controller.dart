@@ -13,12 +13,14 @@ import '../../features/messages/data/local_store.dart';
 import '../../features/messages/data/messenger.dart';
 import '../../features/profile/data/profile_photos.dart';
 import '../../features/settings/data/app_lock.dart';
+import '../../features/settings/data/device_prefs.dart';
 import '../../features/updates/data/release_service.dart';
 import '../../features/updates/data/update_installer.dart';
 import '../api/api_client.dart';
 import '../api/session.dart';
 import '../config.dart';
 import '../crypto/device_crypto.dart';
+import '../platform/desktop_shell.dart';
 import '../push/push.dart';
 import '../realtime/realtime_client.dart';
 import '../theme/appearance.dart';
@@ -46,6 +48,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// choices once the vault is open.
   final appearance = Appearance();
 
+  /// Boards 48-49: this device's call style and Windows background choices.
+  final device = DevicePrefs();
+
   /// Board 43: downloads and hands over an update (one at a time).
   final installer = UpdateInstaller();
   LocalStore? store;
@@ -68,6 +73,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       api = ApiClient(base: AppConfig.apiBase, sessions: sessions, crypto: crypto!);
       store = LocalStore(crypto!);
       await appearance.load(store!);
+      await device.load(store!);
+      await DesktopShell.attach(device);
       activation = ActivationService(api: api!, crypto: crypto!, sessions: sessions);
       // Board 42: needs no session, so it also works before activation.
       releases = ReleaseService(api: api!)..start();
@@ -166,15 +173,19 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     m.addListener(_watchSignedOut);
     messenger = m;
     photos = ProfilePhotos(messenger: m, media: m.media, store: store!);
-    calls = CallService(messenger: m, api: api!);
+    calls = CallService(messenger: m, api: api!, ringsNatively: () => device.callStyle == CallStyle.phone);
+    DesktopShell.watch(messenger: m, calls: calls!);
     phase = AppPhase.ready;
     await m.start();
     // Answered on the phone's own ringing screen (Phase 14c): take the call
     // as soon as its offer is fetched and decrypted.
-    ringing = NativeRinging(onAccepted: () {
-      calls?.acceptWhenRinging();
-      unawaited(m.sync().catchError((Object _) {}));
-    });
+    ringing = NativeRinging(
+      onAccepted: () {
+        calls?.acceptWhenRinging();
+        unawaited(m.sync().catchError((Object _) {}));
+      },
+      onDeclined: () => unawaited(calls?.decline()),
+    );
     unawaited(ringing!.start());
     push = PushRegistrar(api: api!, messenger: m);
     unawaited(push!.start());
@@ -219,6 +230,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     unawaited(CallerNames.clear());
     unawaited(push?.stop());
     push = null;
+    DesktopShell.unwatch();
     calls?.dispose(); // ends any call in progress
     calls = null;
     m.dispose();

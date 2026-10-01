@@ -35,35 +35,52 @@ Future<void> ringForPush(String messageId) async {
   } on Object {
     name = null; // offline, stale token, not found: ring anyway
   }
-  await FlutterCallkitIncoming.showCallkitIncoming(CallKitParams(
-    id: messageId,
-    nameCaller: name ?? 'Skyline call',
-    appName: 'Skyline',
-    handle: '',
-    type: 0,
-    duration: ringSeconds * 1000,
-    missedCallNotification: const NotificationParams(
-      showNotification: true,
-      subtitle: 'Missed call',
-      isShowCallback: false,
-    ),
-    extra: {'m': messageId},
-    android: const AndroidParams(
-      isCustomNotification: true,
-      isShowLogo: false,
-      ringtonePath: 'system_ringtone_default',
-      backgroundColor: '#0C111C',
-      actionColor: '#3A63D8',
-      textColor: '#F2F5FA',
-      incomingCallNotificationChannelName: 'Incoming calls',
-      missedCallNotificationChannelName: 'Missed calls',
-      isShowFullLockedScreen: true,
-      isImportant: true,
-      textAccept: 'Accept',
-      textDecline: 'Decline',
-    ),
-  ));
+  await _showNative(id: messageId, name: name ?? 'Skyline call', video: false);
 }
+
+/// Board 48, "Like a phone call": a call that arrived while Skyline is open
+/// rings on the phone's own call screen too, named from the contact list.
+Future<void> ringInApp({required String callId, required String name, required bool video}) async {
+  if (!nativeRingingSupported) return;
+  try {
+    // Already ringing there (its push got in first): leave that one. Accept
+    // and Decline act on the call in progress, whichever id it carries.
+    if ((await FlutterCallkitIncoming.activeCalls()).isNotEmpty) return;
+    await _showNative(id: callId, name: name, video: video);
+  } on Object {
+    // the app's own screen is still there underneath
+  }
+}
+
+Future<void> _showNative({required String id, required String name, required bool video}) =>
+    FlutterCallkitIncoming.showCallkitIncoming(CallKitParams(
+      id: id,
+      nameCaller: name,
+      appName: 'Skyline',
+      handle: '',
+      type: video ? 1 : 0,
+      duration: ringSeconds * 1000,
+      missedCallNotification: const NotificationParams(
+        showNotification: true,
+        subtitle: 'Missed call',
+        isShowCallback: false,
+      ),
+      extra: {'m': id},
+      android: const AndroidParams(
+        isCustomNotification: true,
+        isShowLogo: false,
+        ringtonePath: 'system_ringtone_default',
+        backgroundColor: '#0C111C',
+        actionColor: '#3A63D8',
+        textColor: '#F2F5FA',
+        incomingCallNotificationChannelName: 'Incoming calls',
+        missedCallNotificationChannelName: 'Missed calls',
+        isShowFullLockedScreen: true,
+        isImportant: true,
+        textAccept: 'Accept',
+        textDecline: 'Decline',
+      ),
+    ));
 
 Future<String?> _whoIsCalling(String messageId) async {
   final session = await SecureSessionStore().read();
@@ -124,16 +141,20 @@ abstract final class CallerNames {
 /// The main app's side: when the person answered on the native screen, the
 /// app is opened and must take that call as soon as its offer arrives.
 class NativeRinging {
-  NativeRinging({required this.onAccepted});
+  NativeRinging({required this.onAccepted, this.onDeclined});
 
   /// Called when the person tapped Accept on the phone's ringing screen.
   final void Function() onAccepted;
+
+  /// Called when they tapped Decline there while Skyline was running.
+  final void Function()? onDeclined;
   StreamSubscription<CallEvent?>? _sub;
 
   Future<void> start() async {
     if (!nativeRingingSupported) return;
     _sub = FlutterCallkitIncoming.onEvent.listen((e) {
       if (e is CallEventActionCallAccept) onAccepted();
+      if (e is CallEventActionCallDecline) onDeclined?.call();
     });
     // Opened by Accept while Skyline was closed: the event came before we
     // listened, but the call is still listed as accepted.

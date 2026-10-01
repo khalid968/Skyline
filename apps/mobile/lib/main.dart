@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/app/app_controller.dart';
+import 'core/platform/desktop_shell.dart';
 import 'core/push/push.dart';
 import 'core/routing/app_router.dart';
 import 'features/calls/presentation/call_overlay.dart';
@@ -16,6 +17,9 @@ Future<void> main() async {
   await RustLib.init();
   // Firebase, for content-free wake-ups only (Android).
   await initPush();
+  // Windows (board 49): the icon by the clock, notifications, and closing
+  // to the background.
+  await DesktopShell.init();
   runApp(const ProviderScope(child: SkylineApp()));
 }
 
@@ -38,11 +42,40 @@ class SkylineApp extends ConsumerWidget {
         routerConfig: router,
         builder: (context, child) => ProfilePhotoScope(
           photos: ref.watch(appControllerProvider).photos,
-          child: _Calls(child: _LockGate(child: _Updates(child: child ?? const SizedBox.shrink()))),
+          child: _Calls(child: _DesktopLinks(child: _LockGate(child: _Updates(child: child ?? const SizedBox.shrink())))),
         ),
       ),
     );
   }
+}
+
+/// Board 49: a click on a message notification opens that chat.
+class _DesktopLinks extends ConsumerStatefulWidget {
+  const _DesktopLinks({required this.child});
+  final Widget child;
+
+  @override
+  ConsumerState<_DesktopLinks> createState() => _DesktopLinksState();
+}
+
+class _DesktopLinksState extends ConsumerState<_DesktopLinks> {
+  @override
+  void initState() {
+    super.initState();
+    DesktopShell.openChat = (peer) {
+      if (ref.read(appControllerProvider).phase != AppPhase.ready) return;
+      ref.read(appRouterProvider).push('/chat/$peer');
+    };
+  }
+
+  @override
+  void dispose() {
+    DesktopShell.openChat = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Board 42: a version the server no longer supports covers the app with

@@ -36,7 +36,9 @@ class _CallOverlayState extends State<CallOverlay> {
           _callId = call?.id;
           _minimised = false; // every new call opens full screen
         }
-        if (call == null) return widget.child;
+        // Board 48: ringing on the phone's own call screen; ours appears once
+        // it is answered.
+        if (call == null || (call.native && call.phase == CallPhase.incoming)) return widget.child;
         final name = calls.messenger.contact(call.peer)?.displayName ?? 'Contact';
         final full = !_minimised || call.phase == CallPhase.incoming || call.phase == CallPhase.ended;
         return Stack(children: [

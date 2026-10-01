@@ -3,14 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/app/app_controller.dart';
+import '../../../core/platform/desktop_shell.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/version.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/skyline_logo.dart';
 import '../../../shared/widgets/sky_icon.dart';
+import '../../calls/data/ringer.dart';
 import '../../profile/presentation/photo_editor.dart';
 import '../../updates/data/release_service.dart';
 import '../../updates/data/update_installer.dart';
+import '../data/device_prefs.dart';
 import 'settings_widgets.dart';
 
 /// Board 43: Settings. Appearance, Privacy & security and Notifications, then
@@ -127,6 +130,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               subtitle: 'App lock, disappearing messages, safety numbers',
               onTap: () => context.push('/settings/privacy'),
             ),
+            if (nativeRingingSupported)
+              ListenableBuilder(
+                listenable: app.device,
+                builder: (context, _) => SettingsLink(
+                  icon: SkyIcons.phoneCall,
+                  tint: t.verified,
+                  title: 'Calls',
+                  subtitle: app.device.callStyle == CallStyle.phone ? 'Ring like a phone call' : 'Skyline’s call screen',
+                  onTap: () => context.push('/settings/calls'),
+                ),
+              ),
             SettingsLink(
               icon: SkyIcons.bell,
               tint: t.caution,
@@ -134,6 +148,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               subtitle: 'Sounds and previews are set in your device’s settings',
             ),
           ]),
+          if (DesktopShell.supported) ...[
+            const SettingsSection('This computer'),
+            _ThisComputer(prefs: app.device),
+          ],
           const SettingsSection('About'),
           if (app.releases != null) _About(releases: app.releases!, installer: app.installer),
         ],
@@ -283,6 +301,81 @@ class _Found extends StatelessWidget {
                 height: 1.5,
                 color: installer.phase == InstallPhase.failed ? t.danger : t.textSecondary)),
       ]),
+    );
+  }
+}
+
+/// Board 49: Skyline in the background on Windows.
+class _ThisComputer extends StatefulWidget {
+  const _ThisComputer({required this.prefs});
+  final DevicePrefs prefs;
+
+  @override
+  State<_ThisComputer> createState() => _ThisComputerState();
+}
+
+class _ThisComputerState extends State<_ThisComputer> {
+  @override
+  void initState() {
+    super.initState();
+    _syncStartup();
+  }
+
+  /// It can be turned off in Task Manager too: show what is really set.
+  Future<void> _syncStartup() async {
+    final on = await DesktopShell.startsWithWindows();
+    if (mounted && on != widget.prefs.startWithWindows) widget.prefs.update(startWithWindows: on);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.prefs;
+    return ListenableBuilder(
+      listenable: p,
+      builder: (context, _) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SettingsCard(children: [
+          _Toggle(
+            title: 'Start Skyline when Windows starts',
+            subtitle: 'Opens quietly by the clock, so messages and calls arrive from the moment the PC is on.',
+            value: p.startWithWindows,
+            onChanged: (v) => p.update(startWithWindows: v),
+          ),
+          _Toggle(
+            title: 'Keep running when I close the window',
+            subtitle: 'Closing the window hides Skyline instead of quitting. Quit from the icon by the clock.',
+            value: p.keepRunning,
+            onChanged: (v) => p.update(keepRunning: v),
+          ),
+          _Toggle(
+            title: 'Show who a message is from',
+            subtitle: 'Notifications say “New message from Sarah”. Off: only “New message”. Never the message text.',
+            value: p.showSender,
+            onChanged: (v) => p.update(showSender: v),
+          ),
+        ]),
+        SettingsNote(p.keepRunning
+            ? 'Closing the window leaves Skyline working: messages and calls still arrive, and notifications show.'
+            : 'Closing the window quits Skyline: no messages, calls or notifications until it is opened again.'),
+      ]),
+    );
+  }
+}
+
+class _Toggle extends StatelessWidget {
+  const _Toggle({required this.title, required this.subtitle, required this.value, required this.onChanged});
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.sky;
+    return SwitchListTile(
+      value: value,
+      onChanged: onChanged,
+      title: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: t.textPrimary)),
+      subtitle: Text(subtitle, style: TextStyle(fontSize: 12.5, height: 1.45, color: t.textSecondary)),
     );
   }
 }

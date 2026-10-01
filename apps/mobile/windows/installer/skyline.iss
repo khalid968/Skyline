@@ -61,3 +61,13 @@ Name: "{userdesktop}\Skyline"; Filename: "{app}\skyline.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\skyline.exe"; Description: "Open Skyline"; Flags: nowait postinstall skipifsilent
+
+; Board 49: Skyline can start with Windows (a per-person Run entry it writes
+; itself) and keeps running by the clock. Uninstalling stops it and removes
+; that entry; nothing is created here at install time.
+[Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "Skyline"; Flags: uninsdeletevalue dontcreatekey
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"; ValueType: none; ValueName: "Skyline"; Flags: uninsdeletevalue dontcreatekey
+
+[UninstallRun]
+Filename: "{sys}\taskkill.exe"; Parameters: "/im skyline.exe /f"; Flags: runhidden; RunOnceId: "StopSkyline"

@@ -110,6 +110,11 @@ class Messenger extends ChangeNotifier {
   /// "removed". From one of our own devices it is our own photo.
   Future<void> Function(String userId, Map<String, Object?> content)? onProfile;
 
+  /// A new message from someone else (board 49: a Windows notification).
+  /// [chatName] is the person, or the group with [senderName] in it. Never
+  /// the text. Not called for muted chats.
+  Future<void> Function(String peer, {required String chatName, String? senderName})? onIncoming;
+
   String get me => session.userId;
   List<Contact> get contacts => _contacts.values.toList()
     ..sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
@@ -951,6 +956,9 @@ class Messenger extends ChangeNotifier {
         await _touchChat(chat, line, sentAt, unread: !fromMe && openChat != peer);
         if (!fromMe) _typingUntil.remove(peer);
         if (!fromMe && openChat == peer) unawaited(markRead(peer));
+        if (!fromMe && onIncoming != null && !await isMuted(peer)) {
+          unawaited(onIncoming!(peer, chatName: chat.displayName, senderName: senderName));
+        }
         for (var i = 0; i < m.items.length; i++) {
           final item = m.items[i];
           if (!item.burned && (item.kind == MediaKind.photo || item.kind == MediaKind.voice)) {

@@ -1439,3 +1439,33 @@ The owner approved prototypes 41 and 42 and started the phase.
   - iPhone 1.0.3 on the Mac (`--build-number=4`);
   - the 14c ringing test on a phone (the server switch is still off);
   - 14b: the owner's Apple push key and the Firebase iOS app (steps given in chat).
+
+## 2026-10-01 — Boards 48-49: call style setting, and Skyline in the background on Windows
+
+- **Owner asked for:**
+  - a choice in Settings for how calls ring: Skyline's screen (default) or like a normal phone call;
+  - on Windows: start with Windows, and keep running with the window closed, still showing
+    notifications.
+- **Owner's answers:** notifications say who a message is from, never the text; start with Windows is
+  on by default. Prototypes 48 and 49 approved ("looks good"). Decisions: `decisions.md`, 2026-10-01.
+- **Built:**
+  - `features/settings/data/device_prefs.dart`: device-only choices, kept in the vault.
+  - Settings › Calls (`calls_settings_screen.dart`). "Like a phone call" rings through
+    `ringInApp()` in `ringer.dart`, the app's ringing screen hides while the phone's screen rings,
+    and Decline on the phone's screen declines the call. Android only.
+  - `core/platform/desktop_shell.dart` with window_manager, tray_manager, launch_at_startup and
+    Windows notifications: the "This computer" card in Settings, and `Messenger.onIncoming`.
+  - Runner: `--background` starts hidden; one copy at a time (named mutex plus a show event); quits on
+    `WM_ENDSESSION`.
+  - Installer: the uninstaller stops Skyline and removes the Run entry.
+  - Tray icon: `assets/icons/tray.ico`, made by `branding/make-icons.js`.
+- **Tested:**
+  - `flutter analyze` is clean; 52 unit tests pass (new: `test/device_prefs_test.dart`).
+  - New `integration_test/desktop_shell_test.dart` against a throwaway server: closing hides; a hidden
+    message shows "New message from …" without its text; with the switch off it shows only "New
+    message"; a muted chat stays silent; a call notifies; nothing shows while in front. Passes.
+  - Profile build with its own vault, driven by a script: a `--background` start is hidden; a second
+    launch exits and shows the first; WM_CLOSE hides; WM_ENDSESSION quits. No Run entry left behind.
+- **Not tested on a device:** "Like a phone call" on a real Android phone (no phone here). Real toast
+  clicks (Answer, open chat) were not clicked by hand; the test checks what is shown, not the click.
+- **Version 1.0.4+5** (`config/production.json` 1.0.4). Not yet pushed or published.

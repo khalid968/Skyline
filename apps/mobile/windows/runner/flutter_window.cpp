@@ -52,7 +52,7 @@ bool FlutterWindow::OnCreate() {
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
+    if (!start_hidden_) this->Show();
   });
 
   // Flutter can complete the first frame before the "show window" callback is
@@ -76,6 +76,23 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  switch (message) {
+    case kShowMessage:
+      // Another launch (Start menu, a notification) found Skyline running.
+      if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
+      ShowWindow(hwnd, SW_SHOW);
+      SetForegroundWindow(hwnd);
+      return 0;
+    case WM_QUERYENDSESSION:
+      return TRUE;
+    case WM_ENDSESSION:
+      // Windows is signing out, or the installer is replacing Skyline: really
+      // quit. (Closing the window only hides it while Skyline runs in the
+      // background, so the normal close would not end it.)
+      if (wparam) DestroyWindow(hwnd);
+      return 0;
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =
