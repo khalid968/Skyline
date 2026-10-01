@@ -6,6 +6,15 @@ working around it.
 
 ---
 
+## 2026-10-01 — Calls ring when Skyline is closed: switched on (14c done)
+
+- The owner tested on a real Android phone. With Skyline closed and the phone locked, a call rang on
+  the full-screen call screen once Android's "full-screen notifications" permission was on for
+  Skyline. Before that, the server switch was off and the phone showed only "New message".
+- `PUSH_RING_CALLS=on` in production stays on.
+- Android 14+ does not always grant that permission. Settings > Calls shows a warning with Allow when
+  it is missing (1.0.5). Without the permission, a locked phone shows a banner instead.
+
 ## 2026-10-01 — Call style setting, and Skyline in the background on Windows (boards 48-49)
 
 The owner asked for two things, and approved prototypes 48 and 49 ("looks good").

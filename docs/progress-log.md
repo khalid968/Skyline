@@ -1480,3 +1480,7 @@ The owner approved prototypes 41 and 42 and started the phase.
   Backend restarted and healthy.
   - Also committed (733873c, not yet released): Settings > Calls warns when Android 14+ won't allow
     full-screen notifications, with Allow. Without that permission a locked phone shows only a banner.
+- **14c verified on the owner's phone:** closed and locked, a call rang full screen once the
+  full-screen permission was on. The switch stays on.
+- **Released 1.0.5** (Android versionCode 6, Windows): the full-screen permission warning. iPhone
+  1.0.5: `--build-number=6` on the Mac.
