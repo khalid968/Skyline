@@ -1475,3 +1475,8 @@ The owner approved prototypes 41 and 42 and started the phase.
   - Publishing turned "›" in the notes into garbage characters, so the note now says "Settings >
     Calls". Keep release notes plain ASCII.
   - iPhone 1.0.4: build on the Mac with `--build-number=5`.
+- **2026-10-01, later: `PUSH_RING_CALLS=on`** in production, at the owner's request. Their test with
+  Skyline closed and the phone locked had shown only "New message", because the switch was off.
+  Backend restarted and healthy.
+  - Also committed (733873c, not yet released): Settings > Calls warns when Android 14+ won't allow
+    full-screen notifications, with Allow. Without that permission a locked phone shows only a banner.
