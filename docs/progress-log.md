@@ -1469,3 +1469,9 @@ The owner approved prototypes 41 and 42 and started the phase.
 - **Not tested on a device:** "Like a phone call" on a real Android phone (no phone here). Real toast
   clicks (Answer, open chat) were not clicked by hand; the test checks what is shown, not the click.
 - **Version 1.0.4+5** (`config/production.json` 1.0.4). Not yet pushed or published.
+- **Released 1.0.4** (a2eabdc, pushed): Android versionCode 5, signed with the permanent key, and the
+  Windows installer (unsigned). Both downloads verified from outside against the published hashes. No
+  server change.
+  - Publishing turned "›" in the notes into garbage characters, so the note now says "Settings >
+    Calls". Keep release notes plain ASCII.
+  - iPhone 1.0.4: build on the Mac with `--build-number=5`.
