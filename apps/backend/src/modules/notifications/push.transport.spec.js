@@ -2,7 +2,12 @@ import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { FcmTransport, WAKE_UP } from './push.transport';
+import {
+  FcmTransport,
+  IOS_ALERT,
+  WAKE_UP,
+  ringPayload,
+} from './push.transport';
 
 // The Firebase sender against a stand-in for Google: the OAuth assertion is a
 // valid RS256 JWT for the service account, and the message is data-only and
@@ -80,9 +85,44 @@ describe('FcmTransport', () => {
         token: 'device-token',
         data: WAKE_UP,
         android: { priority: 'high', ttl: '3600s' },
+        apns: {
+          headers: {
+            'apns-push-type': 'alert',
+            'apns-priority': '10',
+            'apns-collapse-id': 'inbox',
+            'apns-expiration': expect.stringMatching(/^\d+$/),
+          },
+          payload: { aps: { alert: IOS_ALERT.inbox, sound: 'default' } },
+        },
       },
     });
+    // Nothing for Android to display: it stays a data-only wake-up there.
     expect(body.message.notification).toBeUndefined();
+  });
+
+  it('gives iPhones a fixed, content-free alert, and calls a one-minute one', async () => {
+    const t = new FcmTransport(file);
+    const before = Math.floor(Date.now() / 1000);
+    await t.send(
+      'fcm',
+      'phone',
+      ringPayload('6f1c2a3b-0000-4000-8000-000000000001'),
+    );
+    const body = JSON.parse(calls.at(-1).init.body);
+    expect(body.message.android.ttl).toBe('60s');
+    expect(body.message.apns.payload.aps.alert).toEqual({
+      title: 'Skyline',
+      body: 'Incoming call',
+    });
+    expect(body.message.apns.headers['apns-collapse-id']).toBe('call');
+    const exp = Number(body.message.apns.headers['apns-expiration']);
+    expect(exp).toBeGreaterThanOrEqual(before + 60);
+    expect(exp).toBeLessThanOrEqual(before + 62);
+    // The alert words never change with the message: no sender, no text.
+    expect(IOS_ALERT).toEqual({
+      inbox: { title: 'Skyline', body: 'New message' },
+      call: { title: 'Skyline', body: 'Incoming call' },
+    });
   });
 
   it('reuses the OAuth token and reports a dead device token', async () => {

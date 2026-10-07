@@ -6,6 +6,26 @@ working around it.
 
 ---
 
+## 2026-10-07 — iPhone notifications (14b)
+
+The owner created the APNs key (.p8) and uploaded it to Firebase, with the iOS app
+`fyi.secline.skyline` registered. How it works:
+- **Server:** every FCM push now also carries an `apns` part. Android ignores it; an iPhone shows a fixed
+  alert, "Skyline · New message", or "Skyline · Incoming call" for a call offer.
+  - Nothing from the message is in it, not even the sender (owner decision 2026-09-29).
+  - Alerts replace each other (collapse ids `inbox` and `call`). A call alert expires after 60 seconds.
+  - Same token table, `provider: 'fcm'`: no migration and no platform column.
+- **App:** push is on for iOS. It asks for alert permission, then waits for Apple's device token before
+  Firebase's token exists.
+  - `Runner.entitlements` (`aps-environment`) and `UIBackgroundModes: remote-notification`.
+  - A build phase copies `GoogleService-Info.plist` into the app only when it is present in
+    `ios/Runner`. It stays out of git; CI writes it from `IOS_GOOGLE_SERVICE_INFO_PLIST`. A build
+    without it still works, just without push.
+- **Not the phone's own call screen on iPhone:** that needs PushKit/CallKit (VoIP pushes), a separate
+  piece of work. Board 48's setting stays Android-only.
+- The App Store profile must include Push Notifications (regenerated after enabling it on the App ID).
+  An old profile fails signing.
+
 ## 2026-10-01 — Calls ring when Skyline is closed: switched on (14c done)
 
 - The owner tested on a real Android phone. With Skyline closed and the phone locked, a call rang on

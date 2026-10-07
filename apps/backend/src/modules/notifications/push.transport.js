@@ -13,6 +13,36 @@ export const WAKE_UP = { t: 'inbox' };
 // its inbox and decrypt who is calling itself.
 export const ringPayload = (messageId) => ({ t: 'call', m: messageId });
 
+// Phase 14b: what an iPhone shows. iOS does not run app code for a push
+// reliably, so Apple displays a fixed alert itself. The same words for every
+// message and every person: nothing from the message, not even who sent it
+// (owner decision 2026-09-29). Calls say only that a call is coming.
+export const IOS_ALERT = {
+  inbox: { title: 'Skyline', body: 'New message' },
+  call: { title: 'Skyline', body: 'Incoming call' },
+};
+
+// The iPhone part of a push. Android devices ignore it. Repeated alerts
+// replace each other (collapse id), like the one Android notice.
+export const apnsFor = (
+  payload,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) => {
+  const call = payload.t === 'call';
+  return {
+    headers: {
+      'apns-push-type': 'alert',
+      'apns-priority': '10',
+      'apns-collapse-id': call ? 'call' : 'inbox',
+      // A call is over in a minute; a wake-up can wait an hour.
+      'apns-expiration': String(nowSeconds + (call ? 60 : 3600)),
+    },
+    payload: {
+      aps: { alert: call ? IOS_ALERT.call : IOS_ALERT.inbox, sound: 'default' },
+    },
+  };
+};
+
 export const PUSH_TRANSPORT = Symbol('PUSH_TRANSPORT');
 
 // send() resolves to 'ok', 'invalid' (the token is dead: forget it) or
@@ -37,7 +67,7 @@ export class NullTransport {
   }
 }
 
-// Firebase Cloud Messaging, HTTP v1, for Android. Authenticates with a Google
+// Firebase Cloud Messaging, HTTP v1, for Android and iPhone. Authenticates with a Google
 // service account: an RS256-signed assertion is exchanged for a short-lived
 // OAuth token (Google's documented flow, no SDK). Data-only, high priority,
 // so Android wakes the app even in Doze; nothing is displayed by Google.
@@ -68,7 +98,11 @@ export class FcmTransport {
             token,
             data: payload,
             // A call is over in a minute; a wake-up can wait an hour.
-            android: { priority: 'high', ttl: payload.t === 'call' ? '60s' : '3600s' },
+            android: {
+              priority: 'high',
+              ttl: payload.t === 'call' ? '60s' : '3600s',
+            },
+            apns: apnsFor(payload),
           },
         }),
       },

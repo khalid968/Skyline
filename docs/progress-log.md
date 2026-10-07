@@ -1499,3 +1499,17 @@ The owner approved prototypes 41 and 42 and started the phase.
       honours. That shows the server one more fact, so it needs the owner's decision.
   - Also check the case where Skyline is open in the background, in case Decline gets lost there
     too.
+
+## 2026-10-07 — Phase 14b: iPhone notifications (built, not yet deployed or released)
+
+- **Owner did:** the APNs key (.p8, in `Skyline-secrets/ios/`), uploaded it to Firebase, and the iOS app
+  in Firebase (`GoogleService-Info.plist` in `Skyline-secrets/ios/`).
+- **Server** (`push.transport.js`): every FCM push also carries an `apns` alert. It says "Skyline · New
+  message", or "Incoming call" for a call offer, with collapse ids and expiry. Android ignores it.
+  Tests: 120 unit (a new one covers the iPhone alert), 19 push and messaging app tests.
+- **App:** push is on for iOS (permission prompt, waits for the APNs token), plus `Runner.entitlements`
+  and `UIBackgroundModes`. A "Firebase config" build phase copies `ios/Runner/GoogleService-Info.plist`
+  when present. `flutter analyze` is clean; 52 tests pass.
+- **Not tested:** anything on an iPhone (no Mac here). It needs a TestFlight build.
+- **To build on the Mac:** copy `GoogleService-Info.plist` into `apps/mobile/ios/Runner/`, use the
+  regenerated App Store profile (with Push), and build with `--build-number=7`.

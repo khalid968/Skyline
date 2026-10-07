@@ -21,9 +21,16 @@ import '../api/api_client.dart';
 ///   second isolate, and two ratchet updates at once could corrupt a session.
 ///   The message is pulled and decrypted when the app is next opened.
 ///
-/// Android only for now. iOS needs an Apple developer account (APNs); Windows
-/// stays connected by socket while the app runs.
-bool get pushSupported => !kIsWeb && Platform.isAndroid;
+/// iPhone (Phase 14b): iOS never runs app code for a push reliably, so the
+/// server sends an alert Apple shows by itself: "Skyline · New message", with
+/// nothing from the message in it. Opening it pulls and decrypts as usual.
+///
+/// Windows stays connected by socket while the app runs.
+bool get pushSupported => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+/// Whether Firebase started: on iPhone it needs GoogleService-Info.plist,
+/// which a build made without the secrets does not have.
+bool _firebaseReady = false;
 
 final _notices = FlutterLocalNotificationsPlugin();
 const _channel = AndroidNotificationChannel(
@@ -74,9 +81,17 @@ Future<void> onBackgroundWakeUp(RemoteMessage message) async {
 /// Called once at start-up, before runApp.
 Future<void> initPush() async {
   if (!pushSupported) return;
-  await Firebase.initializeApp();
-  FirebaseMessaging.onBackgroundMessage(onBackgroundWakeUp);
-  await _initNotices();
+  try {
+    await Firebase.initializeApp();
+    _firebaseReady = true;
+  } on Object catch (e) {
+    debugPrint('push unavailable: $e');
+    return;
+  }
+  if (Platform.isAndroid) {
+    FirebaseMessaging.onBackgroundMessage(onBackgroundWakeUp);
+    await _initNotices();
+  }
 }
 
 /// Registers this device's token with the Skyline server and keeps it fresh.
@@ -88,12 +103,19 @@ class PushRegistrar {
   final List<StreamSubscription<Object?>> _subs = [];
 
   Future<void> start() async {
-    if (!pushSupported) return;
+    if (!pushSupported || !_firebaseReady) return;
     try {
       final fm = FirebaseMessaging.instance;
-      // Android 13+: may show the system prompt. Refusing only hides the
-      // notice; the wake-up (and so the pull) still works.
-      final perm = await fm.requestPermission();
+      // Android 13+ and iPhone: may show the system prompt. On Android,
+      // refusing only hides the notice; on iPhone it means no alerts at all.
+      final perm = await fm.requestPermission(badge: false);
+      // iPhone: Firebase's token exists only once Apple has handed over the
+      // device's push token, a moment after registering.
+      if (Platform.isIOS) {
+        for (var i = 0; i < 20 && await fm.getAPNSToken() == null; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        }
+      }
       final token = await fm.getToken();
       lastStatus = 'permission ${perm.authorizationStatus.name}, token ${token == null ? 'none' : 'received'}';
       if (token != null) await _register(token);
