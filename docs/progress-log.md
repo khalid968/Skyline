@@ -1513,3 +1513,6 @@ The owner approved prototypes 41 and 42 and started the phase.
 - **Not tested:** anything on an iPhone (no Mac here). It needs a TestFlight build.
 - **To build on the Mac:** copy `GoogleService-Info.plist` into `apps/mobile/ios/Runner/`, use the
   regenerated App Store profile (with Push), and build with `--build-number=7`.
+- **Pushed and deployed** d239b78 (2026-10-07). The live backend carries the iPhone alert; all services
+  are healthy; `PUSH_RING_CALLS` is still on. Android and Windows unchanged (no new release).
+  Next: iPhone 1.0.5 build 7 on the Mac, then a TestFlight test.
