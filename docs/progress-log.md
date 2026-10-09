@@ -1527,3 +1527,6 @@ The owner approved prototypes 41 and 42 and started the phase.
   3478; no backend errors; the server's IPv6 works and matches DNS.
 - The owner took a snapshot before rescaling. Delete it in the Hetzner console once satisfied (it is
   billed while kept).
+- **2026-10-09: `/admin` fix deployed.** `chat.secline.fyi/admin` without the slash showed the download
+  page, because only `/admin/` matched the dashboard. Nginx now redirects `/admin` to `/admin/`, which
+  opens Overview (or sign-in). Checked with `nginx -t` locally, then live.
