@@ -1516,3 +1516,14 @@ The owner approved prototypes 41 and 42 and started the phase.
 - **Pushed and deployed** d239b78 (2026-10-07). The live backend carries the iPhone alert; all services
   are healthy; `PUSH_RING_CALLS` is still on. Android and Windows unchanged (no new release).
   Next: iPhone 1.0.5 build 7 on the Mac, then a TestFlight test.
+
+## 2026-10-09 — Server rescaled: CPX12 to CX23
+
+- The owner rescaled `skyline-1` in the Hetzner console ("CPU and RAM only", disk unchanged). It is now
+  CX23: 2 vCPU, 4 GB RAM (3.7 GB usable), 40 GB disk, at about €5.49/month instead of €11.49. Same
+  server, same IPv4 188.245.18.45 and IPv6 2a01:4f8:1c1c:a2a5::1, same data.
+- Checked afterwards: all eight services came back by themselves; the site, API, releases and dashboard
+  answer; the TLS certificate is valid to 2026-12-25; the database is intact; coturn is listening on
+  3478; no backend errors; the server's IPv6 works and matches DNS.
+- The owner took a snapshot before rescaling. Delete it in the Hetzner console once satisfied (it is
+  billed while kept).
