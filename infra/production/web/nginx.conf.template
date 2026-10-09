@@ -66,6 +66,10 @@ server {
     default_type application/octet-stream;
   }
 
+  # "/admin" without the slash would otherwise fall through to the download
+  # page below: send it to the dashboard.
+  location = /admin { return 301 https://$host/admin/; }
+
   # The dashboard (built for /admin/). Same origin as the API: no CORS.
   location /admin/ {
     alias /srv/dashboard/;
