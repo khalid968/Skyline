@@ -40,6 +40,11 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   Directory? _dataDir;
 
   AppPhase phase = AppPhase.loading;
+
+  /// Why start-up failed, shown on the problem screen so the person can read
+  /// it out (2026-10-25: an iPhone build failed with no way to tell why).
+  /// Never sent anywhere.
+  String? failure;
   CryptoDevice? crypto;
   ApiClient? api;
   ReleaseService? releases;
@@ -100,8 +105,11 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       }
     } on CryptoException catch (e) {
       phase = e.kind == CryptoErrorKind.vaultLocked ? AppPhase.vaultLocked : AppPhase.failed;
-    } on Object {
+      failure = 'crypto: ${e.kind.name}';
+    } on Object catch (e) {
       phase = AppPhase.failed;
+      failure = _describe(e);
+      debugPrint('start-up failed: $failure');
     }
     notifyListeners();
   }
@@ -138,8 +146,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     c?.dispose();
     try {
       await eraseDeviceVault(vaultPath: vaultPath ?? await _defaultVaultPath(), keys: keys);
-    } on Object {
+    } on Object catch (e) {
       phase = AppPhase.failed;
+      failure = 'erase: ${_describe(e)}';
       notifyListeners();
       return;
     }
@@ -236,6 +245,11 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     m.dispose();
     if (messenger == m) messenger = null;
     unawaited(_eraseAndRestart());
+  }
+
+  static String _describe(Object e) {
+    final text = '${e.runtimeType}: $e'.replaceAll(RegExp(r'\s+'), ' ');
+    return text.length > 300 ? '${text.substring(0, 300)}…' : text;
   }
 
   static Future<String> _defaultVaultPath() async {

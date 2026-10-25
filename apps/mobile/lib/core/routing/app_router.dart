@@ -35,7 +35,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/loading', builder: (context, state) => const _Loading()),
       GoRoute(path: '/activate', builder: (context, state) => const ActivationScreen()),
-      GoRoute(path: '/problem', builder: (context, state) => _Problem(locked: app.phase == AppPhase.vaultLocked)),
+      GoRoute(path: '/problem', builder: (context, state) => _Problem(locked: app.phase == AppPhase.vaultLocked, detail: app.failure)),
       GoRoute(path: '/', builder: (context, state) => const ChatListScreen()),
       GoRoute(
         path: '/settings',
@@ -77,8 +77,9 @@ class _Loading extends StatelessWidget {
 }
 
 class _Problem extends StatelessWidget {
-  const _Problem({required this.locked});
+  const _Problem({required this.locked, this.detail});
   final bool locked;
+  final String? detail;
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +100,12 @@ class _Problem extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, height: 1.55, color: t.textSecondary),
             ),
+            if (detail != null) ...[
+              const SizedBox(height: 18),
+              SelectableText('Details: $detail',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: SkyFonts.mono, fontSize: 11.5, height: 1.5, color: t.textSecondary)),
+            ],
           ]),
         ),
       ),
