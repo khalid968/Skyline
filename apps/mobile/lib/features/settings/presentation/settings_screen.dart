@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/app/app_controller.dart';
 import '../../../core/platform/desktop_shell.dart';
+import '../../../core/push/push.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/version.dart';
 import '../../../shared/widgets/avatar.dart';
@@ -145,7 +146,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               icon: SkyIcons.bell,
               tint: t.caution,
               title: 'Notifications',
-              subtitle: 'Sounds and previews are set in your device’s settings',
+              subtitle: _pushSummary(app),
+              onTap: pushSupported ? () => _showPushStatus(context, app) : null,
             ),
           ]),
           if (DesktopShell.supported) ...[
@@ -158,6 +160,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
     );
   }
+}
+
+/// What push is doing on this device, in one line (phones only).
+String _pushSummary(AppController app) {
+  if (!pushSupported) return 'Sounds and previews are set in your device’s settings';
+  final push = app.push;
+  if (pushProblem != null) return 'Not available in this build';
+  if (push == null) return 'Starting…';
+  if (push.permission == 'denied') return 'Turned off in your phone’s settings';
+  if (push.registered) return 'On. Sounds and previews are set in your phone’s settings';
+  return 'Not set up yet. Tap for details';
+}
+
+void _showPushStatus(BuildContext context, AppController app) {
+  final push = app.push;
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Notifications'),
+      content: SelectableText(
+        [
+          push?.lastStatus ?? pushProblem ?? 'Not started.',
+          if (push?.permission == 'denied')
+            'Turn notifications on for Skyline in your phone’s Settings, then open Skyline again.',
+        ].join('\n\n'),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
+    ),
+  );
 }
 
 class _About extends StatefulWidget {

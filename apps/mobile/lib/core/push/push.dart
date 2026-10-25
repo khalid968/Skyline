@@ -32,6 +32,10 @@ bool get pushSupported => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 /// which a build made without the secrets does not have.
 bool _firebaseReady = false;
 
+/// Why push could not start on this device, if it could not (shown in
+/// Settings > Notifications; never sent anywhere).
+String? pushProblem;
+
 final _notices = FlutterLocalNotificationsPlugin();
 const _channel = AndroidNotificationChannel(
   'messages',
@@ -85,6 +89,9 @@ Future<void> initPush() async {
     await Firebase.initializeApp();
     _firebaseReady = true;
   } on Object catch (e) {
+    pushProblem = Platform.isIOS
+        ? 'This build has no Firebase configuration (GoogleService-Info.plist).'
+        : 'Firebase could not start: $e';
     debugPrint('push unavailable: $e');
     return;
   }
@@ -103,43 +110,68 @@ class PushRegistrar {
   final List<StreamSubscription<Object?>> _subs = [];
 
   Future<void> start() async {
-    if (!pushSupported || !_firebaseReady) return;
+    if (!pushSupported) return;
+    if (!_firebaseReady) {
+      lastStatus = pushProblem ?? 'Push could not start.';
+      return;
+    }
     try {
       final fm = FirebaseMessaging.instance;
-      // Android 13+ and iPhone: may show the system prompt. On Android,
-      // refusing only hides the notice; on iPhone it means no alerts at all.
-      final perm = await fm.requestPermission(badge: false);
-      // iPhone: Firebase's token exists only once Apple has handed over the
-      // device's push token, a moment after registering.
-      if (Platform.isIOS) {
-        for (var i = 0; i < 20 && await fm.getAPNSToken() == null; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 500));
-        }
-      }
-      final token = await fm.getToken();
-      lastStatus = 'permission ${perm.authorizationStatus.name}, token ${token == null ? 'none' : 'received'}';
-      if (token != null) await _register(token);
+      // Listen first: a token that arrives late (or changes later) is still
+      // sent to the server, without waiting for the next launch.
       _subs
         ..add(fm.onTokenRefresh.listen((t) => unawaited(_register(t))))
         // Foreground: just pull; no notice (the chat list updates itself).
         ..add(FirebaseMessaging.onMessage.listen((_) => unawaited(messenger.sync())))
         // The person tapped a notice: pull right away.
         ..add(FirebaseMessaging.onMessageOpenedApp.listen((_) => unawaited(messenger.sync())));
+      // Android 13+ and iPhone: may show the system prompt. On Android,
+      // refusing only hides the notice; on iPhone it means no alerts at all.
+      final perm = await fm.requestPermission(badge: false);
+      permission = perm.authorizationStatus.name;
+      lastStatus = 'Permission: $permission. Waiting for a push token…';
+      // iPhone: Firebase's token exists only once Apple has handed over the
+      // device's push token, a moment after registering.
+      if (Platform.isIOS) {
+        for (var i = 0; i < 30 && await fm.getAPNSToken() == null; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        }
+        if (await fm.getAPNSToken() == null) {
+          lastStatus = 'Permission: $permission. Apple has not given this iPhone a push token yet '
+              '(check the build has the Push Notifications capability).';
+          return;
+        }
+      }
+      final token = await fm.getToken();
+      if (token == null) {
+        lastStatus = 'Permission: $permission. No push token yet.';
+        return;
+      }
+      await _register(token);
     } on Object catch (e) {
-      lastStatus = 'unavailable: $e';
+      lastStatus = 'Push unavailable: $e';
       debugPrint('push $lastStatus');
     }
   }
 
-  /// What happened on the last start, for diagnostics (never contains the token).
-  String lastStatus = 'not started';
+  /// What happened, in words, for Settings > Notifications (never contains
+  /// the token).
+  String lastStatus = 'Not started.';
+
+  /// The system's answer to the notification prompt (e.g. "authorized").
+  String? permission;
+
+  /// Whether the server has this device's current token.
+  bool registered = false;
 
   Future<void> _register(String token) async {
     try {
       await api.put('/me/push', {'provider': 'fcm', 'token': token});
-      lastStatus += ', registered';
+      registered = true;
+      lastStatus = 'Permission: ${permission ?? 'unknown'}. Registered with Skyline’s server.';
     } on Object catch (e) {
-      lastStatus += ', registration failed: $e'; // retried on the next start
+      lastStatus = 'Permission: ${permission ?? 'unknown'}. Registering failed ($e); '
+          'it is tried again on the next start.';
     }
   }
 

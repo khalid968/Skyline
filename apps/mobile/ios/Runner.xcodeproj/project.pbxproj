@@ -269,12 +269,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Phase 14b: GoogleService-Info.plist is a secret kept out of git. CI and
-# the Mac put it in ios/Runner; without it the app builds and runs, only
-# without push.
-src=\"${PROJECT_DIR}/Runner/GoogleService-Info.plist\"
-if [ -f \"$src\" ]; then cp \"$src\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/\"; else echo \"warning: no GoogleService-Info.plist: this build has no push\"; fi
-";
+			shellScript = "# Phase 14b: GoogleService-Info.plist is a secret kept out of git. CI and\n# the Mac put it in ios/Runner. A Release build without it would have no\n# push at all, silently (2026-10-25), so it fails; Debug builds only warn.\nsrc=\"${PROJECT_DIR}/Runner/GoogleService-Info.plist\"\nif [ -f \"$src\" ]; then\n  cp \"$src\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/\"\nelif [ \"${CONFIGURATION}\" = \"Release\" ]; then\n  echo \"error: ios/Runner/GoogleService-Info.plist is missing: this Release build would have no push notifications. Copy it from Skyline-secrets/ios/.\"\n  exit 1\nelse\n  echo \"warning: no GoogleService-Info.plist: this build has no push\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
