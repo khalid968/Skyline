@@ -1530,3 +1530,20 @@ The owner approved prototypes 41 and 42 and started the phase.
 - **2026-10-09: `/admin` fix deployed.** `chat.secline.fyi/admin` without the slash showed the download
   page, because only `/admin/` matched the dashboard. Nginx now redirects `/admin` to `/admin/`, which
   opens Overview (or sign-in). Checked with `nginx -t` locally, then live.
+
+## 2026-10-25 — iPhone push: why it never asked, and making failures visible
+
+- **Seen:** the new TestFlight build first showed "Skyline couldn't start". It never reached the server, which
+  points at a build without `--dart-define-from-file`. After a reinstall and rebuild it ran, but never asked
+  for notification permission. The server had never received a push token from the iPhone, while every
+  Android device had one. Firebase is set up correctly: the production APNs key WF8VVLB8SU, a matching Team
+  ID, and the right bundle ID.
+- **Cause:** with no `GoogleService-Info.plist` in the build, Firebase can't start on iOS, and push was
+  skipped silently.
+- **Changed** (c100178, cda1e68):
+  - a Release iOS build without the plist now fails, with a clear error;
+  - the start-up problem screen shows the reason;
+  - Settings > Notifications shows the push state, with details on tap;
+  - token refresh is watched before the first token, so a late APNs token is still registered.
+- **Owner to do:** rebuild on the Mac with the plist (build 8). In the dashboard, revoke Moe's old iPhone
+  device (09-28); a reinstall created a second one.
