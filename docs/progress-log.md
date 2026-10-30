@@ -1579,3 +1579,6 @@ The owner approved prototypes 41 and 42 and started the phase.
   - Against the old code, 8 of the new tests fail. All pass on the fixed code.
 - **Not yet done:** deploying the backend (needs the owner's go-ahead), the 9 needs-validation leads, and the
   hardening notes, notably `backup.sh` without pipefail and the dev compose ports open on all interfaces.
+- **Pushed and deployed** f1f5587 (2026-10-31). The live backend contains all five fixes, all services are
+  healthy, there are no errors since the restart, and the site, API, releases and dashboard all answer.
+  No app release is needed: every fix is server-side.
