@@ -69,7 +69,12 @@ describe('rate limits and operator tools (real Redis, real processes)', () => {
       });
     });
 
-    it('limits sign-in attempts per USERNAME, so one account cannot be hammered', async () => {
+    it('does NOT limit sign-in per username, so nobody can lock an operator out (security audit 2026-10-30)', async () => {
+      // The old per-username limit counted every attempt, the right password
+      // included, so anyone who knew a username could keep that operator out.
+      // Guessing is now slowed per address (20 per 15 minutes, checked below)
+      // and by the per-account-and-address pause (dashboard-v2 tests); a
+      // username alone is never locked.
       const tries = [];
       for (let i = 0; i < 11; i++) {
         tries.push(
@@ -80,25 +85,26 @@ describe('rate limits and operator tools (real Redis, real processes)', () => {
           ).status,
         );
       }
-      expect(tries.slice(0, 10)).toEqual(Array(10).fill(401));
-      expect(tries[10]).toBe(429);
+      expect(tries).toEqual(Array(11).fill(401));
 
-      // Case or spacing does not reset the counter...
+      // The per-address limit still holds: the 21st attempt from this address
+      // in the window is refused, whatever the username.
+      for (let i = 0; i < 9; i++) {
+        expect(
+          (
+            await api()
+              .post('/admin/auth/login')
+              .send({ username: `other-${i}`, password: 'g' })
+          ).status,
+        ).toBe(401);
+      }
       expect(
         (
           await api()
             .post('/admin/auth/login')
-            .send({ username: ' target ', password: 'g' })
+            .send({ username: 'anyone', password: 'g' })
         ).status,
       ).toBe(429);
-      // ...but a different username is still judged on its own.
-      expect(
-        (
-          await api()
-            .post('/admin/auth/login')
-            .send({ username: 'someone-else', password: 'g' })
-        ).status,
-      ).toBe(401);
     });
   });
 

@@ -3,7 +3,9 @@ import { SessionService } from '../authorization/session.service';
 
 export const WS_AUTHENTICATOR = 'WS_AUTHENTICATOR';
 
-// Turns a WebSocket upgrade request into `{ userId, deviceId }`, or null. The
+// Turns a WebSocket upgrade request into `{ userId, deviceId, sessionId }`,
+// or null. The session id ties the socket to the login that opened it, so
+// ending that session (logout, refresh-token reuse) ends the socket too. The
 // gateway then re-checks that account and device against the database before
 // letting the socket in.
 //
@@ -27,7 +29,11 @@ export class TokenWsAuthenticator {
     if (!token) return null;
     const principal = await this.sessions.resolveDeviceAccess(token);
     return principal
-      ? { userId: principal.userId, deviceId: principal.deviceId }
+      ? {
+          userId: principal.userId,
+          deviceId: principal.deviceId,
+          sessionId: principal.sessionId,
+        }
       : null;
   }
 }

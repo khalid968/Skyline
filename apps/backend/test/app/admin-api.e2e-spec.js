@@ -665,6 +665,37 @@ describe('admin API (real sign-ins, real database)', () => {
       expect(rows[0].v).toBe(false);
     });
 
+    it('applies who-may-act-on-whom to BOTH people (security audit 2026-10-30)', async () => {
+      const m = await mkUser(db.client, 'linkpolicy');
+      // A moderator may link members only; an admin never the owner.
+      expect((await setLink(moderator, m.id, owner.id, true)).status).toBe(403);
+      expect((await setLink(moderator, m.id, admin.id, true)).status).toBe(403);
+      expect((await setLink(moderator, owner.id, m.id, false)).status).toBe(403);
+      expect((await setLink(admin, m.id, owner.id, true)).status).toBe(403);
+      const { rows } = await db.client.query('SELECT are_linked($1, $2) AS v', [m.id, owner.id]);
+      expect(rows[0].v).toBe(false);
+      // The owner may link anyone, an admin included.
+      expect((await setLink(owner, m.id, admin.id, true)).status).toBe(200);
+    });
+
+    it('only the owner may link themselves; anyone may unlink themselves', async () => {
+      const m = await mkUser(db.client, 'selflink');
+      expect((await setLink(moderator, moderator.id, m.id, true)).status).toBe(403);
+      expect((await setLink(admin, admin.id, m.id, true)).status).toBe(403);
+      expect((await setLink(owner, owner.id, m.id, true)).status).toBe(200);
+      await setLink(owner, admin.id, m.id, true);
+      expect((await setLink(admin, admin.id, m.id, false)).body).toEqual({ linked: false, changed: true });
+    });
+
+    it('applies the same rule to the first contacts of a new person', async () => {
+      const username = `firstcontacts-${++seq}`;
+      const res = await createUser(admin, { username, contactIds: [owner.id] });
+      expect(res.status).toBe(403);
+      // Nothing was created: the whole step rolled back.
+      const { rows } = await db.client.query('SELECT 1 FROM users WHERE username = $1', [username]);
+      expect(rows).toHaveLength(0);
+    });
+
     it('refuses to link a person to themselves', async () => {
       const a = await mkUser(db.client, 'self');
       expect((await setLink(admin, a.id, a.id, true)).status).toBe(400);

@@ -6,6 +6,36 @@ working around it.
 
 ---
 
+## 2026-10-30 — Security audit fixes (run 1, five confirmed findings)
+
+The owner ran a full security audit (security-audit skill, standard profile; report in
+`C:\Users\kkhal\security-audit-skill\Skyline\run-1\REPORT.md`) and asked for the five confirmed findings to be
+fixed. Each fix has a regression test, and each test was shown to fail on the old code.
+
+- **Operator lockout (medium).** Five wrong passwords used to pause the *account*, and a per-username limit
+  counted every attempt, so anyone who knew an operator's username, the owner included, could keep them out.
+  - **Now:** the pause is per account **and** address (`adminLoginSubject`), and the per-username limit is gone.
+    The limit of 20 per address, the per-address pause and Argon2 still slow guessing.
+  - **Trade-off accepted:** someone with many addresses can spread guesses for one account across them. That
+    is bounded by Argon2 and by strong operator passwords. The IPv6 /64 grouping lead stays open
+    (NEEDS-VALIDATION).
+- **Placing people in the member plane (two lows).**
+  - `setLink` skipped the who-may-act-on-whom policy, so a moderator could link or unlink the owner and admins.
+  - Group membership let any operator add themselves.
+  - **Now:** `assertCanPlace` applies to links (both people), first contacts at creation, and group adds.
+  - **Rule:** an operator may not place **themselves**, because admins never read messages. The **owner is the
+    exception**: the root of trust, who links their own phone. Anyone may unlink themselves or leave.
+- **WebSocket after logout (low).** A socket now carries the id of the session that opened it.
+  - Logout closes it at once.
+  - Every delivery checks that the session is live, which covers refresh-token reuse, expiry and other
+    instances.
+  - The 30-second sweep closes the rest.
+- **Profile-photo race (low).** Two concurrent photo changes could leave an unreferenced `infinity` attachment
+  that was never deleted.
+  - **Now:** photo changes lock the user's row.
+  - The sweep also deletes any profile attachment no user points at. This also cleans up orphans already in
+    production.
+
 ## 2026-10-07 — iPhone notifications (14b)
 
 The owner created the APNs key (.p8) and uploaded it to Firebase, with the iOS app

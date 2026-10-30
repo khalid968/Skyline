@@ -391,6 +391,26 @@ describe('groups (real sign-ins, real database)', () => {
       .send({ userId: otherAdmin.id, member: true });
     expect(forbidden.status).toBe(403);
 
+    // Security audit 2026-10-30: no operator may add THEMSELVES to a group
+    // (admins never read messages); removing yourself stays allowed.
+    for (const op of [moderator, admin]) {
+      const self = await api()
+        .post(`/admin/groups/${groupId}/members`)
+        .set(op.h)
+        .send({ userId: op.id, member: true });
+      expect(self.status).toBe(403);
+      const leave = await api()
+        .post(`/admin/groups/${groupId}/members`)
+        .set(op.h)
+        .send({ userId: op.id, member: false });
+      expect(leave.status).toBe(200);
+    }
+    const ops = await db.client.query(
+      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = ANY($2::uuid[]) AND removed_at IS NULL',
+      [groupId, [moderator.id, admin.id]],
+    );
+    expect(ops.rows).toHaveLength(0);
+
     await api()
       .post(`/admin/groups/${groupId}/archive`)
       .set(admin.h)

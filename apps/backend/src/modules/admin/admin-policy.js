@@ -41,6 +41,18 @@ export function assertCanManage(actor, target, { self = false } = {}) {
     throw new ForbiddenException();
 }
 
+// Contact links and group membership put a person into the member plane,
+// where they can be messaged and receive group messages. The usual rule
+// applies to everyone involved (a moderator may place members only, an admin
+// never the owner or another admin), and in addition an operator may not
+// place THEMSELVES there: admins never read messages, so they cannot link
+// themselves to members or join groups on their own say-so (security audit
+// 2026-10-30). The owner is the exception, as the root of trust who links
+// their own phone. Removing yourself is always allowed.
+export function assertCanPlace(actor, target, { adding }) {
+  assertCanManage(actor, target, { self: !adding || actor.isOwner });
+}
+
 // Giving someone the admin role, or taking it away, is the owner's alone.
 export function assertCanAssignRole(actor, target, newRole) {
   assertCanManage(actor, target);

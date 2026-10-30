@@ -20,6 +20,7 @@ import {
   loadTarget,
   assertCanManage,
   assertCanAssignRole,
+  assertCanPlace,
 } from './admin-policy';
 
 const OPERATOR_ROLES = new Set(['admin', 'moderator']);
@@ -174,14 +175,18 @@ export class AdminUsersService {
       const linked = [];
       for (const other of new Set(contactIds)) {
         if (!isUuid(other) || other === user.id) continue;
-        const ok = await client.query(
-          `SELECT 1 FROM users WHERE id = $1 AND status <> 'deleted'`,
-          [other],
-        );
-        if (ok.rowCount === 0)
-          throw new BadRequestException([
-            'one of the chosen contacts does not exist',
-          ]);
+        let t;
+        try {
+          t = await loadTarget(client, other);
+        } catch (err) {
+          if (err instanceof NotFoundException)
+            throw new BadRequestException([
+              'one of the chosen contacts does not exist',
+            ]);
+          throw err;
+        }
+        // The same rule as setLink, for the new person's first contacts.
+        assertCanPlace(actor, t, { adding: true });
         await grantLink(client, user.id, other, actor.userId);
         linked.push(other);
       }
@@ -570,6 +575,10 @@ export class AdminUsersService {
       ]);
     const a = await loadTarget(this.db, userId);
     const b = await loadTarget(this.db, otherUserId);
+    // Who-may-act-on-whom applies to BOTH people (security audit 2026-10-30:
+    // without it a moderator could link or unlink the owner and admins).
+    assertCanPlace(actor, a, { adding: linked });
+    assertCanPlace(actor, b, { adding: linked });
 
     const changed = await this.db.transaction(async (client) => {
       const did = linked

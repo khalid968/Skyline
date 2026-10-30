@@ -195,6 +195,11 @@ export class MediaService {
   // previous photo expires at once (the sweep deletes its blob).
   async setProfilePhoto(caller, attachmentId) {
     await this.db.transaction(async (client) => {
+      // One photo change at a time per person: without this lock two
+      // concurrent changes both expired the same old photo, and the loser's
+      // upload stayed 'infinity' with nothing pointing at it, so the sweep
+      // never deleted it (security audit 2026-10-30).
+      await this.lockPhotoOwner(client, caller.userId);
       const { rowCount } = await client.query(
         `UPDATE attachments a SET kind = 'profile', expires_at = 'infinity'
            FROM devices d
@@ -213,9 +218,16 @@ export class MediaService {
 
   async clearProfilePhoto(caller) {
     await this.db.transaction(async (client) => {
+      await this.lockPhotoOwner(client, caller.userId);
       await this.expireProfilePhoto(client, caller.userId);
       await client.query('UPDATE users SET photo_attachment_id = NULL WHERE id = $1', [caller.userId]);
     });
+  }
+
+  async lockPhotoOwner(client, userId) {
+    await client.query('SELECT 1 FROM users WHERE id = $1 FOR UPDATE', [
+      userId,
+    ]);
   }
 
   async expireProfilePhoto(client, userId) {
@@ -250,13 +262,18 @@ export class MediaService {
   // ------------------------------------------------------------ retention
 
   // Deletes every file older than 30 days (and abandoned uploads), for good.
+  // A profile photo that no person points at any more is deleted too, whatever
+  // its expiry: only the CURRENT photo is kept indefinitely.
   async sweep(limit = 100) {
     let removed = 0;
     for (;;) {
       const batch = await this.db.transaction(async (client) => {
         const { rows } = await client.query(
           `SELECT id, storage_key, upload_id, status FROM attachments
-            WHERE status <> 'deleted' AND expires_at <= now()
+            WHERE status <> 'deleted'
+              AND (expires_at <= now()
+                   OR (kind = 'profile'
+                       AND NOT EXISTS (SELECT 1 FROM users u WHERE u.photo_attachment_id = attachments.id)))
             ORDER BY expires_at LIMIT $1 FOR UPDATE SKIP LOCKED`,
           [limit],
         );

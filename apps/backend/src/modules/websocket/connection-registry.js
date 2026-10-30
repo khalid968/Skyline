@@ -8,7 +8,7 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class ConnectionRegistry {
   constructor() {
-    this.byDevice = new Map(); // deviceId -> { socket, userId, deviceId }
+    this.byDevice = new Map(); // deviceId -> { socket, userId, deviceId, sessionId }
     this.byUser = new Map(); //   userId   -> Set<deviceId>
   }
 
@@ -51,6 +51,13 @@ export class ConnectionRegistry {
   disconnectDevice(deviceId, code = 1008, reason = 'revoked') {
     const conn = this.byDevice.get(deviceId);
     if (conn) conn.socket.close(code, reason);
+  }
+
+  // The session that opened a socket ended (logout): close that socket.
+  disconnectSession(sessionId, code = 1008, reason = 'signed out') {
+    if (!sessionId) return;
+    for (const conn of [...this.byDevice.values()])
+      if (conn.sessionId === sessionId) conn.socket.close(code, reason);
   }
 
   disconnectUser(userId, code = 1008, reason = 'revoked') {

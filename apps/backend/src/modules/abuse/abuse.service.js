@@ -43,9 +43,12 @@ export const RULES = {
     level: 'high', count: 8, windowSec: 3600, limitSec: 3600,
     action: 'Blocked automatically: this address cannot try codes',
   },
+  // Counted and paused per account AND address (security audit 2026-10-30):
+  // the address that guessed is paused, never the account itself, so nobody
+  // can lock an operator (or the owner) out just by knowing their username.
   admin_password: {
     level: 'medium', count: 5, windowSec: 600, limitSec: 900,
-    action: 'Sign-in to this dashboard account paused automatically',
+    action: 'Sign-in to this dashboard account paused automatically for this address',
   },
   // Devices only arrive with codes an operator issued: alert only.
   device_burst: {
@@ -148,16 +151,18 @@ export class AbuseService {
 
   // Dashboard sign-in. A paused account answers exactly like a wrong
   // password (the caller makes sure of that), so a pause never reveals that
-  // a username belongs to an operator.
-  async signInPaused(userId) {
-    return this.isLimited('admin_password', userId);
+  // a username belongs to an operator. The pause belongs to the account AND
+  // the address that guessed: from anywhere else the right password works.
+  async signInPaused(userId, ip) {
+    return this.isLimited('admin_password', adminLoginSubject(userId, ip));
   }
 
   async noteAdminLoginFailure(userId, ip) {
-    const n = await this.count(`admin-login:${userId}`, RULES.admin_password.windowSec);
+    const subject = adminLoginSubject(userId, ip);
+    const n = await this.count(`admin-login:${subject}`, RULES.admin_password.windowSec);
     if (n === this.threshold('admin_password')) {
       await this.raise('admin_password', {
-        subjectKey: userId, userId, ip,
+        subjectKey: subject, userId, ip,
         evidence: { wrongAttempts: n, minutes: RULES.admin_password.windowSec / 60 },
       });
     }
@@ -265,4 +270,9 @@ export class AbuseService {
       this.logger.error(`could not record a ${kind} alert: ${err.message}`);
     }
   }
+}
+
+// The sign-in pause key: one account, one address.
+export function adminLoginSubject(userId, ip) {
+  return `${userId}|${ip || 'unknown'}`;
 }

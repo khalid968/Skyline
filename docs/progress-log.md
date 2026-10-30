@@ -1547,3 +1547,35 @@ The owner approved prototypes 41 and 42 and started the phase.
   - token refresh is watched before the first token, so a late APNs token is still registered.
 - **Owner to do:** rebuild on the Mac with the plist (build 8). In the dashboard, revoke Moe's old iPhone
   device (09-28); a reinstall created a second one.
+
+## 2026-10-30 — Security audit (run 1) and fixes for its five confirmed findings
+
+- **Audit:** the security-audit skill, standard profile, run against the whole repository at `fc4cc19`.
+  The report lives outside the repo at `C:\Users\kkhal\security-audit-skill\Skyline\run-1\`: `REPORT.md`,
+  `FINDINGS-DETAIL.md`, `NEEDS-VALIDATION.md`, plus `findings.json` and `coverage-ledger.json`, both validated.
+  - **Coverage:** 31 coverage units over 5 hunting waves. Coverage critics ran after each wave, and the
+    final-clean critic found no gaps.
+  - **Verification:** every candidate went through two independent verifications.
+  - **How backend checks ran:** in a throwaway Docker stack: the `skyline/backend:local` image, on an
+    `--internal` network, in production mode with dummy secrets.
+  - **Untouched:** the production server, external services and the owner's dev data.
+  - **Result:** 5 confirmed (1 medium, 4 low), 9 needs-validation, none rejected. Most of the open leads are
+    client-side and need the Flutter app running. Highest priority: the safety number is computed from the
+    directory key rather than the pinned session key, and group key-share envelopes from non-contacts are
+    handled as direct messages.
+  - **Cost:** agents ran on Sonnet after the owner's cost change. The owner approved two agent files in
+    `~/.claude/agents/` (`audit-worker`, `audit-reader`); they take effect in new sessions.
+- **Fixes** (see `decisions.md` 2026-10-30):
+  1. Operator lockout: the pause is per account and address, and the per-username sign-in limit is gone.
+  2. Contact links: who-may-act-on-whom now applies to both people, and to a new person's first contacts.
+  3. Group membership: only the owner may place themselves (`assertCanPlace`).
+  4. WebSocket: tied to its session. Logout closes it, delivery checks that the session is live, and the
+     sweep closes the rest.
+  5. Profile photos: the swap locks the user row, and the sweep deletes unreferenced profile attachments.
+- **Tests:**
+  - New regression tests in admin-api, groups, dashboard-v2, authentication, media and rate-limit-and-cli.
+  - The rate-limit test that asserted the old per-username lockout now asserts there is no username lockout,
+    and that the per-address limit still holds.
+  - Against the old code, 8 of the new tests fail. All pass on the fixed code.
+- **Not yet done:** deploying the backend (needs the owner's go-ahead), the 9 needs-validation leads, and the
+  hardening notes, notably `backup.sh` without pipefail and the dev compose ports open on all interfaces.

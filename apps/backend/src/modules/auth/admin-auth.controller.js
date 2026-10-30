@@ -45,15 +45,15 @@ export class AdminAuthController {
     this.secureCookie = config.get('env') === 'production';
   }
 
-  // Limited per address AND per username, so spreading guesses over many
-  // addresses still cannot hammer one account.
+  // Limited per address. There is deliberately no limit per username: it
+  // counted every attempt, the right password included, so anyone who knew an
+  // operator's username could keep them out (security audit 2026-10-30).
+  // Guessing one account is slowed instead by the per-address limit, the
+  // per-account-and-address pause (AbuseService) and Argon2.
   @Public()
   @Post('login')
   @HttpCode(200)
-  @RateLimit('admin-login', [
-    { by: 'ip', limit: 20, windowSec: FIFTEEN_MIN },
-    { by: 'body.username', limit: 10, windowSec: FIFTEEN_MIN },
-  ])
+  @RateLimit('admin-login', [{ by: 'ip', limit: 20, windowSec: FIFTEEN_MIN }])
   @Bind(Body(), Ip(), Req(), Res({ passthrough: true }))
   @Validated(AdminLoginDto)
   async login(dto, ip, req, res) {

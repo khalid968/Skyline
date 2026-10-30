@@ -75,6 +75,23 @@ export class AccountService {
     return new Set(rows.map((r) => r.id));
   }
 
+  // Of these device-session ids, the ones still live: not revoked (logout,
+  // refresh-token reuse, device revocation) and not past their expiry. Used to
+  // stop a WebSocket once the session that opened it has ended.
+  async liveSessionIds(sessionIds) {
+    const ids = sessionIds.filter(isUuid);
+    if (ids.length === 0) return new Set();
+
+    const { rows } = await this.db.query(
+      `SELECT id FROM device_sessions
+        WHERE id = ANY($1::uuid[])
+          AND revoked_at IS NULL
+          AND expires_at > now()`,
+      [ids],
+    );
+    return new Set(rows.map((r) => r.id));
+  }
+
   async permissionsForRole(roleKey) {
     const { rows } = await this.db.query(
       'SELECT permission_key FROM role_permissions WHERE role_key = $1',

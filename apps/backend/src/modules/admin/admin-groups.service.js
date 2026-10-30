@@ -11,7 +11,7 @@ import { AuditService } from '../audit/audit.service';
 import { FanoutService } from '../websocket/fanout.service';
 import { isUuid } from '../../common/uuid';
 import { announce } from '../groups/groups.service';
-import { loadTarget, assertCanManage } from './admin-policy';
+import { loadTarget, assertCanPlace } from './admin-policy';
 
 // Groups, as operators manage them (board 31; decisions.md 2026-09-25).
 // Admins and moderators create, rename, archive and change membership. Each
@@ -82,7 +82,7 @@ export class AdminGroupsService {
     const people = [];
     for (const id of new Set(memberIds)) {
       const t = await loadTarget(this.db, id);
-      assertCanManage(actor, t, { self: true });
+      assertCanPlace(actor, t, { adding: true });
       people.push(t);
     }
     const groupId = await this.db.transaction(async (client) => {
@@ -170,7 +170,7 @@ export class AdminGroupsService {
     const g = await this.load(groupId);
     if (g.archived_at) throw new ConflictException();
     const t = await loadTarget(this.db, userId);
-    assertCanManage(actor, t, { self: true });
+    assertCanPlace(actor, t, { adding: member });
     const before = await this.liveMembers(groupId);
     const changed = await this.db.transaction(async (client) => {
       const r = member

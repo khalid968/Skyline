@@ -142,8 +142,11 @@ This project is JavaScript, not TypeScript, compiled by Babel with legacy decora
   delivery on an **already-open socket**, immediately. The sender's own other devices always qualify.
 - **Multi-instance.** `publish()` goes to Redis pub/sub and every instance delivers to its own connected
   sockets; each instance re-applies the graph check. Verified with two real backends and one channel.
-- A 30-second sweep closes sockets whose account was suspended or device revoked. Deliveries are refused
-  the instant it happens; the sweep only stops an inert socket lingering.
+- **A socket belongs to the session that opened it** (security audit 2026-10-30). Logging out closes it at
+  once, and every delivery also checks that session is still live. So a logout, a refresh-token-reuse
+  revocation or an expired session stops delivery immediately, on every instance.
+- A 30-second sweep closes sockets whose account was suspended, whose device was revoked, or whose session
+  ended. Deliveries are refused the instant it happens; the sweep only stops an inert socket lingering.
 
 ## Auditing
 
@@ -185,7 +188,10 @@ Full rationale in `decisions.md` (2026-09-23). How it works:
 - **Tokens and codes are never stored**, only `HMAC-SHA256(AUTH_TOKEN_PEPPER, label, value)`. Each kind has a
   prefix and its own hash label, so one kind can never be looked up as another.
 - **Rate limits** (production values): activation 10 / 15 min per address; refresh 60; admin login 20 per
-  address **and** 10 per username; MFA and 2FA changes 20; password change 10.
+  address; MFA and 2FA changes 20; password change 10. There is deliberately **no limit per username** on admin
+  login (security audit 2026-10-30): it counted the right password too, so anyone who knew an operator's
+  username could lock them out. Five wrong passwords pause sign-in for that account **from that address**
+  only (board 37), so guessing is slowed without letting a stranger lock the owner out.
 - **No custom cryptography.** Ed25519, HMAC, AES-GCM and the CSPRNG are Node's built-ins; Argon2 and TOTP are
   the `argon2` and `otplib` libraries. `src/modules/auth/auth-crypto.js` only fixes how they are used.
 - **The test fakes stay in `test/`.** `test/app/app-harness.js` can set a principal from `x-test-*` headers
@@ -209,6 +215,11 @@ Full rationale in `decisions.md` (2026-09-23). How it works:
   - nobody acts on themselves, except to rename themselves or revoke their own device;
   - only the owner acts on an administrator;
   - a moderator acts only on members.
+- **Placing people in the member plane** (`assertCanPlace`, security audit 2026-10-30). Contact links (both
+  people), a new person's first contacts, and group membership follow the rule above for everyone involved.
+  In addition, an operator may not link themselves or add themselves to a group, because admins never read
+  messages. The owner is the exception, as the root of trust who links their own phone. Anyone may unlink
+  themselves or leave.
 
   `assertCanAssignRole`: only the owner makes or unmakes administrators. The database trigger
   `users_protect_owner` enforces the owner's protection even if the API is bypassed. The dashboard's

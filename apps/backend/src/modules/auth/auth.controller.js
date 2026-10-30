@@ -18,6 +18,7 @@ import { SessionService } from '../authorization/session.service';
 import { ActivationService } from './activation.service';
 import { AbuseService } from '../abuse/abuse.service';
 import { ActivateDto, RefreshDto } from './auth.dto';
+import { ConnectionRegistry } from '../websocket/connection-registry';
 
 const FIFTEEN_MIN = 15 * 60;
 
@@ -25,12 +26,18 @@ const FIFTEEN_MIN = 15 * 60;
 // one-time activation code registers the device, and from then on the device
 // itself is the credential.
 @Controller('auth')
-@Dependencies(ActivationService, SessionService, AbuseService)
+@Dependencies(
+  ActivationService,
+  SessionService,
+  AbuseService,
+  ConnectionRegistry,
+)
 export class AuthController {
-  constructor(activation, sessions, abuse) {
+  constructor(activation, sessions, abuse, registry) {
     this.activation = activation;
     this.sessions = sessions;
     this.abuse = abuse;
+    this.registry = registry;
     this.logger = new Logger('Auth');
   }
 
@@ -93,7 +100,11 @@ export class AuthController {
   @HttpCode(204)
   @Bind(Req())
   async logout(req) {
-    if (req.account.sessionId)
+    if (req.account.sessionId) {
       await this.sessions.revokeDeviceSession(req.account.sessionId);
+      // The socket this login opened closes too (on this instance at once;
+      // others refuse its deliveries immediately and close it on their sweep).
+      this.registry.disconnectSession(req.account.sessionId);
+    }
   }
 }

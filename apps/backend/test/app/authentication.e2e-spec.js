@@ -488,6 +488,15 @@ describe('authentication (real tokens, real database)', () => {
       expect(r.ready).toBe(true);
     });
 
+    it('closes the socket when its session logs out (security audit 2026-10-30)', async () => {
+      const m = await member();
+      const r = await open(`ws://localhost:${t.port}/ws`, bearer(m.accessToken));
+      expect(r.ready).toBe(true);
+      const closed = new Promise((resolve) => r.ws.on('close', (code) => resolve(code)));
+      expect((await api().post('/auth/logout').set(bearer(m.accessToken))).status).toBe(204);
+      expect(await closed).toBe(1008);
+    });
+
     it('refuses no token, a refresh token, and a dashboard token', async () => {
       const m = await member();
       const op = await operator('wsop');

@@ -54,6 +54,8 @@ export class EventsGateway {
         socket: client,
         userId: account.userId,
         deviceId: account.deviceId,
+        // Real sign-ins always carry it; only the test authenticator omits it.
+        sessionId: principal.sessionId,
       });
       client.send(JSON.stringify({ type: 'ready' }));
     } catch (err) {
@@ -67,9 +69,10 @@ export class EventsGateway {
   }
 
   // Runs on a timer. Drops dead connections, and closes any whose account was
-  // suspended or whose device was revoked since they connected. Deliveries are
-  // already refused for those the instant it happens (FanoutService); this just
-  // stops an inert socket lingering.
+  // suspended, whose device was revoked, or whose session ended (logout,
+  // refresh-token reuse) since they connected. Deliveries are already refused
+  // for those the instant it happens (FanoutService); this just stops an
+  // inert socket lingering.
   async sweep() {
     const conns = this.registry.all();
     if (conns.length === 0) return;
@@ -89,6 +92,16 @@ export class EventsGateway {
     for (const c of conns) {
       if (!live.has(c.deviceId))
         this.registry.disconnectDevice(c.deviceId, 1008, 'revoked');
+    }
+
+    const withSession = conns.filter((c) => c.sessionId);
+    if (withSession.length === 0) return;
+    const liveSessions = await this.accounts.liveSessionIds(
+      withSession.map((c) => c.sessionId),
+    );
+    for (const c of withSession) {
+      if (!liveSessions.has(c.sessionId))
+        this.registry.disconnectSession(c.sessionId);
     }
   }
 }

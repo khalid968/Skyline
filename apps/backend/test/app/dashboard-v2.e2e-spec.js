@@ -6,7 +6,7 @@
 import request from 'supertest';
 import { createTestDatabase, mkUser, mkDevice } from '../db/harness';
 import { createTestApp } from './app-harness';
-import { hashPassword } from '../../src/modules/auth/admin-auth.service';
+import { hashPassword, AdminAuthService } from '../../src/modules/auth/admin-auth.service';
 import { AbuseService, RULES } from '../../src/modules/abuse/abuse.service';
 import { UsageService } from '../../src/modules/monitoring/usage.service';
 import { csvCell } from '../../src/modules/admin/admin-audit.service';
@@ -227,6 +227,18 @@ describe('admin dashboard v2 (real sign-ins, real database, real Redis)', () => 
       (a) => a.kind === 'admin_password' && a.subject?.userId === victim.id,
     );
     expect(alert).toMatchObject({ level: 'medium', limitActive: true });
+
+    // Security audit 2026-10-30: only the address that guessed is paused. The
+    // operator signing in from anywhere else gets in with the right password,
+    // so nobody can lock an operator out just by knowing their username.
+    const auth = t.app.get(AdminAuthService);
+    await expect(
+      auth.login({ username: victim.username, password: PASSWORD }, '203.0.113.7', 'test'),
+    ).resolves.toMatchObject({ mfaRequired: false });
+    // ...and wrong guesses from that other address are counted on their own.
+    await expect(
+      auth.login({ username: victim.username, password: 'wrong' }, '203.0.113.7', 'test'),
+    ).rejects.toMatchObject({ status: 401 });
 
     // Lifting it lets the operator in again.
     await api().post(`/admin/alerts/${alert.alertId}/lift`).set(owner.h).expect(200);

@@ -49,10 +49,11 @@ export class AdminAuthService {
     );
     const account = rows[0];
 
-    // An account whose sign-in is paused (board 37: too many wrong
-    // passwords) answers exactly like a wrong password, timing included, so a
-    // pause never reveals that a username belongs to an operator.
-    const paused = account ? await this.abuse.signInPaused(account.id) : false;
+    // An account whose sign-in is paused for this address (board 37: too many
+    // wrong passwords from here) answers exactly like a wrong password, timing
+    // included, so a pause never reveals that a username belongs to an
+    // operator. Other addresses are not paused (security audit 2026-10-30).
+    const paused = account ? await this.abuse.signInPaused(account.id, ip) : false;
 
     // An unknown username still pays for a full Argon2 verification, so the
     // response time does not reveal which usernames are operators.
@@ -117,7 +118,7 @@ export class AdminAuthService {
         !creds ||
         !creds.totp_enabled_at ||
         status.rows[0]?.status !== 'active' ||
-        (await this.abuse.signInPaused(pending.user_id))
+        (await this.abuse.signInPaused(pending.user_id, ip))
       ) {
         throw new UnauthorizedException();
       }

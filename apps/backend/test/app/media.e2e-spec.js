@@ -369,5 +369,36 @@ describe('media (real tokens, real object store)', () => {
       expect((await contactsOf(to)).find((c) => c.userId === from.userId).photo).toBeNull();
       expect((await download(to, second.attachmentId)).status).toBe(404);
     });
+
+    it('two photo changes at once keep exactly one photo, and the sweep deletes orphans (security audit 2026-10-30)', async () => {
+      const { from } = await people('pp4');
+      const kept = async () =>
+        (
+          await db.client.query(
+            `SELECT a.id FROM attachments a JOIN devices d ON d.id = a.uploaded_by_device_id
+              WHERE d.user_id = $1 AND a.kind = 'profile' AND a.expires_at = 'infinity' AND a.status <> 'deleted'`,
+            [from.userId],
+          )
+        ).rows.map((r) => r.id);
+      for (let round = 0; round < 6; round++) {
+        const x = await upload(from, crypto.randomBytes(512));
+        const y = await upload(from, crypto.randomBytes(512));
+        const rs = await Promise.all(
+          [x, y].map((u) => api().put('/me/photo').set(from.h).send({ attachmentId: u.attachmentId })),
+        );
+        for (const r of rs) expect(r.status).toBe(204);
+        expect(await kept()).toHaveLength(1);
+      }
+      const current = (await db.client.query('SELECT photo_attachment_id AS p FROM users WHERE id = $1', [from.userId])).rows[0].p;
+      expect(await kept()).toEqual([current]);
+
+      // An orphan left behind by older code is swept even though it never expires.
+      const orphan = await upload(from, crypto.randomBytes(512));
+      await db.client.query(`UPDATE attachments SET kind = 'profile', expires_at = 'infinity' WHERE id = $1`, [orphan.attachmentId]);
+      await t.app.get(MediaService).sweep();
+      const status = async (id) => (await db.client.query('SELECT status FROM attachments WHERE id = $1', [id])).rows[0].status;
+      expect(await status(orphan.attachmentId)).toBe('deleted');
+      expect(await status(current)).toBe('ready');
+    });
   });
 });

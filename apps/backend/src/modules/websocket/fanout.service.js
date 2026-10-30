@@ -2,6 +2,7 @@ import { Injectable, Dependencies, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../../redis/redis.module';
 import { GraphService } from '../authorization/graph.service';
+import { AccountService } from '../authorization/account.service';
 import { ConnectionRegistry } from './connection-registry';
 import { isUuid } from '../../common/uuid';
 
@@ -23,12 +24,19 @@ const OPEN = 1; // WebSocket.OPEN
 // The payload is opaque here: in Phase 8 it is ciphertext, and this service
 // never looks inside it.
 @Injectable()
-@Dependencies(RedisService, ConfigService, ConnectionRegistry, GraphService)
+@Dependencies(
+  RedisService,
+  ConfigService,
+  ConnectionRegistry,
+  GraphService,
+  AccountService,
+)
 export class FanoutService {
-  constructor(redis, config, registry, graph) {
+  constructor(redis, config, registry, graph, accounts) {
     this.redis = redis;
     this.registry = registry;
     this.graph = graph;
+    this.accounts = accounts;
     this.channel = config.get('redis.channel');
     this.logger = new Logger('Fanout');
     this.subscriber = null;
@@ -81,6 +89,13 @@ export class FanoutService {
       event.senderUserId,
       conns.map((c) => c.deviceId),
     );
+    // A socket keeps working only while the session that opened it is live:
+    // logging out or a revoked session stops delivery at once, on every
+    // instance (security audit 2026-10-30).
+    const sessionIds = conns.filter((c) => c.sessionId).map((c) => c.sessionId);
+    const liveSessions = sessionIds.length
+      ? await this.accounts.liveSessionIds(sessionIds)
+      : new Set();
 
     const frame = JSON.stringify({
       type: event.type,
@@ -90,7 +105,10 @@ export class FanoutService {
     let delivered = 0;
     let refused = 0;
     for (const c of conns) {
-      if (!allowed.has(c.deviceId)) {
+      if (
+        !allowed.has(c.deviceId) ||
+        (c.sessionId && !liveSessions.has(c.sessionId))
+      ) {
         refused++;
         continue;
       }
