@@ -6,6 +6,52 @@ working around it.
 
 ---
 
+## 2026-10-31 (later) — Upload limits, IPv6 addresses, Decline from the call screen
+
+The owner chose how to close the last two audit leads (7 and 8) and the Decline bug from 2026-10-01.
+
+- **Upload limits (lead 7).** Every limit is checked when an upload starts, against the size it declares:
+  - **Per person:** up to 5 GB in any 24 hours, across all their devices together. Over that, the start
+    answers 429 with Retry-After, the time until enough of their uploads leave the window. The check holds a
+    per-person advisory lock, so parallel starts can't each slip under.
+  - **Disk floor:** no upload starts that would leave less than 6 GB free. Uploads still in progress count
+    as if already written. Over the floor the answer is 507. In production every container shares the
+    server's one disk, so the backend reads free space from its own root (`statfs('/')`). If that can't be
+    read, it logs and allows: the daily limit still applies.
+  - **Idle uploads:** an upload with no new part for 24 hours is removed by the hourly sweep, parts included.
+  - **The app:** shows such a refusal like any failed send, with retry. No new screen.
+  - Migration 017 adds the two indexes these queries read.
+  - **Not limited:** the total kept. Thirty days of 5 GB a day from several people can still exceed the disk.
+    The floor stops uploads first, so the database, logs and backups keep working.
+- **IPv6 (lead 8).** Docker had no IPv6, so Docker's proxy forwarded every IPv6 visitor to Nginx from one
+  internal address (172.18.0.1). All IPv6 users shared one rate limit, and one stranger could lock everyone on
+  IPv6 out of activation and dashboard sign-in for 15 minutes. Confirmed from the server's configuration; the
+  one read-only look at the live limits held a single IPv4 entry, which neither confirms nor rules it out.
+  - **Now:** the production network has IPv6 (a private ULA range), so ip6tables forwards the visitor's real
+    address. The backend counts an IPv6 address as its **/64** (`addressBucket`) in the rate limiter, the
+    activation-guessing counter and the dashboard sign-in pause.
+  - **Why /64:** a home or mobile network is normally given a whole /64. Counting single addresses would
+    let one person rotate through billions of them.
+  - IPv4 counting is unchanged. Audit records and sessions still store the exact address.
+  - Checked first: the server's IPv6 default route is static (`accept_ra = 0`), so the IP forwarding Docker
+    turns on can't drop it.
+- **Decline from the phone's call screen.** The caller only stops ringing when this phone sends a
+  Signal-encrypted "decline", and only the running app can encrypt. The owner chose to **open the app
+  briefly** rather than add a server-visible "declined" signal. The server learns nothing new.
+  - **How:** `flutter_callkit_incoming` 3.1.6 is now vendored (`apps/mobile/third_party/`, see
+    `SKYLINE-PATCH.md`), with one patch. Decline goes through the plugin's `TransparentActivity`, like Accept,
+    because on Android 12+ a broadcast from a notification can't open an app.
+  - `MainActivity` keeps the declined call's id. The app sends the decline as soon as that call's offer has
+    been fetched, then returns to the background if it wasn't on screen before.
+  - Bound to that call only, like Accept: `declineWhenRinging(nativeId)`. A declined offer never rings in
+    the app. If no offer arrives within 20 seconds, the app gives up and goes back.
+- **Smaller fixes from the 2026-10-30 hardening notes:**
+  - `backup.sh` uses pipefail, and every step fails the backup explicitly (the shell ignores `set -e` inside
+    `one || ...`).
+  - Old backups and partial runs are pruned before a new backup.
+  - The development Postgres, Redis and MinIO listen on 127.0.0.1 only. coturn stays reachable for phones
+    on the LAN.
+
 ## 2026-10-31 — App-side fixes for the audit's validated leads
 
 The owner had the 9 needs-validation leads tested (results in

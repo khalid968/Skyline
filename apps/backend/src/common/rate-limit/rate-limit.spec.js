@@ -1,5 +1,10 @@
 import { HttpException, ServiceUnavailableException } from '@nestjs/common';
-import { RateLimit, RateLimitGuard, RATE_LIMIT } from './rate-limit';
+import {
+  RateLimit,
+  RateLimitGuard,
+  RATE_LIMIT,
+  addressBucket,
+} from './rate-limit';
 
 function context(meta, req = {}) {
   const headers = {};
@@ -102,5 +107,49 @@ describe('RateLimitGuard', () => {
       RateLimit('x', [{ by: 'ip', limit: 0, windowSec: 60 }]),
     ).toThrow();
     expect(() => RateLimit('x', [{ by: 'ip', limit: 5 }])).toThrow();
+  });
+});
+
+describe('addressBucket', () => {
+  it('leaves IPv4 addresses, mapped forms included, exactly as they were', () => {
+    expect(addressBucket('203.0.113.9')).toBe('203.0.113.9');
+    expect(addressBucket('::ffff:127.0.0.1')).toBe('::ffff:127.0.0.1');
+    expect(addressBucket('unknown')).toBe('unknown');
+    expect(addressBucket(undefined)).toBeUndefined();
+  });
+
+  it('counts an IPv6 address as its /64, however it is written', () => {
+    const bucket = '2001:db8:1:2::/64';
+    for (const ip of [
+      '2001:db8:1:2::1',
+      '2001:0db8:0001:0002:ffff:ffff:ffff:ffff',
+      '2001:DB8:1:2:aaaa::',
+      '2001:db8:1:2::1%eth0',
+      '2001:db8:1:2::192.0.2.1',
+    ]) {
+      expect(addressBucket(ip)).toBe(bucket);
+    }
+    expect(addressBucket('2001:db8:1:3::1')).toBe('2001:db8:1:3::/64');
+    expect(addressBucket('::1')).toBe('0:0:0:0::/64');
+  });
+
+  it('gives a rotating /64 one counter in the guard', async () => {
+    const keys = [];
+    const guard = new RateLimitGuard(reflector, {
+      hit: async (key) => {
+        keys.push(key);
+        return { allowed: true, retryAfterSec: 60 };
+      },
+    });
+    const meta = {
+      name: 'activate',
+      rules: [{ by: 'ip', limit: 10, windowSec: 900 }],
+    };
+    await guard.canActivate(context(meta, { ip: '2a01:4f8:1:2::1' }).ctx);
+    await guard.canActivate(
+      context(meta, { ip: '2a01:4f8:1:2:dead:beef:0:7' }).ctx,
+    );
+    expect(new Set(keys).size).toBe(1);
+    expect(keys[0]).toBe('activate:ip:2a01:4f8:1:2::/64');
   });
 });

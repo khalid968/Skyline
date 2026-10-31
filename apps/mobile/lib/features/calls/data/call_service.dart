@@ -142,11 +142,56 @@ class CallService extends ChangeNotifier {
     }
   }
 
-  bool _isAccepted(String callId, String? messageId) {
-    final until = _acceptUntil;
-    final id = _acceptId;
+  bool _isAccepted(String callId, String? messageId) => _names(_acceptId, _acceptUntil, callId, messageId);
+
+  /// Whether the ringing screen's [id], still within [until], names this call.
+  static bool _names(String? id, DateTime? until, String callId, String? messageId) {
     if (until == null || id == null || DateTime.now().isAfter(until)) return false;
     return id == callId || (messageId != null && id == messageId);
+  }
+
+  /// Set when the person tapped Decline on the phone's own ringing screen:
+  /// that call's offer, once fetched, is declined without ringing here.
+  DateTime? _declineUntil;
+  String? _declineId;
+  void Function()? _declineDone;
+  Timer? _declineTimer;
+
+  /// Decline the call the phone's ringing screen showed as [nativeId]: now if
+  /// it is ringing here, or as soon as its offer arrives. Skyline may have
+  /// been closed, so the offer can take a few seconds (owner decision
+  /// 2026-10-31). Only that call, like [acceptWhenRinging]. [done] runs once
+  /// the caller has been told, or after 20 seconds if the offer never came.
+  void declineWhenRinging(String nativeId, {void Function()? done}) {
+    if (_declineId == nativeId && _declineUntil != null) return; // told twice
+    _declined();
+    _declineUntil = DateTime.now().add(const Duration(seconds: 20));
+    _declineId = nativeId;
+    _declineDone = done;
+    _declineTimer = Timer(const Duration(seconds: 20), _declined);
+    final call = current;
+    if (call != null &&
+        !call.outgoing &&
+        call.phase == CallPhase.incoming &&
+        _names(_declineId, _declineUntil, call.id, _offerMessageId)) {
+      unawaited(_declineNow(call));
+    }
+  }
+
+  Future<void> _declineNow(Call call) async {
+    _declineUntil = _declineId = null;
+    await _signal(call, 'decline');
+    await _finish(call, 'declined');
+    _declined();
+  }
+
+  void _declined() {
+    _declineTimer?.cancel();
+    _declineTimer = null;
+    _declineUntil = _declineId = null;
+    final done = _declineDone;
+    _declineDone = null;
+    done?.call();
   }
 
   RTCPeerConnection? _pc;
@@ -690,6 +735,13 @@ class CallService extends ChangeNotifier {
         _pendingOffer = sdp;
         _offerMessageId = content['_messageId'] as String?;
         _offerDevice = device;
+        if (_names(_declineId, _declineUntil, callId, _offerMessageId)) {
+          // Already declined on the phone's ringing screen: tell the caller,
+          // and never ring here.
+          await _declineNow(incoming);
+          unawaited(NativeRinging.stopAll());
+          return;
+        }
         _ringTimer = Timer(ringFor, () => _finish(incoming, 'missed'));
         // While it rings: what Accept would otherwise wait for.
         _turnSoon = api.get('/calls/turn').then<Object?>((v) => v, onError: (Object _) => null);
@@ -767,6 +819,7 @@ class CallService extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _ringTimer?.cancel();
+    _declineTimer?.cancel();
     unawaited(ringtone.dispose());
     _tick?.cancel();
     unawaited(_pc?.close());

@@ -1,10 +1,13 @@
 import { randomUUID } from 'crypto';
+import { statfs } from 'fs/promises';
 import {
   NotFoundException,
   Injectable,
   Dependencies,
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Logger,
 } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
@@ -23,6 +26,17 @@ export const PART_SIZE = 8 * 1024 * 1024;
 export const MAX_CIPHERTEXT = 2 * 1024 * 1024 * 1024 + 16;
 const START_LIMIT = { limit: 120, windowSec: 3600 };
 const SWEEP_EVERY_MS = 60 * 60 * 1000;
+
+// Storage limits (owner decision 2026-10-31, security audit lead 7). One
+// person may start up to 5 GB of uploads in any 24 hours, counted by the
+// size declared at the start, so it holds before a byte arrives. And no
+// upload starts that would leave the disk with less than 6 GB free, so the
+// database, logs and backups keep working whatever anyone sends.
+export const DAILY_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024;
+export const MIN_FREE_DISK_BYTES = 6 * 1024 * 1024 * 1024;
+// An upload with no new part for this long is abandoned: the sweep removes
+// it, and its parts with it.
+export const IDLE_UPLOAD_HOURS = 24;
 
 @Injectable()
 @Dependencies(DatabaseService, RateLimitService, StorageService, AbuseService)
@@ -76,18 +90,84 @@ export class MediaService {
     }
     // The object name says nothing: not who, not what, not which chat.
     const key = randomUUID();
-    const uploadId = await this.storage.startUpload(key);
-    const { rows } = await this.db.query(
-      `INSERT INTO attachments (storage_key, ciphertext_bytes, ciphertext_sha256, uploaded_by_device_id, upload_id)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id, expires_at`,
-      [key, ciphertextBytes, hash, caller.deviceId, uploadId],
-    );
+    const rows = await this.db.transaction(async (client) => {
+      // One start at a time per person, so two parallel starts cannot both
+      // fit under the daily allowance.
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        `upload-quota:${caller.userId}`,
+      ]);
+      await this.assertRoomFor(client, caller, ciphertextBytes, res);
+      const uploadId = await this.storage.startUpload(key);
+      const inserted = await client.query(
+        `INSERT INTO attachments (storage_key, ciphertext_bytes, ciphertext_sha256, uploaded_by_device_id, upload_id)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id, expires_at`,
+        [key, ciphertextBytes, hash, caller.deviceId, uploadId],
+      );
+      return inserted.rows;
+    });
     return {
       attachmentId: rows[0].id,
       partSize: PART_SIZE,
       parts: Math.ceil(ciphertextBytes / PART_SIZE),
       expiresAt: rows[0].expires_at,
     };
+  }
+
+  // 429 with Retry-After when this person's last 24 hours plus this file
+  // pass the daily allowance; 507 when the disk would drop below the floor.
+  // Uploads still in progress count against the disk as if already written.
+  async assertRoomFor(client, caller, bytes, res) {
+    const { rows } = await client.query(
+      `SELECT a.ciphertext_bytes, a.created_at
+         FROM attachments a JOIN devices d ON d.id = a.uploaded_by_device_id
+        WHERE d.user_id = $1 AND a.created_at > now() - interval '24 hours'
+        ORDER BY a.created_at`,
+      [caller.userId],
+    );
+    let used = rows.reduce((n, r) => n + Number(r.ciphertext_bytes), 0);
+    if (used + bytes > DAILY_UPLOAD_BYTES) {
+      // Free again once enough of the oldest uploads leave the window.
+      let freedAt = Date.now() + 24 * 3600 * 1000;
+      for (const r of rows) {
+        used -= Number(r.ciphertext_bytes);
+        if (used + bytes <= DAILY_UPLOAD_BYTES) {
+          freedAt = new Date(r.created_at).getTime() + 24 * 3600 * 1000;
+          break;
+        }
+      }
+      res?.setHeader?.(
+        'Retry-After',
+        String(Math.max(1, Math.ceil((freedAt - Date.now()) / 1000))),
+      );
+      throw new HttpException('Too Many Requests', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    const free = await this.freeDiskBytes();
+    if (free === null) return;
+    const pending = await client.query(
+      `SELECT coalesce(sum(a.ciphertext_bytes - coalesce(p.bytes, 0)), 0)::bigint AS n
+         FROM attachments a
+         LEFT JOIN (SELECT attachment_id, sum(bytes) AS bytes FROM attachment_parts GROUP BY attachment_id) p
+                ON p.attachment_id = a.id
+        WHERE a.status = 'uploading'`,
+    );
+    if (free - Number(pending.rows[0].n) - bytes < MIN_FREE_DISK_BYTES) {
+      this.logger.warn('upload refused: the disk is nearly full');
+      throw new HttpException('Insufficient Storage', HttpStatus.INSUFFICIENT_STORAGE);
+    }
+  }
+
+  // Free space on the disk the object store writes to. In production every
+  // container and volume shares the server's one disk, so the backend's own
+  // root tells the truth. null when it cannot be read (logged): the daily
+  // allowance still applies.
+  async freeDiskBytes() {
+    try {
+      const s = await statfs('/');
+      return Number(s.bavail) * Number(s.bsize);
+    } catch (err) {
+      this.logger.warn(`could not read free disk space: ${err.message}`);
+      return null;
+    }
   }
 
   async progress(attachmentId) {
@@ -261,7 +341,7 @@ export class MediaService {
 
   // ------------------------------------------------------------ retention
 
-  // Deletes every file older than 30 days (and abandoned uploads), for good.
+  // Deletes every file older than 30 days, and uploads idle for 24 hours, for good.
   // A profile photo that no person points at any more is deleted too, whatever
   // its expiry: only the CURRENT photo is kept indefinitely.
   async sweep(limit = 100) {
@@ -272,10 +352,15 @@ export class MediaService {
           `SELECT id, storage_key, upload_id, status FROM attachments
             WHERE status <> 'deleted'
               AND (expires_at <= now()
+                   OR (status = 'uploading'
+                       AND created_at < now() - make_interval(hours => $2)
+                       AND NOT EXISTS (SELECT 1 FROM attachment_parts p
+                                        WHERE p.attachment_id = attachments.id
+                                          AND p.uploaded_at > now() - make_interval(hours => $2)))
                    OR (kind = 'profile'
                        AND NOT EXISTS (SELECT 1 FROM users u WHERE u.photo_attachment_id = attachments.id)))
             ORDER BY expires_at LIMIT $1 FOR UPDATE SKIP LOCKED`,
-          [limit],
+          [limit, IDLE_UPLOAD_HOURS],
         );
         for (const a of rows) {
           if (a.status === 'uploading' && a.upload_id) {

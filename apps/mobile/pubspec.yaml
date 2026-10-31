@@ -1,7 +1,7 @@
 name: skyline
 description: "Skyline — secure messaging, built for people you trust."
 publish_to: "none"
-version: 1.0.5+6
+version: 1.0.6+7
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -57,8 +57,11 @@ dependencies:
   url_launcher: ^6.3.2
   crypto: ^3.0.7
   # Phase 14c: the phone's own ringing screen (Android full-screen call,
-  # iPhone CallKit). Pinned exactly: it runs when Skyline is closed.
-  flutter_callkit_incoming: 3.1.6
+  # iPhone CallKit). A vendored copy of 3.1.6, since it runs when Skyline is
+  # closed, with one patch: Decline opens the app so it can tell the caller
+  # (third_party/flutter_callkit_incoming/SKYLINE-PATCH.md).
+  flutter_callkit_incoming:
+    path: third_party/flutter_callkit_incoming
   window_manager: ^0.5.2
   tray_manager: ^0.5.3
   launch_at_startup: ^0.5.1

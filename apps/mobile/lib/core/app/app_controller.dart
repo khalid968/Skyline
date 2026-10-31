@@ -193,7 +193,12 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         calls?.acceptWhenRinging(nativeId);
         unawaited(m.sync().catchError((Object _) {}));
       },
-      onDeclined: () => unawaited(calls?.decline()),
+      // Declined there: the caller is told (Skyline may have been opened
+      // just for this, and then goes back), owner decision 2026-10-31.
+      onDeclined: (nativeId) {
+        calls?.declineWhenRinging(nativeId, done: () => unawaited(NativeRinging.declineHandled()));
+        unawaited(m.sync().catchError((Object _) {}));
+      },
     );
     unawaited(ringing!.start());
     push = PushRegistrar(api: api!, messenger: m);

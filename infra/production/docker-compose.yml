@@ -191,6 +191,21 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
 
+# IPv6 inside Docker (owner decision 2026-10-31, security audit lead 8).
+# Without it, Docker's proxy forwarded every IPv6 visitor to Nginx from one
+# internal address, so all of them shared one rate limit and one stranger
+# could lock everyone on IPv6 out of activation and dashboard sign-in. With
+# it, ip6tables forwards the visitor's real address; the backend counts an
+# IPv6 address as its /64 (addressBucket). A private (ULA) range: nothing
+# here is reachable from outside except the published ports. Changing this
+# needs `docker compose down` once, so the network is created again.
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd8e:5c1e:7a3b::/64
+
 volumes:
   postgres-data:
   minio-data:

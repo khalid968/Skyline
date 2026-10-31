@@ -180,6 +180,9 @@ decrypts.
     the app opens. The background never refreshes the session and never opens the vault.
   - **Decline:** declining on the native screen stops the ringing only, and the caller hears it ring
     out. A real "declined" would need the vault.
+    - **Fixed in 1.0.6 (2026-10-31):** Decline opens Skyline briefly to send the encrypted decline, then
+      it goes back (decisions.md). If the phone is offline, or the offer has already expired, the caller
+      still hears it ring out.
   - **Stale ringing:** if the caller hangs up first, the native screen keeps ringing until its
     45-second timeout.
   - **iPhone:** needs PushKit/CallKit with the APNs key (Phase 14b/14c, iOS part).
@@ -253,3 +256,21 @@ decrypts.
   lose.
 - **Also:** group members who are not linked to someone see initials. The photo's key travels one to one;
   sending it through groups is a possible follow-up.
+
+## One person could fill the server's disk with uploads (audit lead 7) — MITIGATED 2026-10-31
+- **What:** uploads had no per-person limit. With 22 GB free, one member with a fast connection could fill
+  the disk in about an hour, and media (then the database) would fail for everyone.
+- **Now:** 5 GB per person per 24 hours, no upload start below 6 GB free disk, and idle uploads removed
+  after 24 hours (decisions.md 2026-10-31).
+- **Still possible:** steady use by several people over 30 days can reach the floor. Uploads then stop with
+  "couldn't send" until files expire. The nightly backup also archives all media, and 30 nights are kept, so
+  media takes up to about 30 times its size in backups. **Watch** disk use on the Overview page. If media
+  grows, keep fewer nights of media backups, or move backups off the server.
+
+## Every IPv6 visitor shared one rate limit (audit lead 8) — CLOSED 2026-10-31
+- **What:** without IPv6 in Docker, Docker's proxy forwarded every IPv6 visitor from one internal address,
+  so they shared one rate-limit bucket. One stranger could block activation or dashboard sign-in for
+  everyone on IPv6.
+- **Now:** IPv6 on the production Docker network, so real addresses arrive, and each IPv6 /64 counts as one
+  address (decisions.md 2026-10-31).
+

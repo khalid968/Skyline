@@ -9,6 +9,7 @@ import {
   Global,
   Module,
 } from '@nestjs/common';
+import { isIP } from 'net';
 import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../../redis/redis.module';
@@ -128,9 +129,38 @@ export async function enforceLimit(limiter, key, rule, res, logger) {
   }
 }
 
+// The counter an address belongs to: the address itself for IPv4, its /64
+// for IPv6. A home or mobile network is normally handed a whole /64, so
+// counting single IPv6 addresses would let one person rotate through
+// billions of them (security audit 2026-10-31). IPv4 is left exactly as it
+// was, mapped forms included.
+export function addressBucket(ip) {
+  if (typeof ip !== 'string' || isIP(ip.split('%')[0]) !== 6) return ip;
+  if (/^::ffff:\d+\.\d+\.\d+\.\d+$/i.test(ip)) return ip;
+  let s = ip.split('%')[0].toLowerCase();
+  const v4 = s.match(/(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (v4) {
+    const [a, b, c, d] = v4.slice(1).map(Number);
+    s = `${s.slice(0, -v4[0].length)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const [head, tail] = s.split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const groups =
+    tail === undefined
+      ? left
+      : [...left, ...Array(8 - left.length - right.length).fill('0'), ...right];
+  return `${groups
+    .slice(0, 4)
+    .map((g) => parseInt(g, 16).toString(16))
+    .join(':')}::/64`;
+}
+
 function subjectOf(req, by) {
   if (by === 'ip')
-    return req.ip || (req.socket && req.socket.remoteAddress) || 'unknown';
+    return addressBucket(
+      req.ip || (req.socket && req.socket.remoteAddress) || 'unknown',
+    );
   const field = by.slice('body.'.length);
   const v = req.body && req.body[field];
   if (typeof v !== 'string' || v.length === 0) return null;

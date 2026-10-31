@@ -1611,3 +1611,46 @@ The owner approved prototypes 41 and 42 and started the phase.
 - **Next:** release 1.0.6; per-user upload cap; IPv6 in Docker plus /64 grouping (or drop the AAAA record);
   a design board for a warning before opening program files; the earlier notes (decline from the
   notification, `backup.sh` pipefail, dev compose ports, iPhone build 8).
+
+## 2026-10-31 (later) — Upload limits, IPv6, Decline from the call screen, release 1.0.6 built
+
+- **Owner decisions:**
+  - 5 GB per person per day, plus a 6 GB free-disk floor;
+  - Decline opens the app briefly, so the server learns nothing new;
+  - one read-only look at the live rate limits, then IPv6 in Docker;
+  - push, deploy and release 1.0.6.
+
+  Details are in `decisions.md` (2026-10-31, later).
+- **Server:**
+  - Upload limits in `media.service.js`, with migration 017 adding indexes. The sweep also removes uploads
+    idle for 24 hours.
+  - IPv6 is counted per /64 (`addressBucket`) in the rate limiter, activation guessing and the sign-in pause.
+  - Production compose gives the default network IPv6 (ULA `fd8e:5c1e:7a3b::/64`).
+  - `backup.sh`: pipefail, explicit failures, and pruning before each run. Tested in `postgres:16-alpine`
+    with a failing `pg_dump`: reported, nothing left behind, the loop goes on.
+  - Development Postgres, Redis and MinIO listen on 127.0.0.1. This takes effect the next time the dev stack
+    is recreated; I didn't restart it, because the owner's server on :3000 uses it.
+- **IPv6 check (read-only):**
+  - The live limits held one IPv4 entry, which settles nothing on its own.
+  - Server configuration: `daemon.json` has no IPv6, `skyline_default` has `EnableIPv6=false`, and
+    `docker-proxy` owns `[::]:443`. So IPv6 visitors arrived as 172.18.0.1.
+  - The IPv6 default route is static (`accept_ra = 0`), so enabling forwarding is safe.
+- **App:**
+  - `flutter_callkit_incoming` 3.1.6 is vendored in `apps/mobile/third_party/` with one patch
+    (`SKYLINE-PATCH.md`): Decline goes through `TransparentActivity`.
+  - `MainActivity` adds the "skyline/launch" channel: `takeDeclined` and `declineHandled`, which goes back if
+    Skyline wasn't on screen.
+  - `CallService.declineWhenRinging(nativeId)` replaces the unbound `decline()` from the native screen.
+- **Tests:**
+  - backend unit 123 (3 new), db 105, app 292 (3 new storage-limit tests);
+  - Flutter unit 55, analyze clean;
+  - `calls_test` on the emulator passes with two new steps: declined before the offer arrives (never rings,
+    the caller is told), and another caller's offer still rings.
+  - **Not tested on a phone:** the native Decline tap itself, with Skyline closed. The patched plugin and
+    MainActivity compile into the app the emulator ran.
+- **Release 1.0.6 built here** (`--build-number=7`, `config/production.json`):
+  - APK signed with the permanent key (`01:35:14:FB…`), SHA-256 `682215e5…`;
+  - Windows installer, unsigned, `45143d27…`.
+
+  It wasn't built by tag: GitHub holds no signing secrets, so the release workflow would produce nothing.
+  Notes: `docs/releases/1.0.6.md`. iPhone 1.0.6: build on the Mac with `--build-number=8`.

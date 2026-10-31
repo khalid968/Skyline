@@ -145,5 +145,43 @@ void main() {
     expect(skewed.phase, CallPhase.incoming);
     await bCalls.decline();
     await idle(bCalls);
+
+    // 6. Declined on the phone's own ringing screen before the offer was
+    //    fetched (Skyline was closed; owner decision 2026-10-31): Bob's app
+    //    never rings it, and Alice is told.
+    final toAlice = <Map<String, Object?>>[];
+    final aliceSignals = alice.onCall!;
+    alice.onCall = (s, d, p, c) {
+      toAlice.add(c);
+      aliceSignals(s, d, p, c);
+    };
+    var handled = false;
+    bCalls.declineWhenRinging('closed-app-call', done: () => handled = true);
+    await alice.sendCallSignal(bobId, {
+      'callId': 'closed-app-call',
+      'action': 'offer',
+      'sdp': 'v=0',
+      'video': false,
+      'sentAt': DateTime.now().millisecondsSinceEpoch,
+    });
+    await eventually(() async => handled ? true : null);
+    await eventually(() async =>
+        toAlice.any((c) => c['callId'] == 'closed-app-call' && c['action'] == 'decline') ? true : null);
+    await idle(bCalls);
+    expect((await callLines(bob, aliceId)).last['outcome'], 'declined');
+
+    // Only the call that was declined: another caller's offer still rings.
+    bCalls.declineWhenRinging('some-other-call');
+    await alice.sendCallSignal(bobId, {
+      'callId': 'next-call',
+      'action': 'offer',
+      'sdp': 'v=0',
+      'video': false,
+      'sentAt': DateTime.now().millisecondsSinceEpoch,
+    });
+    final next = await eventually(() async => bCalls.current?.id == 'next-call' ? bCalls.current : null);
+    expect(next.phase, CallPhase.incoming);
+    await bCalls.decline();
+    await idle(bCalls);
   });
 }

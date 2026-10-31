@@ -9,7 +9,11 @@ import { createTestApp } from './app-harness';
 import configuration from '../../src/config/configuration';
 import { AuditService } from '../../src/modules/audit/audit.service';
 import { issueActivationCode } from '../../src/modules/auth/activation-codes';
-import { MediaService, PART_SIZE } from '../../src/modules/media/media.service';
+import {
+  MediaService,
+  PART_SIZE,
+  MIN_FREE_DISK_BYTES,
+} from '../../src/modules/media/media.service';
 import { newDeviceKey, activationFields } from './device-key';
 
 const b64 = (buf) => buf.toString('base64');
@@ -321,6 +325,99 @@ describe('media (real tokens, real object store)', () => {
           .send({ ciphertextBytes: 100, sha256: 'short' })
       ).status,
     ).toBe(400);
+  });
+
+  // Storage limits (owner decision 2026-10-31, security audit lead 7).
+  describe('storage limits', () => {
+    const GB = 1024 ** 3;
+    const start = (d, ciphertextBytes) =>
+      api()
+        .post('/attachments')
+        .set(d.h)
+        .send({ ciphertextBytes, sha256: b64(crypto.randomBytes(32)) });
+
+    it('one person may start 5 GB of uploads a day, on all their devices together', async () => {
+      const { from, to } = await people('q1');
+      expect((await start(from, 2 * GB)).status).toBe(201);
+      expect((await start(from, 2 * GB)).status).toBe(201);
+      const over = await start(from, 2 * GB);
+      expect(over.status).toBe(429);
+      const wait = Number(over.headers['retry-after']);
+      expect(wait).toBeGreaterThan(23 * 3600);
+      expect(wait).toBeLessThanOrEqual(24 * 3600);
+      // What still fits, fits; a second device of the same person shares it.
+      expect((await start(from, 900 * 1024 ** 2)).status).toBe(201);
+      const second = await device(from.userId);
+      expect((await start(second, 200 * 1024 ** 2)).status).toBe(429);
+      // Someone else is not affected.
+      expect((await start(to, 2 * GB)).status).toBe(201);
+      // A day later the allowance is back, and the idle uploads are swept.
+      await db.client.query(
+        `UPDATE attachments a SET created_at = now() - interval '25 hours'
+           FROM devices d WHERE d.id = a.uploaded_by_device_id AND d.user_id = ANY($1::uuid[])`,
+        [[from.userId, to.userId]],
+      );
+      expect((await start(from, 2 * GB)).status).toBe(201);
+      expect(await t.app.get(MediaService).sweep()).toBeGreaterThanOrEqual(4);
+    }, 60000);
+
+    it('no upload starts that would leave the disk below 6 GB free', async () => {
+      const { from } = await people('q2');
+      const media = t.app.get(MediaService);
+      const real = media.freeDiskBytes;
+      // Uploads still in progress count as if written: 1 GB to spare
+      // beyond them and the floor.
+      const pending = Number(
+        (
+          await db.client.query(
+            `SELECT coalesce(sum(a.ciphertext_bytes - coalesce((SELECT sum(bytes) FROM attachment_parts p
+                                                                 WHERE p.attachment_id = a.id), 0)), 0) AS n
+               FROM attachments a WHERE a.status = 'uploading'`,
+          )
+        ).rows[0].n,
+      );
+      media.freeDiskBytes = async () => MIN_FREE_DISK_BYTES + pending + GB;
+      try {
+        expect((await start(from, 2 * GB)).status).toBe(507);
+        expect((await start(from, 1024 ** 2)).status).toBe(201);
+        // That 1 MB now counts too: 1 GB no longer fits.
+        expect((await start(from, GB)).status).toBe(507);
+        // Unreadable free space: the daily allowance still applies.
+        media.freeDiskBytes = async () => null;
+        expect((await start(from, 2 * GB)).status).toBe(201);
+      } finally {
+        media.freeDiskBytes = real;
+      }
+    }, 60000);
+
+    it('an upload idle for 24 hours is removed; one still moving is kept', async () => {
+      const { from } = await people('q3');
+      const idle = await upload(from, crypto.randomBytes(PART_SIZE + 10), {
+        finish: false,
+        skip: [2],
+      });
+      const moving = await upload(from, crypto.randomBytes(PART_SIZE + 10), {
+        finish: false,
+        skip: [2],
+      });
+      const ids = [idle.attachmentId, moving.attachmentId];
+      await db.client.query(
+        `UPDATE attachments SET created_at = now() - interval '25 hours' WHERE id = ANY($1::uuid[])`,
+        [ids],
+      );
+      await db.client.query(
+        `UPDATE attachment_parts SET uploaded_at = now() - interval '25 hours' WHERE attachment_id = $1`,
+        [idle.attachmentId],
+      );
+      await t.app.get(MediaService).sweep();
+      const { rows } = await db.client.query(
+        'SELECT id, status FROM attachments WHERE id = ANY($1::uuid[])',
+        [ids],
+      );
+      const status = Object.fromEntries(rows.map((r) => [r.id, r.status]));
+      expect(status[idle.attachmentId]).toBe('deleted');
+      expect(status[moving.attachmentId]).toBe('uploading');
+    }, 60000);
   });
 
   // Phase 14d (board 46): profile photos.

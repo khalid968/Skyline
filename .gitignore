@@ -14,6 +14,8 @@ apps/mobile/web/
 apps/mobile/*.iml
 apps/mobile/.metadata
 **/*.g.dart
+# The vendored call plugin ships its generated files (SKYLINE-PATCH.md).
+!apps/mobile/third_party/**/*.g.dart
 **/*.freezed.dart
 
 # --- Node / NestJS ---

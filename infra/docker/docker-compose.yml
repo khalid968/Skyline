@@ -8,8 +8,10 @@ services:
       POSTGRES_USER: skyline
       POSTGRES_PASSWORD: skyline
       POSTGRES_DB: skyline
+    # Only this PC: the development passwords are in this file (security
+    # audit 2026-10-30). coturn below stays reachable, for phones on the LAN.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +24,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -44,8 +46,8 @@ services:
       MINIO_ROOT_USER: skyline
       MINIO_ROOT_PASSWORD: skyline-secret
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio-data:/data
     healthcheck:

@@ -11,6 +11,7 @@ import { RedisService } from '../../redis/redis.module';
 import {
   RateLimitService,
   enforceLimit,
+  addressBucket,
 } from '../../common/rate-limit/rate-limit';
 import { AuditService } from '../audit/audit.service';
 
@@ -115,18 +116,21 @@ export class AbuseService {
 
   // Activation, before anything else: a blocked address is refused with 429.
   // That says nothing about any code, only that this address must wait.
+  // An IPv6 address counts as its /64, like the rate limiter's.
   async assertMayActivate(ip, res) {
-    if (ip && (await this.isLimited('code_guessing', ip))) {
-      this.tooMany(res, await this.ttl('code_guessing', ip));
+    const subject = addressBucket(ip);
+    if (subject && (await this.isLimited('code_guessing', subject))) {
+      this.tooMany(res, await this.ttl('code_guessing', subject));
     }
   }
 
   async noteActivationFailure(ip) {
     if (!ip) return;
-    const n = await this.count(`activate:${ip}`, RULES.code_guessing.windowSec);
+    const subject = addressBucket(ip);
+    const n = await this.count(`activate:${subject}`, RULES.code_guessing.windowSec);
     if (n === this.threshold('code_guessing')) {
       await this.raise('code_guessing', {
-        subjectKey: ip, ip,
+        subjectKey: subject, ip,
         evidence: { wrongAttempts: n, minutes: RULES.code_guessing.windowSec / 60, address: ip },
       });
     }
@@ -272,7 +276,8 @@ export class AbuseService {
   }
 }
 
-// The sign-in pause key: one account, one address.
+// The sign-in pause key: one account, one address (an IPv6 address counts as
+// its /64).
 export function adminLoginSubject(userId, ip) {
-  return `${userId}|${ip || 'unknown'}`;
+  return `${userId}|${addressBucket(ip) || 'unknown'}`;
 }

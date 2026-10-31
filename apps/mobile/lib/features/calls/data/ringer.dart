@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -169,16 +170,28 @@ class NativeRinging {
   /// with that screen's id for the call.
   final void Function(String nativeId) onAccepted;
 
-  /// Called when they tapped Decline there while Skyline was running.
-  final void Function()? onDeclined;
+  /// Called when they tapped Decline there, with that screen's id for the
+  /// call. Skyline may have been opened just for this (see [declineHandled]).
+  final void Function(String nativeId)? onDeclined;
   StreamSubscription<CallEvent?>? _sub;
+
+  /// MainActivity: Decline opens the app (the patched plugin,
+  /// third_party/flutter_callkit_incoming/SKYLINE-PATCH.md), which keeps the
+  /// declined call's id until we take it.
+  static const _launch = MethodChannel('skyline/launch');
 
   Future<void> start() async {
     if (!nativeRingingSupported) return;
     _sub = FlutterCallkitIncoming.onEvent.listen((e) {
       if (e is CallEventActionCallAccept) onAccepted(e.callKitParams.id);
-      if (e is CallEventActionCallDecline) onDeclined?.call();
+      if (e is CallEventActionCallDecline) onDeclined?.call(e.callKitParams.id);
     });
+    _launch.setMethodCallHandler((call) async {
+      if (call.method == 'declined') await _takeDeclined();
+    });
+    // Opened by Decline while Skyline was closed: the plugin's event came
+    // before anyone listened.
+    await _takeDeclined();
     // Opened by Accept while Skyline was closed: the event came before we
     // listened, but the call is still listed as accepted.
     try {
@@ -188,6 +201,26 @@ class NativeRinging {
       }
     } on Object {
       // no native calls
+    }
+  }
+
+  Future<void> _takeDeclined() async {
+    try {
+      final id = await _launch.invokeMethod<String>('takeDeclined');
+      if (id != null && id.isNotEmpty) onDeclined?.call(id);
+    } on Object {
+      // not opened by Decline
+    }
+  }
+
+  /// The decline has been sent (or its offer never came): if Skyline was
+  /// opened only for it, it goes back to the background.
+  static Future<void> declineHandled() async {
+    if (!nativeRingingSupported) return;
+    try {
+      await _launch.invokeMethod<bool>('declineHandled');
+    } on Object {
+      // nothing to do
     }
   }
 
