@@ -1677,3 +1677,9 @@ The owner approved prototypes 41 and 42 and started the phase.
     same aliases afterwards.
 - **Release 1.0.6 staged, not published:** `/root/release-1.0.6` on the server, checksums verified. It
   waits for the owner's go-ahead: `./publish-release.sh /root/release-1.0.6`.
+- **Released 1.0.6 (2026-10-31)** at the owner's go-ahead: Android versionCode 7 and Windows (unsigned).
+  - `GET /app/releases` reports 1.0.6, and both downloads match their hashes from outside.
+  - The minimum stays 1.0.0.
+  - iPhone 1.0.6: build on the Mac with `--build-number=8`.
+  - **Owner to test on a phone:** with Skyline closed, decline a call on the call screen. The caller
+    should see "Declined" within a few seconds, and Skyline should flash up and go back.
