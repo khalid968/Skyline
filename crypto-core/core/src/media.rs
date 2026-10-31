@@ -147,6 +147,9 @@ pub fn decrypt_file(
     }
 }
 
+/// The most [decrypt_to_memory] will open: 64 MB of ciphertext.
+pub const MAX_IN_MEMORY: u64 = 64 * 1024 * 1024;
+
 /// Decrypts a small file (a photo, a voice message) straight into memory for
 /// display; nothing touches the disk. Refuses anything over 64 MB.
 pub fn decrypt_to_memory(
@@ -155,8 +158,13 @@ pub fn decrypt_to_memory(
     nonce: &[u8],
     expected_sha256: Option<&[u8]>,
 ) -> Result<Vec<u8>, CryptoError> {
+    // Size first, from the file system: a huge file is refused before any of
+    // it is read into memory (security audit 2026-10-31).
+    if fs::metadata(input).map_err(io)?.len() > MAX_IN_MEMORY {
+        return Err(CryptoError::invalid("too large to open in memory"));
+    }
     let mut data = fs::read(input).map_err(io)?;
-    if data.len() > 64 * 1024 * 1024 {
+    if data.len() as u64 > MAX_IN_MEMORY {
         return Err(CryptoError::invalid("too large to open in memory"));
     }
     if data.len() < TAG + 1 {

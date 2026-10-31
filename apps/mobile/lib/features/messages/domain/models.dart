@@ -32,6 +32,7 @@ class LocalMessage {
     this.senderName,
     this.replyTo,
     this.editedAt,
+    this.serverAt,
     this.deleted = false,
     Map<String, String>? reactions,
     this.mentions = const [],
@@ -60,6 +61,12 @@ class LocalMessage {
 
   /// When a view-once message was opened (by them, if we sent it).
   DateTime? openedAt;
+
+  /// When the server accepted it, by the server's clock (null for what this
+  /// device sent itself). The edit and delete windows are judged by this, so
+  /// a sender cannot stretch them by claiming an earlier time (security
+  /// audit 2026-10-31).
+  DateTime? serverAt;
 
   /// Who sent it, in a group (null in a one-to-one chat, where it is the
   /// peer or us). The name is kept as it was, so it survives the sender
@@ -123,6 +130,7 @@ class LocalMessage {
         if (senderName != null) 'senderName': senderName,
         if (replyTo != null) 'replyTo': replyTo,
         'editedAt': editedAt?.millisecondsSinceEpoch,
+        'serverAt': serverAt?.millisecondsSinceEpoch,
         if (deleted) 'deleted': true,
         if (reactions.isNotEmpty) 'reactions': reactions,
         if (mentions.isNotEmpty) 'mentions': mentions,
@@ -152,6 +160,7 @@ class LocalMessage {
         senderName: j['senderName'] as String?,
         replyTo: j['replyTo'] as Map<String, Object?>?,
         editedAt: _time(j['editedAt']),
+        serverAt: _time(j['serverAt']),
         deleted: j['deleted'] == true,
         reactions: {
           for (final e in ((j['reactions'] as Map<String, Object?>?) ?? const {}).entries)
@@ -200,6 +209,17 @@ class MediaInfo {
   int size; // plaintext bytes
   String? attachmentId;
   int cipherSize;
+
+  /// The most a photo or voice message may be to be fetched and opened in
+  /// memory without asking (crypto-core media::MAX_IN_MEMORY).
+  static const maxInMemoryCipher = 64 * 1024 * 1024;
+
+  /// Fetched as soon as it is seen: a photo or voice message of a known size
+  /// that can be opened in memory. Anything else waits for a tap, so a
+  /// contact cannot make this device pull gigabytes (security audit
+  /// 2026-10-31).
+  bool get fetchesItself =>
+      (kind == MediaKind.photo || kind == MediaKind.voice) && cipherSize > 0 && cipherSize <= maxInMemoryCipher;
   String key; // base64
   String nonce; // base64
   String sha256; // base64, of the ciphertext

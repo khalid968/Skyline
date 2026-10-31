@@ -137,7 +137,10 @@ extension MessageActions on Messenger {
     if (target is! String) return;
     final m = await store.message(target);
     if (m == null || m.peerUserId != peer) return; // only this chat's messages
-    final sentAt = DateTime.fromMillisecondsSinceEpoch((content['sentAt'] as int?) ?? DateTime.now().millisecondsSinceEpoch);
+    // The server's time for this action when it came through the server;
+    // the sender's own claim only for what never did.
+    final sentAt = Messenger._serverAt(content) ??
+        DateTime.fromMillisecondsSinceEpoch((content['sentAt'] as int?) ?? DateTime.now().millisecondsSinceEpoch);
     final byAuthor = (m.fromMe ? me : m.author) == sender;
     switch (content['type']) {
       case 'edit':

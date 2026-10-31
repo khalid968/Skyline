@@ -136,6 +136,25 @@ void main() {
     expect(long.endsWith('.pdf'), isTrue);
   });
 
+  test('a file name is never read as commands (audit 2026-10-31)', () {
+    final n = MediaService.safeName('Report & notes ^ 100% (final)!;`.pdf');
+    expect(n, isNot(matches(RegExp(r'[&^%!;()`]'))));
+    expect(n, endsWith('.pdf'));
+  });
+
+  test('only small photos and voice messages fetch themselves (audit 2026-10-31)', () {
+    MediaInfo item(MediaKind kind, int cipherSize) =>
+        MediaInfo(kind: kind, name: 'x', mime: 'application/octet-stream', size: 1, cipherSize: cipherSize);
+    expect(item(MediaKind.photo, 300 * 1024).fetchesItself, isTrue);
+    expect(item(MediaKind.voice, 40 * 1024).fetchesItself, isTrue);
+    expect(item(MediaKind.photo, MediaInfo.maxInMemoryCipher).fetchesItself, isTrue);
+    expect(item(MediaKind.photo, MediaInfo.maxInMemoryCipher + 1).fetchesItself, isFalse, reason: 'too big for memory');
+    expect(item(MediaKind.photo, 2 * 1024 * 1024 * 1024).fetchesItself, isFalse);
+    expect(item(MediaKind.photo, 0).fetchesItself, isFalse, reason: 'no declared size');
+    expect(item(MediaKind.video, 1024).fetchesItself, isFalse);
+    expect(item(MediaKind.file, 1024).fetchesItself, isFalse);
+  });
+
   test('sizes, progress and durations read as on the boards', () {
     expect(formatBytes(5 * 1024 * 1024), '5.0 MB');
     expect(formatBytes(184 * 1024 * 1024), '184 MB');

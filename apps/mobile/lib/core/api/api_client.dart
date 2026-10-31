@@ -73,7 +73,10 @@ class ApiClient {
 
   /// Streams a download into [out], resuming from however much of it is
   /// already there (HTTP Range). [onProgress] gets (bytes so far, total).
-  Future<void> download(String path, File out, {void Function(int got, int total)? onProgress}) async {
+  /// [maxBytes]: the most the file may hold; past it the download stops with
+  /// [DownloadTooLargeException] (a sender's declared size is a limit, not
+  /// only a progress hint; security audit 2026-10-31).
+  Future<void> download(String path, File out, {void Function(int got, int total)? onProgress, int? maxBytes}) async {
     Future<http.StreamedResponse> open(String token, int from) async {
       final req = http.Request('GET', url(path))
         ..headers['authorization'] = 'Bearer $token'
@@ -108,14 +111,21 @@ class ApiClient {
     }
     if (res.statusCode == 200) from = 0; // the server sent it all
     final total = from + (res.contentLength ?? 0);
+    if (maxBytes != null && total > maxBytes) {
+      await res.stream.listen(null).cancel(); // not drained: that would fetch it all
+      throw DownloadTooLargeException();
+    }
     final sink = out.openWrite(mode: from == 0 ? FileMode.write : FileMode.append);
     var got = from;
     try {
       await for (final chunk in res.stream.timeout(_timeout)) {
         sink.add(chunk);
         got += chunk.length;
+        if (maxBytes != null && got > maxBytes) throw DownloadTooLargeException();
         onProgress?.call(got, total);
       }
+    } on DownloadTooLargeException {
+      rethrow;
     } on Exception {
       throw ApiException(0); // resumable: the bytes so far are kept
     } finally {
@@ -240,3 +250,6 @@ class ApiClient {
     }();
   }
 }
+
+/// A download ran past the size it was declared to have.
+class DownloadTooLargeException implements Exception {}

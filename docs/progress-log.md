@@ -1582,3 +1582,32 @@ The owner approved prototypes 41 and 42 and started the phase.
 - **Pushed and deployed** f1f5587 (2026-10-31). The live backend contains all five fixes, all services are
   healthy, there are no errors since the restart, and the site, API, releases and dashboard all answer.
   No app release is needed: every fix is server-side.
+
+## 2026-10-31 — Audit leads validated; seven fixed in the app and crypto core
+
+- **Emulator run** (Android emulator, Medium Phone API 36.1): every integration suite passes against a
+  throwaway server, one fixture per suite: crypto, messaging, groups, message tools, profile photos, calls
+  (relayed), plus the new `audit_regressions_test`. The runner waits out the activation limit (10 per address
+  per 15 minutes, shared dev Redis) and never clears it.
+- **Lead validation** (results outside the repo:
+  `C:\Users\kkhal\security-audit-skill\Skyline\run-1\validation\2026-10-31-results.md`):
+  - Confirmed by running: safety number vs pinned key (Rust), key-share envelopes from non-contacts and the
+    timer overwrite (emulator), edit/delete window (Dart).
+  - Confirmed in source: large media read whole into memory, unbound native Accept, documents opened with
+    the sender's name and type (deliberately not exercised with a runnable file).
+  - Deployment: upload storage has no per-user cap and the disk has 22 GB free (confirmed). IPv6 rotation
+    does not work as described, because Docker forwards all IPv6 clients as one address, so all IPv6 users
+    likely share one rate-limit bucket (inferred from config; confirming needs a production read).
+- **Fixes** (decisions.md 2026-10-31): bundle identity must match the directory, safety number from the
+  pinned key (`known_identity`, FFI regenerated); key shares carry only `skey`; direct content only from
+  contacts; timer notices cannot reuse ids; edit/delete windows on the server clock (`serverAt`); size check
+  before reading media, self-fetch only for declared sizes up to 64 MB, downloads capped at the declared size;
+  native Accept bound to the ringing call's id; safe file names, Windows opens through ShellExecute, decrypted
+  copies get the Mark of the Web.
+- **Tests:** Rust 43 (2 new + an oversized-media test), Flutter unit 55 (3 new), dashboard 31, backend unit 120,
+  backend crypto-e2e 2, emulator integration 7 suites. The regression test reproduces exactly what the
+  validation run did; on the old code those two attacks succeeded.
+- **Needs a release:** all fixes are in the app, so people get them with the next app version (1.0.6).
+- **Next:** release 1.0.6; per-user upload cap; IPv6 in Docker plus /64 grouping (or drop the AAAA record);
+  a design board for a warning before opening program files; the earlier notes (decline from the
+  notification, `backup.sh` pipefail, dev compose ports, iPhone build 8).

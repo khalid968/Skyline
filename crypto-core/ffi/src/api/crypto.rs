@@ -154,7 +154,15 @@ impl CryptoDevice {
             .collect())
     }
 
-    pub fn start_session(&self, user_id: String, bundle: PreKeyBundle) -> Result<()> {
+    /// `directory_identity_key`: the key directory's identity key for that
+    /// device. A device never seen before is refused unless the bundle
+    /// carries exactly that key.
+    pub fn start_session(
+        &self,
+        user_id: String,
+        bundle: PreKeyBundle,
+        directory_identity_key: Option<Vec<u8>>,
+    ) -> Result<()> {
         let unsigned = |k: SignedPreKey| core::SignedPreKeyPublic {
             key_id: k.key_id,
             public_key: k.public_key,
@@ -173,7 +181,13 @@ impl CryptoDevice {
                     public_key: k.public_key,
                 }),
             },
+            directory_identity_key,
         )?)
+    }
+
+    /// The identity key pinned for that device, or None before any session.
+    pub fn known_identity(&self, user_id: String, device_number: u32) -> Result<Option<Vec<u8>>> {
+        Ok(self.0.known_identity(user_id, device_number)?)
     }
 
     pub fn has_session(&self, user_id: String, device_number: u32) -> Result<bool> {

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gal/gal.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../core/platform/screen_protection.dart';
@@ -114,7 +115,7 @@ class MediaBubble extends StatelessWidget {
   void _autoFetch(int i) {
     final info = m.items[i];
     if (info.state != MediaState.remote || info.burned) return;
-    if (info.kind != MediaKind.photo && info.kind != MediaKind.voice) return;
+    if (!info.fetchesItself) return;
     final k = _key(m, i);
     if (messenger.media.downloading(k)) return;
     final last = _tried[k];
@@ -165,8 +166,13 @@ Future<void> _openFile(BuildContext context, MediaService media, MediaInfo info)
   final snack = ScaffoldMessenger.of(context);
   try {
     final plain = await media.plainCopy(info);
-    final r = await OpenFilex.open(plain.path, type: info.mime);
-    if (r.type != ResultType.done) {
+    // Windows: through the shell's own "open" (ShellExecute), which honours
+    // the copy's internet mark; open_filex goes through cmd, which reads the
+    // file name as commands (security audit 2026-10-31).
+    final opened = Platform.isWindows
+        ? await launchUrl(Uri.file(plain.path))
+        : (await OpenFilex.open(plain.path, type: info.mime)).type == ResultType.done;
+    if (!opened) {
       snack.showSnackBar(const SnackBar(content: Text('No app on this device can open this file.')));
       await media.discard(plain);
     }

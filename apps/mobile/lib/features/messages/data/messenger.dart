@@ -766,7 +766,13 @@ class Messenger extends ChangeNotifier {
         final d = raw! as Map<String, Object?>;
         final n = d['deviceNumber']! as int;
         if (!entry.value.contains(n)) continue;
-        await crypto.startSession(userId: entry.key, bundle: _bundle(d));
+        // The bundle must carry the key the directory lists (what the safety
+        // number shows); the core refuses a new device otherwise.
+        await crypto.startSession(
+          userId: entry.key,
+          bundle: _bundle(d),
+          directoryIdentityKey: await _directoryIdentity(entry.key, n),
+        );
       }
     }
   }
@@ -890,15 +896,50 @@ class Messenger extends ChangeNotifier {
     } on Object {
       return;
     }
+    // A pairwise envelope that came through a group (POST /groups/:id/key-shares)
+    // carries that group's sender key and nothing else: any group-mate can send
+    // one, linked or not, so other content there would let a non-contact write
+    // to us directly (security audit 2026-10-31).
+    final viaGroup = e['groupId'] as String?;
+    if (viaGroup != null) {
+      if (content['type'] == 'skey' && content['group'] == viaGroup) {
+        await _acceptSenderKey(sender, device, content);
+      }
+      return;
+    }
     if (content['type'] == 'skey') return _acceptSenderKey(sender, device, content);
+    // Direct content only from a contact or our own devices. The server
+    // already checks the link; this holds even if it did not.
+    if (!fromMe && !_contacts.containsKey(sender)) {
+      await refreshContacts().catchError((Object _) {});
+      if (!_contacts.containsKey(sender)) return;
+    }
     // A call offer rings only while it is fresh; the server says how long it
     // held it (phone clocks can be minutes apart, an emulator's especially).
-    if (content['type'] == 'call' && e['ageMs'] is int) content = {...content, 'ageMs': e['ageMs']};
+    // The server's message id too: it names the call on the phone's ringing
+    // screen when a push rang it. Both always come from the envelope, never
+    // from what the caller wrote.
+    if (content['type'] == 'call') content = {...content, 'ageMs': e['ageMs'], '_messageId': e['messageId']};
+    content = _stampServerTime(content, e);
     // The chat: from a contact it is the sender; from our own other device it
     // is whoever that device addressed.
     final peer = fromMe ? content['peer'] as String? : sender;
     if (peer == null) return;
     await _handleContent(peer, sender, device, content);
+  }
+
+  /// Puts the server's time for envelope [e] into [content], replacing any
+  /// value the sender wrote under that key.
+  static Map<String, Object?> _stampServerTime(Map<String, Object?> content, Map<String, Object?> e) {
+    final at = e['sentAt'] is String ? DateTime.tryParse(e['sentAt']! as String) : null;
+    return {...content, _serverAtKey: at?.millisecondsSinceEpoch};
+  }
+
+  static const _serverAtKey = '_serverAt';
+
+  static DateTime? _serverAt(Map<String, Object?> content) {
+    final ms = content[_serverAtKey];
+    return ms is int ? DateTime.fromMillisecondsSinceEpoch(ms) : null;
   }
 
   /// One decrypted message, one-to-one ([group] false: [peer] is the other
@@ -940,6 +981,7 @@ class Messenger extends ChangeNotifier {
           senderUserId: group ? sender : null,
           senderName: senderName,
           replyTo: _quoteFrom(content['reply']),
+          serverAt: _serverAt(content),
           mentions: group ? [for (final x in (content['mentions'] as List<Object?>? ?? const [])) if (x is String) x] : const [],
         );
         // Our own view-once, sent from another of our devices: we cannot
@@ -961,17 +1003,22 @@ class Messenger extends ChangeNotifier {
         }
         for (var i = 0; i < m.items.length; i++) {
           final item = m.items[i];
-          if (!item.burned && (item.kind == MediaKind.photo || item.kind == MediaKind.voice)) {
+          if (!item.burned && item.fetchesItself) {
             unawaited(fetchMedia(m.id, i));
           }
         }
       case 'timer':
+        // The id is the sender's choice: never let it land on a message we
+        // already hold (it would replace it, ours included; security audit
+        // 2026-10-31). A repeat of the same notice is simply already here.
+        final noticeId = content['id'] as String?;
+        if (noticeId != null && await store.message(noticeId) != null) return;
         final seconds = content['seconds'] as int?;
         final chat = await _ensureChat(peer);
         chat.timerSeconds = seconds;
         await store.putChat(chat);
         await store.putMessage(LocalMessage(
-          id: (content['id'] as String?) ?? _uuid.v4(),
+          id: noticeId ?? _uuid.v4(),
           peerUserId: peer,
           fromMe: fromMe,
           sentAt: sentAt,

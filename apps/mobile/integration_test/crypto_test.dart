@@ -46,7 +46,8 @@ void main() {
     await a.setLocalAddress(userId: alice, deviceNumber: 1);
     await b.setLocalAddress(userId: bob, deviceNumber: 1);
 
-    await a.startSession(userId: bob, bundle: await publish(b, 1));
+    final bobsBundle = await publish(b, 1);
+    await a.startSession(userId: bob, bundle: bobsBundle, directoryIdentityKey: bobsBundle.identityKey);
     final first = await a.encrypt(
       userId: bob,
       deviceNumber: 1,

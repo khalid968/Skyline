@@ -6,6 +6,40 @@ working around it.
 
 ---
 
+## 2026-10-31 — App-side fixes for the audit's validated leads
+
+The owner had the 9 needs-validation leads tested (results in
+`C:\Users\kkhal\security-audit-skill\Skyline\run-1\validation\2026-10-31-results.md`) and asked for the 7 real
+ones to be fixed. All seven are in the app or the crypto core, so they reach people with the next app release.
+None changes what anyone sees.
+
+- **Safety number (high).** `start_session` now takes the directory's identity key and refuses a device it
+  has never seen unless the bundle carries exactly that key (the same rule `decrypt` already had for a first
+  incoming message). The safety-number screen computes from the key pinned in the vault (`known_identity`),
+  falling back to the directory key before any session.
+  - **Why both:** the safety number is only meaningful if it describes the key messages are encrypted to.
+    A server that lists one key and hands out another can no longer get a session at all.
+- **Key shares carry sender keys only (medium).** A pairwise envelope that arrives through a group
+  (`/groups/:id/key-shares`, labelled with `groupId`) is accepted only as `skey` for that same group; anything
+  else is dropped. Direct content is accepted only from a contact or our own devices, even though the server
+  already checks links.
+- **Timer notices cannot replace messages (medium).** A timer message whose id is already stored is ignored.
+- **Edit/delete windows use the server's clock (low).** Each received message stores `serverAt` (the server's
+  `created_at` for its envelope); the 15-minute and 24-hour windows compare server times. Messages from before
+  this change, and our own sends, fall back to `sentAt`.
+- **Large media (medium).** `decrypt_to_memory` checks the file size before reading. Photos and voice
+  messages fetch themselves only with a declared size up to 64 MB (`MediaInfo.fetchesItself`); downloads stop
+  past the declared size.
+- **Accept on the ringing screen (low).** `acceptWhenRinging` takes the CallKit call id (the offer's server
+  message id from a push, or the call id from the app) and answers only that call's offer.
+- **Opening received documents (medium).** No visible change yet:
+  - file names lose `& ^ % ! ; ( )` and backticks;
+  - on Windows files open through ShellExecute (`url_launcher`), not `cmd /c start`;
+  - the decrypted copy gets the Mark of the Web (`Zone.Identifier`, zone 3), so Windows warns before running
+    a program from it and Office uses Protected View.
+  - **Still open:** an in-app warning before opening a file type that can run programs is a new surface and
+    needs a design board first.
+
 ## 2026-10-30 — Security audit fixes (run 1, five confirmed findings)
 
 The owner ran a full security audit (security-audit skill, standard profile; report in

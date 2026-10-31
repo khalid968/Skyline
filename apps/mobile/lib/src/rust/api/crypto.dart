@@ -96,6 +96,10 @@ abstract class CryptoDevice implements RustOpaqueInterface {
 
   Future<DeviceIdentity> identity();
 
+  /// The identity key pinned for that device, or None before any session.
+  Future<Uint8List?> knownIdentity(
+      {required String userId, required int deviceNumber});
+
   Future<List<StoredRecord>> listRecords(
       {required String kind,
       required String group,
@@ -140,8 +144,13 @@ abstract class CryptoDevice implements RustOpaqueInterface {
 
   Future<Uint8List> sign({required List<int> message});
 
+  /// `directory_identity_key`: the key directory's identity key for that
+  /// device. A device never seen before is refused unless the bundle
+  /// carries exactly that key.
   Future<void> startSession(
-      {required String userId, required PreKeyBundle bundle});
+      {required String userId,
+      required PreKeyBundle bundle,
+      Uint8List? directoryIdentityKey});
 
   Future<bool> verifyScannedSafetyNumber(
       {required String theirUserId,

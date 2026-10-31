@@ -168,10 +168,19 @@ class MediaService extends ChangeNotifier {
         transfers[messageId] = Transfer(0, m.cipherSize);
         notifyListeners();
         try {
-          await api.download('/attachments/${m.attachmentId}', part, onProgress: (got, total) {
-            transfers[messageId] = Transfer(got, m.cipherSize > 0 ? m.cipherSize : total);
-            _notifySoon();
-          });
+          await api.download(
+            '/attachments/${m.attachmentId}',
+            part,
+            maxBytes: m.cipherSize > 0 ? m.cipherSize : null,
+            onProgress: (got, total) {
+              transfers[messageId] = Transfer(got, m.cipherSize > 0 ? m.cipherSize : total);
+              _notifySoon();
+            },
+          );
+        } on DownloadTooLargeException {
+          // Bigger than the sender said: not the file that was sent.
+          if (await part.exists()) await part.delete();
+          rethrow;
         } on ApiException catch (e) {
           if (e.status == 404) {
             if (await part.exists()) await part.delete();
@@ -231,7 +240,20 @@ class MediaService extends ChangeNotifier {
       nonce: base64.decode(m.nonce),
       expectedSha256: m.sha256.isEmpty ? null : base64.decode(m.sha256),
     );
+    await _markAsDownloaded(out);
     return out;
+  }
+
+  /// Windows: tags the copy as coming from the internet (the Mark of the Web
+  /// browsers add), so Windows warns before running a program from it and
+  /// Office opens documents in Protected View (security audit 2026-10-31).
+  static Future<void> _markAsDownloaded(File f) async {
+    if (!Platform.isWindows) return;
+    try {
+      await File('${f.path}:Zone.Identifier').writeAsString('[ZoneTransfer]\r\nZoneId=3\r\n');
+    } on FileSystemException {
+      // Not NTFS (a FAT drive): nothing to attach it to.
+    }
   }
 
   Future<void> discard(File plain) async {
@@ -290,7 +312,10 @@ class MediaService extends ChangeNotifier {
 
   /// A file name that is safe to create: no folders, no control characters.
   static String safeName(String name) {
-    var n = name.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_').trim();
+    // Also the characters a command shell reads as instructions (& ^ % ! ;
+    // ( ) and the backtick): a sender's file name is only ever a name
+    // (security audit 2026-10-31).
+    var n = name.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F&^%!;()`]'), '_').trim();
     if (n.isEmpty || n == '.' || n == '..') n = 'file';
     if (n.length > 120) {
       final dot = n.lastIndexOf('.');

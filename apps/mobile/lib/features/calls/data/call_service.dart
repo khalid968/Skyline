@@ -117,19 +117,36 @@ class CallService extends ChangeNotifier {
   Future<Object?>? _turnSoon;
 
   /// Set when the person tapped Accept on the phone's own ringing screen
-  /// (Phase 14c): the offer, once fetched and decrypted, is answered at once.
+  /// (Phase 14c): that call's offer, once fetched and decrypted, is answered
+  /// at once.
   DateTime? _acceptUntil;
 
-  /// Accept the next incoming call if it arrives soon. The offer is normally
-  /// fetched within a second or two of the app opening; a short window means
-  /// a different, later call is never answered by mistake.
-  void acceptWhenRinging() {
+  /// The ringing screen's id for the call that was accepted: the offer's
+  /// server message id (rung by a push) or the call id (rung by the app).
+  String? _acceptId;
+
+  /// The offer's server message id, while it rings.
+  String? _offerMessageId;
+
+  /// Accept the call the phone's ringing screen showed as [nativeId], if its
+  /// offer arrives soon. Only that call: another caller's offer is never
+  /// answered by this (security audit 2026-10-31), and the short window
+  /// covers the second or two the offer takes to be fetched.
+  void acceptWhenRinging(String nativeId) {
     _acceptUntil = DateTime.now().add(const Duration(seconds: 20));
+    _acceptId = nativeId;
     final call = current;
-    if (call != null && !call.outgoing && call.phase == CallPhase.incoming) {
-      _acceptUntil = null;
+    if (call != null && !call.outgoing && call.phase == CallPhase.incoming && _isAccepted(call.id, _offerMessageId)) {
+      _acceptUntil = _acceptId = null;
       unawaited(accept());
     }
+  }
+
+  bool _isAccepted(String callId, String? messageId) {
+    final until = _acceptUntil;
+    final id = _acceptId;
+    if (until == null || id == null || DateTime.now().isAfter(until)) return false;
+    return id == callId || (messageId != null && id == messageId);
   }
 
   RTCPeerConnection? _pc;
@@ -616,6 +633,7 @@ class CallService extends ChangeNotifier {
       _screen = null;
       _hasVideo = false;
       _pendingOffer = null;
+      _offerMessageId = null;
       _turnSoon = null;
       unawaited(NativeRinging.stopAll());
       _offerDevice = null;
@@ -670,15 +688,15 @@ class CallService extends ChangeNotifier {
         final incoming = Call(id: callId, peer: peer, video: video, outgoing: false, phase: CallPhase.incoming);
         current = incoming;
         _pendingOffer = sdp;
+        _offerMessageId = content['_messageId'] as String?;
         _offerDevice = device;
         _ringTimer = Timer(ringFor, () => _finish(incoming, 'missed'));
         // While it rings: what Accept would otherwise wait for.
         _turnSoon = api.get('/calls/turn').then<Object?>((v) => v, onError: (Object _) => null);
         unawaited(_initRenderers());
         notifyListeners();
-        final until = _acceptUntil;
-        _acceptUntil = null;
-        if (until != null && DateTime.now().isBefore(until)) {
+        if (_isAccepted(callId, _offerMessageId)) {
+          _acceptUntil = _acceptId = null;
           // Already answered on the phone's ringing screen.
           unawaited(accept());
           unawaited(NativeRinging.stopAll());

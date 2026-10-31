@@ -196,8 +196,13 @@ extension GroupEngine on Messenger {
       final j = await api.get(path) as Map<String, Object?>;
       for (final raw in j['devices']! as List<Object?>) {
         final d = raw! as Map<String, Object?>;
-        if (!entry.value.contains(d['deviceNumber']! as int)) continue;
-        await crypto.startSession(userId: entry.key, bundle: _bundle(d));
+        final n = d['deviceNumber']! as int;
+        if (!entry.value.contains(n)) continue;
+        await crypto.startSession(
+          userId: entry.key,
+          bundle: _bundle(d),
+          directoryIdentityKey: await _directoryIdentity(entry.key, n),
+        );
       }
     }
   }
@@ -273,7 +278,7 @@ extension GroupEngine on Messenger {
       return;
     }
     if (content['group'] != groupId) return; // meant for another group: drop it
-    await _handleContent(groupId, sender, device, content, group: true);
+    await _handleContent(groupId, sender, device, Messenger._stampServerTime(content, e), group: true);
   }
 
   static const _maxPending = 300;

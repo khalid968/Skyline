@@ -58,7 +58,11 @@ fn run(base: &str, alice_id: &str, alice_code: &str, bob_id: &str, bob_code: &st
     let bob_identity_from_server = bundle.identity_key.clone();
     alice
         .crypto
-        .start_session(bob.user_id.clone(), bundle)
+        .start_session(
+            bob.user_id.clone(),
+            bundle,
+            Some(bob_identity_from_server.clone()),
+        )
         .map_err(err)?;
 
     let secret = "Meet at the usual place at 7.";

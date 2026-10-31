@@ -5,6 +5,27 @@
 use ed25519_dalek::{Signature, Verifier as _, VerifyingKey};
 use skyline_crypto_core::*;
 
+/// Starts a session as if the directory listed exactly the bundle's key.
+trait StartListed {
+    fn start_listed(
+        &self,
+        user_id: String,
+        bundle: PreKeyBundleInput,
+    ) -> std::result::Result<(), CryptoError>;
+}
+
+impl StartListed for SkylineCrypto {
+    fn start_listed(
+        &self,
+        user_id: String,
+        bundle: PreKeyBundleInput,
+    ) -> std::result::Result<(), CryptoError> {
+        let listed = bundle.identity_key.clone();
+        self.start_session(user_id, bundle, Some(listed))
+    }
+}
+
+
 struct Device {
     crypto: SkylineCrypto,
     user_id: String,
@@ -112,7 +133,7 @@ fn connected() -> (Device, Device) {
     let mut bob = Device::new(BOB, 1);
     alice
         .crypto
-        .start_session(BOB.into(), bob.bundle())
+        .start_listed(BOB.into(), bob.bundle())
         .unwrap();
     (alice, bob)
 }
@@ -243,8 +264,8 @@ fn a_one_time_prekey_handed_out_twice_works_only_once() {
             public_key: k.public_key.clone(),
         }),
     };
-    alice.crypto.start_session(BOB.into(), bundle).unwrap();
-    carol.crypto.start_session(BOB.into(), reused).unwrap();
+    alice.crypto.start_listed(BOB.into(), bundle).unwrap();
+    carol.crypto.start_listed(BOB.into(), reused).unwrap();
     assert_eq!(
         bob.receive(&alice, &alice.send(&bob, "first")).unwrap(),
         "first"
@@ -286,12 +307,12 @@ fn a_forged_bundle_is_refused() {
     // Bob's identity, but a signed prekey the server (or anyone) substituted.
     let mut bundle = bob.bundle();
     bundle.signed_pre_key = clone_signed(mallory.signed.as_ref().unwrap());
-    assert!(alice.crypto.start_session(BOB.into(), bundle).is_err());
+    assert!(alice.crypto.start_listed(BOB.into(), bundle).is_err());
 
     // Same for the post-quantum key.
     let mut bundle = bob.bundle();
     bundle.kyber_pre_key = clone_signed(mallory.last_resort.as_ref().unwrap());
-    assert!(alice.crypto.start_session(BOB.into(), bundle).is_err());
+    assert!(alice.crypto.start_listed(BOB.into(), bundle).is_err());
 
     assert!(!alice.crypto.has_session(BOB.into(), 1).unwrap());
 }
@@ -306,12 +327,64 @@ fn a_changed_identity_for_a_known_device_is_refused() {
     let mut impostor = Device::new(BOB, 1);
     let err = alice
         .crypto
-        .start_session(BOB.into(), impostor.bundle())
+        .start_listed(BOB.into(), impostor.bundle())
         .unwrap_err();
     assert_eq!(err.kind, CryptoErrorKind::UntrustedIdentity, "{err:?}");
     // The genuine session still works.
     let m = alice.send(&bob, "still you?");
     assert_eq!(bob.receive(&alice, &m).unwrap(), "still you?");
+}
+
+#[test]
+fn a_bundle_must_carry_the_directory_identity() {
+    // Security audit 2026-10-31: a server listing Bob's real key in the
+    // directory (what the safety number shows) but handing out a substitute's
+    // bundle for Bob's address. The session must not start.
+    let alice = Device::new(ALICE, 1);
+    let bob = Device::new(BOB, 1);
+    let mut substitute = Device::new(BOB, 1);
+    let listed = bob.crypto.identity().unwrap().identity_key;
+
+    let err = alice
+        .crypto
+        .start_session(BOB.into(), substitute.bundle(), Some(listed))
+        .unwrap_err();
+    assert_eq!(err.kind, CryptoErrorKind::UntrustedIdentity, "{err:?}");
+    // No directory answer: refused too.
+    let err = alice
+        .crypto
+        .start_session(BOB.into(), substitute.bundle(), None)
+        .unwrap_err();
+    assert_eq!(err.kind, CryptoErrorKind::UntrustedIdentity, "{err:?}");
+    assert!(!alice.crypto.has_session(BOB.into(), 1).unwrap());
+    assert_eq!(alice.crypto.known_identity(BOB.into(), 1).unwrap(), None);
+}
+
+#[test]
+fn the_pinned_identity_is_the_one_in_the_session() {
+    let (alice, mut bob) = connected();
+    let bobs = bob.crypto.identity().unwrap().identity_key;
+    assert_eq!(
+        alice.crypto.known_identity(BOB.into(), 1).unwrap(),
+        Some(bobs.clone())
+    );
+    // A later directory answer cannot move it: a known device keeps its key.
+    let mut impostor = Device::new(BOB, 1);
+    let theirs = impostor.crypto.identity().unwrap().identity_key;
+    assert!(
+        alice
+            .crypto
+            .start_session(BOB.into(), impostor.bundle(), Some(theirs))
+            .is_err()
+    );
+    alice
+        .crypto
+        .start_session(BOB.into(), bob.bundle(), Some(bobs.clone()))
+        .unwrap();
+    assert_eq!(
+        alice.crypto.known_identity(BOB.into(), 1).unwrap(),
+        Some(bobs)
+    );
 }
 
 #[test]
@@ -326,7 +399,7 @@ fn the_last_resort_key_works_but_cannot_be_replayed() {
         bundle.kyber_pre_key.key_id,
         bob.last_resort.as_ref().unwrap().key_id
     );
-    alice.crypto.start_session(BOB.into(), bundle).unwrap();
+    alice.crypto.start_listed(BOB.into(), bundle).unwrap();
     let first = alice.send(&bob, "via last resort");
     assert_eq!(bob.receive(&alice, &first).unwrap(), "via last resort");
     // The Kyber key is reused by design, so a replay must be caught by its
@@ -341,11 +414,11 @@ fn a_second_device_is_a_separate_session() {
     let mut bob_pc = Device::new(BOB, 2);
     alice
         .crypto
-        .start_session(BOB.into(), bob_phone.bundle())
+        .start_listed(BOB.into(), bob_phone.bundle())
         .unwrap();
     alice
         .crypto
-        .start_session(BOB.into(), bob_pc.bundle())
+        .start_listed(BOB.into(), bob_pc.bundle())
         .unwrap();
     let to_phone = alice.send(&bob_phone, "phone");
     let to_pc = alice.send(&bob_pc, "pc");
@@ -438,7 +511,7 @@ fn the_vault_on_disk_is_encrypted_and_needs_its_key() {
         let alice = SkylineCrypto::open(path.clone(), key.clone()).unwrap();
         alice.set_local_address(ALICE.into(), 1).unwrap();
         let mut bob = Device::new(BOB, 1);
-        alice.start_session(BOB.into(), bob.bundle()).unwrap();
+        alice.start_listed(BOB.into(), bob.bundle()).unwrap();
 
         // Nothing readable: not the contact's id, not a public key, not the
         // literal namespace names.

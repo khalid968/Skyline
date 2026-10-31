@@ -9,6 +9,27 @@ use proptest::test_runner::{Config, TestRunner};
 use skyline_crypto_core::media::{decrypt_to_memory, encrypt_bytes};
 use skyline_crypto_core::*;
 
+/// Starts a session as if the directory listed exactly the bundle's key.
+trait StartListed {
+    fn start_listed(
+        &self,
+        user_id: String,
+        bundle: PreKeyBundleInput,
+    ) -> std::result::Result<(), CryptoError>;
+}
+
+impl StartListed for SkylineCrypto {
+    fn start_listed(
+        &self,
+        user_id: String,
+        bundle: PreKeyBundleInput,
+    ) -> std::result::Result<(), CryptoError> {
+        let listed = bundle.identity_key.clone();
+        self.start_session(user_id, bundle, Some(listed))
+    }
+}
+
+
 const ALICE: &str = "6f0b6a1e-0000-4000-8000-00000000000a";
 const BOB: &str = "6f0b6a1e-0000-4000-8000-00000000000b";
 
@@ -41,7 +62,7 @@ fn bundle(d: &SkylineCrypto) -> PreKeyBundleInput {
 /// Alice and Bob with a working session both ways.
 fn pair() -> (SkylineCrypto, SkylineCrypto) {
     let (a, b) = (device(ALICE), device(BOB));
-    a.start_session(BOB.into(), bundle(&b)).unwrap();
+    a.start_listed(BOB.into(), bundle(&b)).unwrap();
     let first = a.encrypt(BOB.into(), 1, b"hello".to_vec()).unwrap();
     let dir = a.identity().unwrap().identity_key;
     b.decrypt(ALICE.into(), 1, first, Some(dir)).unwrap();
@@ -173,7 +194,7 @@ fn forged_key_bundles_are_refused() {
             }
             // Only the untouched bundle may start a session; a random value
             // equal to the real one is astronomically unlikely.
-            prop_assert!(a.start_session(BOB.into(), forged).is_err());
+            prop_assert!(a.start_listed(BOB.into(), forged).is_err());
             Ok(())
         })
         .unwrap();

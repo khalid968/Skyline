@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,6 +29,13 @@ class _SafetyNumberScreenState extends ConsumerState<SafetyNumberScreen> {
   late final Messenger messenger = ref.read(appControllerProvider).messenger!;
   int _index = 0;
 
+  /// The key our messages to [d] are actually encrypted to: the one the
+  /// session pinned, falling back to the directory's before any session
+  /// (security audit 2026-10-31).
+  Future<Uint8List> _theirKey(KnownDevice d) async =>
+      await messenger.crypto.knownIdentity(userId: widget.peer, deviceNumber: d.deviceNumber) ??
+      base64.decode(d.identityKey);
+
   Future<(List<KnownDevice>, String?, String?)> _load() async {
     final devices = await messenger.store.devicesOf(widget.peer);
     if (devices.isEmpty) return (devices, null, null);
@@ -35,7 +43,7 @@ class _SafetyNumberScreenState extends ConsumerState<SafetyNumberScreen> {
     final n = await messenger.crypto.safetyNumber(
       theirUserId: widget.peer,
       theirDeviceNumber: d.deviceNumber,
-      theirIdentityKey: base64.decode(d.identityKey),
+      theirIdentityKey: await _theirKey(d),
     );
     return (devices, n.displayable, base64.encode(n.scannable));
   }
@@ -61,7 +69,7 @@ class _SafetyNumberScreenState extends ConsumerState<SafetyNumberScreen> {
     final match = await messenger.crypto.verifyScannedSafetyNumber(
       theirUserId: widget.peer,
       theirDeviceNumber: d.deviceNumber,
-      theirIdentityKey: base64.decode(d.identityKey),
+      theirIdentityKey: await _theirKey(d),
       scanned: bytes,
     );
     if (!mounted) return;

@@ -26,8 +26,12 @@ class MessageRules {
 
   // --------------------------------------------- what a receiver accepts
 
-  /// An edit of [target] sent at [sentAt]: by its author, of a text that is
-  /// still there, with a text body, and within the window (plus slack).
+  /// When [m] was sent, for the windows: the server's time when we have it.
+  static DateTime sentTime(LocalMessage m) => m.serverAt ?? m.sentAt;
+
+  /// An edit of [target] sent at [sentAt] (the server's time for the edit):
+  /// by its author, of a text that is still there, with a text body, and
+  /// within the window (plus slack) of when the server took the target.
   static bool acceptEdit({
     required LocalMessage target,
     required bool byAuthor,
@@ -38,10 +42,10 @@ class MessageRules {
       !target.deleted &&
       body is String &&
       target.kind == MessageKind.text &&
-      sentAt.difference(target.sentAt) <= editWindow + slack;
+      sentAt.difference(sentTime(target)) <= editWindow + slack;
 
   static bool acceptDelete({required LocalMessage target, required bool byAuthor, required DateTime sentAt}) =>
-      byAuthor && !target.deleted && sentAt.difference(target.sentAt) <= deleteWindow + slack;
+      byAuthor && !target.deleted && sentAt.difference(sentTime(target)) <= deleteWindow + slack;
 
   /// The reaction to store, or null to remove the sender's reaction.
   static String? reaction(Object? emoji) =>

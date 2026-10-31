@@ -189,8 +189,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // Answered on the phone's own ringing screen (Phase 14c): take the call
     // as soon as its offer is fetched and decrypted.
     ringing = NativeRinging(
-      onAccepted: () {
-        calls?.acceptWhenRinging();
+      onAccepted: (nativeId) {
+        calls?.acceptWhenRinging(nativeId);
         unawaited(m.sync().catchError((Object _) {}));
       },
       onDeclined: () => unawaited(calls?.decline()),

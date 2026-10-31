@@ -75,6 +75,33 @@ void main() {
       );
     });
 
+    test('the windows run on the server clock, so a claimed time cannot stretch them (audit 2026-10-31)', () {
+      // The author claims the message was sent "just now" (sentAt t0 + 3 days)
+      // but the server took it at t0; three days later is past both windows.
+      final target = msg(fromMe: false)..serverAt = t0;
+      final claimedFresh = LocalMessage(
+        id: 'm1',
+        peerUserId: 'bob',
+        fromMe: false,
+        sentAt: t0.add(const Duration(days: 3)),
+        text: 'hello',
+        serverAt: t0,
+      );
+      final threeDaysOn = t0.add(const Duration(days: 3, minutes: 1));
+      for (final m in [target, claimedFresh]) {
+        expect(MessageRules.acceptEdit(target: m, byAuthor: true, body: 'new', sentAt: threeDaysOn), isFalse);
+        expect(MessageRules.acceptDelete(target: m, byAuthor: true, sentAt: threeDaysOn), isFalse);
+      }
+      // Inside the window by the server's clock it is still accepted.
+      expect(
+        MessageRules.acceptEdit(
+            target: claimedFresh, byAuthor: true, body: 'new', sentAt: t0.add(const Duration(minutes: 5))),
+        isTrue,
+      );
+      // And the server time survives the vault round trip.
+      expect(LocalMessage.fromJson(claimedFresh.toJson()).serverAt!.isAtSameMomentAs(t0), isTrue);
+    });
+
     test('a reaction is one short emoji; anything else removes it', () {
       expect(MessageRules.reaction('\u{1F44D}'), '\u{1F44D}');
       // A family emoji is several code points joined, and still one reaction.

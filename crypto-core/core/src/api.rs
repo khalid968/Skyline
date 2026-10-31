@@ -295,7 +295,17 @@ impl SkylineCrypto {
     /// Starts an encrypted session with one of a contact's devices, from the
     /// bundle the key directory returned. libsignal verifies both prekey
     /// signatures against the identity key here; a forged bundle fails.
-    pub fn start_session(&self, user_id: String, bundle: PreKeyBundleInput) -> Result<()> {
+    /// `directory_identity_key`: the key directory's identity key for that
+    /// device. For a device we have never seen it must equal the bundle's, so
+    /// the session is with the key the safety number shows (security audit
+    /// 2026-10-31); a server cannot serve one key in the directory and
+    /// another in the bundle. A known device must keep its pinned key.
+    pub fn start_session(
+        &self,
+        user_id: String,
+        bundle: PreKeyBundleInput,
+        directory_identity_key: Option<Vec<u8>>,
+    ) -> Result<()> {
         let remote = address(&user_id, bundle.device_number)?;
         let identity = IdentityKey::decode(&bundle.identity_key)?;
         let pre_key = match &bundle.pre_key {
@@ -319,6 +329,17 @@ impl SkylineCrypto {
         )?;
         self.atomic(|vault| {
             let local = local_address(vault)?;
+            let known = block_on(VaultStore { vault }.get_identity(&remote))?;
+            if known.is_none()
+                && directory_identity_key.as_deref() != Some(bundle.identity_key.as_slice())
+            {
+                return Err(CryptoError::new(
+                    CryptoErrorKind::UntrustedIdentity,
+                    format!(
+                        "the key bundle for {remote} carries an identity key the directory does not list for that device"
+                    ),
+                ));
+            }
             let (mut sessions, mut identities) = (VaultStore { vault }, VaultStore { vault });
             block_on(process_prekey_bundle(
                 &remote,
@@ -534,6 +555,16 @@ impl SkylineCrypto {
     }
 
     // -------------------------------------------------------- safety numbers
+
+    /// The identity key pinned for a device (first seen, never replaced), or
+    /// None before any session. The safety number is computed from this one:
+    /// it is the key our messages to that device are actually encrypted to.
+    pub fn known_identity(&self, user_id: String, device_number: u32) -> Result<Option<Vec<u8>>> {
+        let remote = address(&user_id, device_number)?;
+        let vault = self.lock();
+        Ok(block_on(VaultStore { vault: &vault }.get_identity(&remote))?
+            .map(|k| k.serialize().to_vec()))
+    }
 
     /// The safety number between this device and one device of a contact. Both
     /// sides compute the same digits. Each side's identifier is its

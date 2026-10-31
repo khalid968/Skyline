@@ -165,8 +165,9 @@ abstract final class CallerNames {
 class NativeRinging {
   NativeRinging({required this.onAccepted, this.onDeclined});
 
-  /// Called when the person tapped Accept on the phone's ringing screen.
-  final void Function() onAccepted;
+  /// Called when the person tapped Accept on the phone's ringing screen,
+  /// with that screen's id for the call.
+  final void Function(String nativeId) onAccepted;
 
   /// Called when they tapped Decline there while Skyline was running.
   final void Function()? onDeclined;
@@ -175,14 +176,16 @@ class NativeRinging {
   Future<void> start() async {
     if (!nativeRingingSupported) return;
     _sub = FlutterCallkitIncoming.onEvent.listen((e) {
-      if (e is CallEventActionCallAccept) onAccepted();
+      if (e is CallEventActionCallAccept) onAccepted(e.callKitParams.id);
       if (e is CallEventActionCallDecline) onDeclined?.call();
     });
     // Opened by Accept while Skyline was closed: the event came before we
     // listened, but the call is still listed as accepted.
     try {
       final calls = await FlutterCallkitIncoming.activeCalls();
-      if (calls.any((c) => c.isAccepted)) onAccepted();
+      for (final c in calls.where((c) => c.isAccepted)) {
+        onAccepted(c.id);
+      }
     } on Object {
       // no native calls
     }

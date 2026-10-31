@@ -100,3 +100,17 @@ fn empty_files_are_refused() {
     fs::write(&inp, b"").unwrap();
     assert!(encrypt_file(&inp, &tmp("empty-out")).is_err());
 }
+
+#[test]
+fn an_oversized_file_is_refused_before_it_is_read() {
+    // Security audit 2026-10-31: a photo whose file is over the in-memory
+    // limit is refused by its size alone. The file is extended without being
+    // written, so reading it whole is what would take the time and memory.
+    let path = tmp("huge");
+    let f = fs::File::create(&path).unwrap();
+    f.set_len(MAX_IN_MEMORY + 1).unwrap();
+    drop(f);
+    let err = decrypt_to_memory(&path, &[0u8; 32], &[0u8; 12], None).unwrap_err();
+    assert!(err.message.contains("too large"), "{err:?}");
+    fs::remove_file(&path).unwrap();
+}
