@@ -1654,3 +1654,26 @@ The owner approved prototypes 41 and 42 and started the phase.
 
   It wasn't built by tag: GitHub holds no signing secrets, so the release workflow would produce nothing.
   Notes: `docs/releases/1.0.6.md`. iPhone 1.0.6: build on the Mac with `--build-number=8`.
+- **Pushed 994e1cb and deployed (2026-10-31, 10:09-10:10 UTC, about 65 seconds of downtime).** Live now:
+  - the upload limits (migration 017 applied);
+  - /64 counting;
+  - the backup fix;
+  - IPv6 on `skyline_default` (`fd8e:5c1e:7a3b::/64`). ip6tables now forwards IPv6 on ports 80 and 443
+    straight to web's IPv6 address, instead of through docker-proxy.
+
+  Not observed from an IPv6 client: this PC has no IPv6, and Nginx's access log isn't in the container's
+  output.
+- **What went wrong:** survey, survey2 and TopShift (`survey-app-1`, `rawan-survey-app-1`, `topshift-app-1`)
+  join `skyline_default` as an external network. So does `certbot`, which `docker compose down` leaves
+  running.
+  - The first attempt disconnected the three apps but not certbot, so the network couldn't be removed, and
+    `deploy.sh` stopped at the migration while Skyline was down.
+  - The second attempt also disconnected certbot. The network was then re-created and `deploy.sh` succeeded.
+  - The three apps were reconnected with their aliases (`app` plus `survey2-app`, `survey-app`,
+    `topshift-app`), and certbot was reconnected too.
+  - Afterwards all four sites answered as before: chat, survey and survey2 with 200, TopShift with 307. The
+    API is ready, the dashboard answers 200, and the backend logged no errors.
+  - **Next time the network changes:** disconnect those four containers first, and reconnect them with the
+    same aliases afterwards.
+- **Release 1.0.6 staged, not published:** `/root/release-1.0.6` on the server, checksums verified. It
+  waits for the owner's go-ahead: `./publish-release.sh /root/release-1.0.6`.
